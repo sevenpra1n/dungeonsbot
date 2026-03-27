@@ -35,11 +35,19 @@ def init_database():
             points REAL DEFAULT 0.0,
             click_power REAL DEFAULT 1.0,
             strength REAL DEFAULT 20.0,
+            wins INTEGER DEFAULT 0,
             last_click TIMESTAMP DEFAULT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    # Добавить столбец wins, если его нет (миграция)
+    try:
+        cursor.execute('ALTER TABLE players ADD COLUMN wins INTEGER DEFAULT 0')
+        conn.commit()
+    except sqlite3.OperationalError as e:
+        if "duplicate column name" not in str(e).lower():
+            logging.warning(f"Migration warning: {e}")
     
     # Таблица покупок улучшений клика
     cursor.execute('''
@@ -73,8 +81,8 @@ def add_player(user_id: int, nickname: str):
     
     try:
         cursor.execute('''
-            INSERT INTO players (user_id, nickname, points, click_power, strength)
-            VALUES (?, ?, 0.0, 1.0, 20.0)
+            INSERT INTO players (user_id, nickname, points, click_power, strength, wins)
+            VALUES (?, ?, 0.0, 1.0, 20.0, 0)
         ''', (user_id, nickname))
         conn.commit()
     except sqlite3.IntegrityError:
@@ -88,7 +96,7 @@ def get_player(user_id: int):
     cursor = conn.cursor()
     
     cursor.execute('''
-        SELECT user_id, nickname, points, click_power, strength, last_click FROM players
+        SELECT user_id, nickname, points, click_power, strength, wins, last_click FROM players
         WHERE user_id = ?
     ''', (user_id,))
     
@@ -102,7 +110,8 @@ def get_player(user_id: int):
             "points": result[2],
             "click_power": result[3],
             "strength": result[4],
-            "last_click": result[5]
+            "wins": result[5] if result[5] is not None else 0,
+            "last_click": result[6]
         }
     return None
 
@@ -130,6 +139,20 @@ def update_player_strength(user_id: int, strength: float):
         SET strength = ?, updated_at = CURRENT_TIMESTAMP
         WHERE user_id = ?
     ''', (strength, user_id))
+    
+    conn.commit()
+    conn.close()
+
+def update_player_wins(user_id: int):
+    """Увеличить счётчик побед на 1"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        UPDATE players 
+        SET wins = COALESCE(wins, 0) + 1, updated_at = CURRENT_TIMESTAMP
+        WHERE user_id = ?
+    ''', (user_id,))
     
     conn.commit()
     conn.close()
@@ -219,14 +242,14 @@ def add_equipment_purchase(user_id: int, equipment_id: int):
     conn.close()
 
 def get_leaderboard(limit: int = 10):
-    """Получить рейтинг игроков (только с > 0 очков)"""
+    """Получить рейтинг игроков (по силе)"""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     
     cursor.execute('''
-        SELECT nickname, points FROM players
-        WHERE points > 0
-        ORDER BY points DESC
+        SELECT nickname, strength, COALESCE(wins, 0) FROM players
+        WHERE strength > 0
+        ORDER BY strength DESC
         LIMIT ?
     ''', (limit,))
     
@@ -278,8 +301,18 @@ class BattleState(StatesGroup):
     enemy_attacking = State()
     battle_round = State()
 
+class OnlineState(StatesGroup):
+    searching = State()
+    waiting_accept = State()
+    in_pvp_battle = State()
+
 # Словарь для отслеживания cooldown клика
 click_cooldowns = {}
+
+# Очередь поиска PvP: user_id -> {nickname, strength, wins, chat_id}
+pvp_queue: dict = {}
+# Активные PvP пары: user_id -> opponent_user_id
+pvp_pairs: dict = {}
 
 # ============== KEYBOARDS ==============
 def get_main_kb():
@@ -288,6 +321,7 @@ def get_main_kb():
         [KeyboardButton(text="качать хуй")],
         [KeyboardButton(text="🏪 Магазин"), KeyboardButton(text="⚔️ Враги")],
         [KeyboardButton(text="🎖️ Снаряжение"), KeyboardButton(text="🏆 Рейтинг")],
+        [KeyboardButton(text="🌐 Онлайн")],
         [KeyboardButton(text="/профиль")]
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
@@ -351,19 +385,34 @@ def get_end_battle_kb():
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
+def get_searching_kb():
+    """Меню поиска соперника"""
+    kb = [
+        [KeyboardButton(text="🚫 Прекратить поиск")]
+    ]
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+def get_pvp_accept_kb():
+    """Меню подтверждения PvP"""
+    kb = [
+        [KeyboardButton(text="✅ Принять игру")],
+        [KeyboardButton(text="❌ Отклонить")]
+    ]
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
 # ============== HELPER FUNCTIONS ==============
-def calculate_player_health(strength: float) -> float:
-    """Рассчитать здоровье игрока (сила * 0.2)"""
-    return round(strength * 0.2, 1)
+def calculate_player_health(strength: float) -> int:
+    """Рассчитать здоровье игрока (сила * 0.9)"""
+    return int(round(strength * 0.9))
 
-def calculate_damage(strength: float) -> float:
-    """Рассчитать урон (сила * 0.4)"""
-    return round(strength * 0.4, 1)
+def calculate_damage(strength: float) -> int:
+    """Рассчитать урон (сила * 0.3)"""
+    return int(round(strength * 0.3))
 
-def calculate_enemy_damage(enemy_id: int) -> float:
+def calculate_enemy_damage(enemy_id: int) -> int:
     """Рассчитать урон врага (здоровье врага * 0.4)"""
     enemy_health = ENEMIES[enemy_id]['health']
-    return round(enemy_health * 0.4, 1)
+    return int(round(enemy_health * 0.4))
 
 def can_click(user_id: int) -> bool:
     """Проверить, может ли пользователь нажать кнопку клика"""
@@ -589,14 +638,14 @@ async def show_leaderboard(message: types.Message):
     leaderboard = get_leaderboard(10)
     
     if not leaderboard:
-        await message.answer("📊 Рейтинг пуст. Начните кликать!", reply_markup=get_main_kb())
+        await message.answer("📊 Рейтинг пуст. Прокачайся!", reply_markup=get_main_kb())
         return
     
     response = "🏆 **РЕЙТИНГ ИГРОКОВ**\n\n"
     
-    for index, (nickname, points) in enumerate(leaderboard, 1):
+    for index, (nickname, strength, wins) in enumerate(leaderboard, 1):
         medal = "🥇" if index == 1 else "🥈" if index == 2 else "🥉" if index == 3 else f"{index}."
-        response += f"{medal} {nickname} — {points} ⚡\n"
+        response += f"{medal} {nickname} — {int(strength)}🗡️ {wins}🏆\n"
     
     await message.answer(response, reply_markup=get_main_kb())
 
@@ -696,8 +745,8 @@ async def start_battle(message: types.Message, state: FSMContext):
         await asyncio.sleep(2)
         
         # Враг атакует
-        enemy_damage = round(data['enemy_damage'] * random.uniform(0.7, 1.3), 1)
-        new_player_health = data['player_health'] - enemy_damage
+        enemy_damage = int(round(data['enemy_damage'] * random.uniform(0.7, 1.3)))
+        new_player_health = int(round(data['player_health'] - enemy_damage))
         
         battle_log = f"⚔️ **РАУНД БОЯ** ⚔️\n\n"
         battle_log += f"☠️ {enemy_info['name']} атакует!\n"
@@ -737,8 +786,8 @@ async def battle_round(message: types.Message, state: FSMContext):
     
     if action == "🗡️ Атаковать":
         # Урон игрока с вариацией
-        player_damage = round(data['player_damage'] * random.uniform(0.8, 1.2), 1)
-        new_enemy_health = data['enemy_health'] - player_damage
+        player_damage = int(round(data['player_damage'] * random.uniform(0.8, 1.2)))
+        new_enemy_health = int(round(data['enemy_health'] - player_damage))
         
         battle_log = f"⚔️ **РАУНД БОЯ** ⚔️\n\n"
         battle_log += f"👤 {player['nickname']} атакует!\n"
@@ -761,8 +810,8 @@ async def battle_round(message: types.Message, state: FSMContext):
             return
         
         # Враг контратакует
-        enemy_damage = round(data['enemy_damage'] * random.uniform(0.7, 1.3), 1)
-        new_player_health = data['player_health'] - enemy_damage
+        enemy_damage = int(round(data['enemy_damage'] * random.uniform(0.7, 1.3)))
+        new_player_health = int(round(data['player_health'] - enemy_damage))
         
         battle_log += f"☠️ {enemy_info['name']} контратакует!\n"
         battle_log += f"💥 Урон: {enemy_damage}\n\n"
@@ -789,8 +838,8 @@ async def battle_round(message: types.Message, state: FSMContext):
     
     elif action == "🛡️ Защиту":
         # Защита уменьшает полученный урон на 50%
-        enemy_damage = round(data['enemy_damage'] * random.uniform(0.35, 0.65), 1)
-        new_player_health = data['player_health'] - enemy_damage
+        enemy_damage = int(round(data['enemy_damage'] * random.uniform(0.35, 0.65)))
+        new_player_health = int(round(data['player_health'] - enemy_damage))
         
         battle_log = f"🛡️ **РАУНД БОЯ** 🛡️\n\n"
         battle_log += f"👤 {player['nickname']} встал в защиту!\n\n"
@@ -808,8 +857,8 @@ async def battle_round(message: types.Message, state: FSMContext):
             return
         
         # Игрок контратакует при защите (меньший урон)
-        counter_damage = round(data['player_damage'] * 0.5 * random.uniform(0.8, 1.2), 1)
-        new_enemy_health = data['enemy_health'] - counter_damage
+        counter_damage = int(round(data['player_damage'] * 0.5 * random.uniform(0.8, 1.2)))
+        new_enemy_health = int(round(data['enemy_health'] - counter_damage))
         
         battle_log += f"⚔️ Контратака!\n"
         battle_log += f"💥 Урон: {counter_damage}\n\n"
@@ -855,6 +904,361 @@ async def back_to_enemies(message: types.Message, state: FSMContext):
 async def back_to_main(message: types.Message, state: FSMContext):
     await state.clear()
     await message.answer("Вернулись в главное меню!", reply_markup=get_main_kb())
+
+# ============== ONLINE (PvP) ==============
+@dp.message(F.text == "🌐 Онлайн")
+async def open_online(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    player = get_player(user_id)
+
+    if not player:
+        await message.answer("Сначала зарегистрируйся! /start")
+        return
+
+    if user_id in pvp_queue:
+        await message.answer("Ты уже в очереди поиска!", reply_markup=get_searching_kb())
+        await state.set_state(OnlineState.searching)
+        return
+
+    health = calculate_player_health(player['strength'])
+    damage = calculate_damage(player['strength'])
+
+    search_text = (
+        "🌐 **ОНЛАЙН РЕЖИМ**\n\n"
+        f"Твои характеристики:\n"
+        f"👤 {player['nickname']}\n"
+        f"❤️ {health}\n"
+        f"⚔️ {damage}\n"
+        f"💪 {int(player['strength'])}🗡️ | {player['wins']}🏆\n\n"
+        "🔍 Ищем соперника..."
+    )
+
+    pvp_queue[user_id] = {
+        "nickname": player['nickname'],
+        "strength": player['strength'],
+        "wins": player['wins'],
+        "health": health,
+        "damage": damage,
+        "chat_id": message.chat.id
+    }
+
+    await message.answer(search_text, reply_markup=get_searching_kb())
+    await state.set_state(OnlineState.searching)
+
+    # Проверяем, есть ли ещё кто-то в очереди
+    other_players = [uid for uid in pvp_queue if uid != user_id]
+    if other_players:
+        opponent_id = other_players[0]
+        opponent_data = pvp_queue.pop(opponent_id)
+        my_data = pvp_queue.pop(user_id)
+
+        # Связываем пару
+        pvp_pairs[user_id] = opponent_id
+        pvp_pairs[opponent_id] = user_id
+
+        match_text_me = (
+            "✅ **СОПЕРНИК НАЙДЕН!**\n\n"
+            f"Ваш соперник:\n"
+            f"👤 {opponent_data['nickname']}\n"
+            f"❤️ {opponent_data['health']}\n"
+            f"⚔️ {opponent_data['damage']}\n"
+            f"💪 {int(opponent_data['strength'])}🗡️ | {opponent_data['wins']}🏆\n\n"
+            "Подтвердите участие!"
+        )
+        match_text_opp = (
+            "✅ **СОПЕРНИК НАЙДЕН!**\n\n"
+            f"Ваш соперник:\n"
+            f"👤 {my_data['nickname']}\n"
+            f"❤️ {my_data['health']}\n"
+            f"⚔️ {my_data['damage']}\n"
+            f"💪 {int(my_data['strength'])}🗡️ | {my_data['wins']}🏆\n\n"
+            "Подтвердите участие!"
+        )
+
+        # Сохраняем данные для подтверждения
+        # Используем FSM для текущего игрока
+        await state.update_data(
+            opponent_id=opponent_id,
+            my_health=my_data['health'],
+            my_damage=my_data['damage'],
+            opp_health=opponent_data['health'],
+            opp_damage=opponent_data['damage'],
+            accepted=False
+        )
+        await state.set_state(OnlineState.waiting_accept)
+
+        # Отправляем оппоненту через bot.send_message
+        await bot.send_message(
+            chat_id=opponent_data['chat_id'],
+            text=match_text_opp,
+            reply_markup=get_pvp_accept_kb()
+        )
+        # Обновляем состояние оппонента через диспетчер
+        opp_state = dp.fsm.resolve_context(bot, opponent_data['chat_id'], opponent_id)
+        await opp_state.update_data(
+            opponent_id=user_id,
+            my_health=opponent_data['health'],
+            my_damage=opponent_data['damage'],
+            opp_health=my_data['health'],
+            opp_damage=my_data['damage'],
+            accepted=False
+        )
+        await opp_state.set_state(OnlineState.waiting_accept)
+
+        await message.answer(match_text_me, reply_markup=get_pvp_accept_kb())
+
+
+@dp.message(OnlineState.searching, F.text == "🚫 Прекратить поиск")
+async def stop_searching(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    pvp_queue.pop(user_id, None)
+    await state.clear()
+    await message.answer("Поиск отменён.", reply_markup=get_main_kb())
+
+
+@dp.message(OnlineState.waiting_accept)
+async def handle_pvp_accept(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+    data = await state.get_data()
+    opponent_id = data.get('opponent_id')
+
+    if text == "❌ Отклонить":
+        # Уведомляем оппонента
+        pvp_pairs.pop(user_id, None)
+        if opponent_id:
+            pvp_pairs.pop(opponent_id, None)
+            opp_player = get_player(opponent_id)
+            if opp_player:
+                opp_chat_id = None
+                # Получаем chat_id оппонента через его данные
+                opp_state = dp.fsm.resolve_context(bot, opponent_id, opponent_id)
+                opp_data = await opp_state.get_data()
+                await opp_state.clear()
+                try:
+                    await bot.send_message(
+                        chat_id=opponent_id,
+                        text="❌ Соперник отклонил игру.",
+                        reply_markup=get_main_kb()
+                    )
+                except Exception:
+                    pass
+        await state.clear()
+        await message.answer("Вы отклонили игру.", reply_markup=get_main_kb())
+        return
+
+    if text != "✅ Принять игру":
+        await message.answer("Нажмите ✅ Принять игру или ❌ Отклонить", reply_markup=get_pvp_accept_kb())
+        return
+
+    # Игрок принял — помечаем
+    await state.update_data(accepted=True)
+
+    # Проверяем принял ли оппонент
+    if opponent_id:
+        opp_state = dp.fsm.resolve_context(bot, opponent_id, opponent_id)
+        opp_data = await opp_state.get_data()
+        opp_accepted = opp_data.get('accepted', False)
+
+        if opp_accepted:
+            # Оба приняли — стартуем бой
+            player_goes_first = random.random() < 0.5
+
+            # Для текущего игрока
+            await state.update_data(
+                pvp_player_health=data['my_health'],
+                pvp_player_damage=data['my_damage'],
+                pvp_enemy_health=data['opp_health'],
+                pvp_enemy_damage=data['opp_damage'],
+                pvp_goes_first=player_goes_first,
+                pvp_my_turn=player_goes_first
+            )
+            await state.set_state(OnlineState.in_pvp_battle)
+
+            # Для оппонента (ход противоположный)
+            await opp_state.update_data(
+                pvp_player_health=opp_data['my_health'],
+                pvp_player_damage=opp_data['my_damage'],
+                pvp_enemy_health=opp_data['opp_health'],
+                pvp_enemy_damage=opp_data['opp_damage'],
+                pvp_goes_first=not player_goes_first,
+                pvp_my_turn=not player_goes_first
+            )
+            await opp_state.set_state(OnlineState.in_pvp_battle)
+
+            opp_player = get_player(opponent_id)
+            my_player = get_player(user_id)
+
+            first_name = my_player['nickname'] if player_goes_first else opp_player['nickname']
+            start_text = f"⚔️ **БОЙ НАЧАЛСЯ!**\n\nПервым ходит: {first_name}\n"
+
+            if player_goes_first:
+                await message.answer(
+                    start_text + "\n🗡️ Твой ход!",
+                    reply_markup=get_battle_action_kb()
+                )
+                await bot.send_message(
+                    chat_id=opponent_id,
+                    text=start_text + "\n⏳ Ход соперника...",
+                    reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True)
+                )
+            else:
+                await message.answer(
+                    start_text + "\n⏳ Ход соперника...",
+                    reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True)
+                )
+                await bot.send_message(
+                    chat_id=opponent_id,
+                    text=start_text + "\n🗡️ Твой ход!",
+                    reply_markup=get_battle_action_kb()
+                )
+        else:
+            await message.answer("✅ Вы приняли. Ожидаем соперника...", reply_markup=get_pvp_accept_kb())
+
+
+@dp.message(OnlineState.in_pvp_battle)
+async def pvp_battle_round(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+    data = await state.get_data()
+    opponent_id = data.get('opponent_id')
+
+    if not data.get('pvp_my_turn', False):
+        await message.answer("⏳ Сейчас ход соперника, подожди!", reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
+        return
+
+    my_health = data['pvp_player_health']
+    my_damage = data['pvp_player_damage']
+    enemy_health = data['pvp_enemy_health']
+    enemy_damage = data['pvp_enemy_damage']
+
+    if text == "🗡️ Атаковать":
+        dealt = int(round(my_damage * random.uniform(0.8, 1.2)))
+        new_enemy_health = int(round(enemy_health - dealt))
+
+        battle_log = f"⚔️ **PvP БОЙ** ⚔️\n\nТы атакуешь!\n💥 Урон: {dealt}\n\n"
+
+        if new_enemy_health <= 0:
+            update_player_wins(user_id)
+            battle_log += "✅ **ВЫ ПОБЕДИЛИ!**\n(+1 победа, очки не начисляются)"
+            await message.answer(battle_log, reply_markup=get_end_battle_kb())
+            pvp_pairs.pop(user_id, None)
+            pvp_pairs.pop(opponent_id, None)
+            await state.clear()
+
+            if opponent_id:
+                opp_state = dp.fsm.resolve_context(bot, opponent_id, opponent_id)
+                await opp_state.clear()
+                try:
+                    await bot.send_message(
+                        chat_id=opponent_id,
+                        text=f"⚔️ **PvP БОЙ** ⚔️\n\nСоперник атакует!\n💥 Урон: {dealt}\n\n❌ **ВЫ ПРОИГРАЛИ!**",
+                        reply_markup=get_end_battle_kb()
+                    )
+                except Exception:
+                    pass
+            return
+
+        # Передаём ход сопернику
+        battle_log += (
+            f"👤 Ты: ❤️ {my_health}\n"
+            f"👤 Соперник: ❤️ {new_enemy_health}\n\n"
+            "⏳ Ход соперника..."
+        )
+        await message.answer(battle_log, reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
+        # Обновляем здоровье противника в своём стейте
+        await state.update_data(pvp_enemy_health=new_enemy_health, pvp_my_turn=False)
+
+        if opponent_id:
+            opp_state = dp.fsm.resolve_context(bot, opponent_id, opponent_id)
+            opp_data = await opp_state.get_data()
+            # У соперника pvp_player_health = это моё здоровье (для них мы — противник)
+            # Они атаковали нас — значит их pvp_enemy_health уменьшилось
+            # Нет, они НЕ атаковали — это МЫ атаковали ИХ.
+            # С точки зрения соперника: их pvp_enemy_health (= наше здоровье) не менялось,
+            # а их pvp_player_health (= их здоровье) уменьшилось на dealt.
+            new_opp_player_health = int(round(opp_data.get('pvp_player_health', 0) - dealt))
+            await opp_state.update_data(
+                pvp_player_health=new_opp_player_health,
+                pvp_my_turn=True
+            )
+            try:
+                await bot.send_message(
+                    chat_id=opponent_id,
+                    text=(
+                        f"⚔️ **PvP БОЙ** ⚔️\n\n"
+                        f"Соперник атакует! 💥 {dealt} урона\n\n"
+                        f"👤 Ты: ❤️ {new_opp_player_health}\n"
+                        f"👤 Соперник: ❤️ {opp_data.get('pvp_enemy_health', 0)}\n\n"
+                        "🗡️ Твой ход!"
+                    ),
+                    reply_markup=get_battle_action_kb()
+                )
+            except Exception:
+                pass
+
+    elif text == "🛡️ Защиту":
+        # Защита: снижаем входящий урон
+        taken = int(round(enemy_damage * random.uniform(0.35, 0.65)))
+        new_my_health = int(round(my_health - taken))
+
+        battle_log = f"🛡️ **PvP БОЙ** 🛡️\n\nТы встал в защиту!\n💥 Получено урона: {taken} (снижено)\n\n"
+
+        if new_my_health <= 0:
+            battle_log += "❌ **ВЫ ПРОИГРАЛИ!**"
+            await message.answer(battle_log, reply_markup=get_end_battle_kb())
+            pvp_pairs.pop(user_id, None)
+            pvp_pairs.pop(opponent_id, None)
+            await state.clear()
+
+            if opponent_id:
+                update_player_wins(opponent_id)
+                opp_state = dp.fsm.resolve_context(bot, opponent_id, opponent_id)
+                await opp_state.clear()
+                try:
+                    await bot.send_message(
+                        chat_id=opponent_id,
+                        text="✅ **ВЫ ПОБЕДИЛИ!**\n(+1 победа, очки не начисляются)",
+                        reply_markup=get_end_battle_kb()
+                    )
+                except Exception:
+                    pass
+            return
+
+        battle_log += (
+            f"👤 Ты: ❤️ {new_my_health}\n"
+            f"👤 Соперник: ❤️ {enemy_health}\n\n"
+            "⏳ Ход соперника..."
+        )
+        await message.answer(battle_log, reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
+        # Моё здоровье уменьшилось, передаём ход
+        await state.update_data(pvp_player_health=new_my_health, pvp_my_turn=False)
+
+        if opponent_id:
+            opp_state = dp.fsm.resolve_context(bot, opponent_id, opponent_id)
+            opp_data = await opp_state.get_data()
+            # С точки зрения соперника: их pvp_enemy_health (= наше здоровье) уменьшилось
+            new_opp_enemy_health = int(round(opp_data.get('pvp_enemy_health', 0) - taken))
+            await opp_state.update_data(
+                pvp_enemy_health=new_opp_enemy_health,
+                pvp_my_turn=True
+            )
+            try:
+                await bot.send_message(
+                    chat_id=opponent_id,
+                    text=(
+                        f"🛡️ **PvP БОЙ** 🛡️\n\n"
+                        f"Соперник встал в защиту!\n\n"
+                        f"👤 Ты: ❤️ {opp_data.get('pvp_player_health', 0)}\n"
+                        f"👤 Соперник: ❤️ {new_opp_enemy_health}\n\n"
+                        "🗡️ Твой ход!"
+                    ),
+                    reply_markup=get_battle_action_kb()
+                )
+            except Exception:
+                pass
+    else:
+        await message.answer("Выбери действие!", reply_markup=get_battle_action_kb())
 
 # ============== MAIN ==============
 async def main():
