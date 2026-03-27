@@ -42,10 +42,12 @@ def init_database():
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    # Миграция: добавить столбцы wins и rating_points, если их нет
+    # Миграция: добавить столбцы если их нет
     for col_sql in [
         'ALTER TABLE players ADD COLUMN wins INTEGER DEFAULT 0',
         'ALTER TABLE players ADD COLUMN rating_points INTEGER DEFAULT 0',
+        'ALTER TABLE players ADD COLUMN materials INTEGER DEFAULT 0',
+        'ALTER TABLE players ADD COLUMN raid_floor INTEGER DEFAULT 1',
     ]:
         try:
             cursor.execute(col_sql)
@@ -152,8 +154,8 @@ def add_player(user_id: int, nickname: str):
     
     try:
         cursor.execute('''
-            INSERT INTO players (user_id, nickname, points, click_power, strength, wins)
-            VALUES (?, ?, 0.0, 1.0, 20.0, 0)
+            INSERT INTO players (user_id, nickname, points, click_power, strength, wins, materials, raid_floor)
+            VALUES (?, ?, 0.0, 1.0, 20.0, 0, 0, 1)
         ''', (user_id, nickname))
         cursor.execute('''
             INSERT OR IGNORE INTO player_weapons (user_id, weapon_id) VALUES (?, 0)
@@ -173,7 +175,8 @@ def get_player(user_id: int):
     cursor = conn.cursor()
     
     cursor.execute('''
-        SELECT user_id, nickname, points, click_power, strength, wins, last_click, rating_points FROM players
+        SELECT user_id, nickname, points, click_power, strength, wins, last_click, rating_points,
+               COALESCE(materials, 0), COALESCE(raid_floor, 1) FROM players
         WHERE user_id = ?
     ''', (user_id,))
     
@@ -189,7 +192,9 @@ def get_player(user_id: int):
             "strength": result[4],
             "wins": result[5] if result[5] is not None else 0,
             "last_click": result[6],
-            "rating_points": result[7] if result[7] is not None else 0
+            "rating_points": result[7] if result[7] is not None else 0,
+            "materials": result[8],
+            "raid_floor": result[9],
         }
     return None
 
@@ -260,6 +265,26 @@ def update_last_click(user_id: int):
         WHERE user_id = ?
     ''', (user_id,))
     
+    conn.commit()
+    conn.close()
+
+def update_player_materials(user_id: int, materials: int):
+    """Обновить количество материалов игрока"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE players SET materials = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?
+    ''', (materials, user_id))
+    conn.commit()
+    conn.close()
+
+def update_player_raid_floor(user_id: int, floor: int):
+    """Обновить текущий этаж рейда игрока"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE players SET raid_floor = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?
+    ''', (floor, user_id))
     conn.commit()
     conn.close()
 
@@ -548,12 +573,20 @@ def get_clan_members(clan_id: int):
 
 # ============== UPGRADES ==============
 UPGRADES = {
-    1: {"power": 2.0, "cost": 20, "display": "💳 2 клика"},
-    2: {"power": 4.0, "cost": 100, "display": "💳 4 клика"},
-    3: {"power": 8.0, "cost": 250, "display": "💳 8 клика"},
-    4: {"power": 12.0, "cost": 550, "display": "💳 12 клика"},
-    5: {"power": 25.0, "cost": 1150, "display": "💳 25 клика"}
+    1:  {"power": 2.0,   "cost": 20,    "display": "💳 2 клика"},
+    2:  {"power": 4.0,   "cost": 100,   "display": "💳 4 клика"},
+    3:  {"power": 8.0,   "cost": 250,   "display": "💳 8 клика"},
+    4:  {"power": 12.0,  "cost": 550,   "display": "💳 12 клика"},
+    5:  {"power": 25.0,  "cost": 1150,  "display": "💳 25 клика"},
+    6:  {"power": 30.0,  "cost": 2100,  "display": "💳 30 клика"},
+    7:  {"power": 40.0,  "cost": 3850,  "display": "💳 40 клика"},
+    8:  {"power": 60.0,  "cost": 5200,  "display": "💳 60 клика"},
+    9:  {"power": 80.0,  "cost": 9000,  "display": "💳 80 клика"},
+    10: {"power": 120.0, "cost": 17000, "display": "💳 120 клика"},
 }
+
+UPGRADES_PAGE1 = {k: v for k, v in UPGRADES.items() if k <= 5}
+UPGRADES_PAGE2 = {k: v for k, v in UPGRADES.items() if k > 5}
 
 # ============== EQUIPMENT ==============
 EQUIPMENT = {
@@ -603,6 +636,20 @@ ENEMIES = {
     5: {"name": "Дух леса", "health": 950, "reward": 190, "base_damage": 60}
 }
 
+# ============== RAID FLOORS ==============
+RAID_FLOORS = {
+    1:  {"name": "летучая мышь",      "health": 60,   "reward": 10,  "base_damage": 15,  "emoji": "💀"},
+    2:  {"name": "крыса",             "health": 140,  "reward": 25,  "base_damage": 35,  "emoji": "💀"},
+    3:  {"name": "слизень",           "health": 200,  "reward": 40,  "base_damage": 50,  "emoji": "💀"},
+    4:  {"name": "большой слизень",   "health": 340,  "reward": 80,  "base_damage": 85,  "emoji": "💀"},
+    5:  {"name": "скелет",            "health": 440,  "reward": 110, "base_damage": 110, "emoji": "💀"},
+    6:  {"name": "гоблин",            "health": 600,  "reward": 145, "base_damage": 150, "emoji": "💀"},
+    7:  {"name": "проклятый доспех",  "health": 740,  "reward": 210, "base_damage": 185, "emoji": "💀"},
+    8:  {"name": "железная дева",     "health": 840,  "reward": 350, "base_damage": 210, "emoji": "💀"},
+    9:  {"name": "призрачный палач",  "health": 1280, "reward": 520, "base_damage": 320, "emoji": "💀"},
+    10: {"name": "зеркальный дух",    "health": 2000, "reward": 700, "base_damage": 500, "emoji": "♦️💀"},
+}
+
 # ============== STATES ==============
 class Registration(StatesGroup):
     waiting_for_nickname = State()
@@ -623,6 +670,9 @@ class BattleState(StatesGroup):
     in_battle = State()
     enemy_attacking = State()
     battle_round = State()
+
+class RaidState(StatesGroup):
+    in_raid = State()
 
 class OnlineState(StatesGroup):
     searching = State()
@@ -652,23 +702,28 @@ def get_main_kb():
     """Главное меню"""
     kb = [
         [KeyboardButton(text="качать хуй")],
-        [KeyboardButton(text="🔨 Кузня"), KeyboardButton(text="⚔️ Враги")],
-        [KeyboardButton(text="🏆 Рейтинг"), KeyboardButton(text="🌐 Онлайн")],
-        [KeyboardButton(text="🛡️ Кланы")],
-        [KeyboardButton(text="/профиль")]
+        [KeyboardButton(text="🏪 Магазин"), KeyboardButton(text="🔨 Кузня")],
+        [KeyboardButton(text="🐉 Рейд"), KeyboardButton(text="🌐 Онлайн")],
+        [KeyboardButton(text="🛡️ Кланы"), KeyboardButton(text="🏆 Рейтинг")],
+        [KeyboardButton(text="📖 Профиль")]
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
-def get_shop_kb():
-    """Меню магазина"""
+def get_shop_kb(page: int = 1):
+    """Меню магазина (постраничное)"""
     kb = []
-    
-    for upgrade_id, upgrade_info in UPGRADES.items():
-        button_text = f"💲 {upgrade_info['display']} ({upgrade_info['cost']} мощи)"
+    items = UPGRADES_PAGE1 if page == 1 else UPGRADES_PAGE2
+    for upgrade_id, upgrade_info in items.items():
+        button_text = f"💲 {upgrade_info['display']} ({upgrade_info['cost']} очков)"
         kb.append([KeyboardButton(text=button_text)])
-    
+    nav = []
+    if page == 2:
+        nav.append(KeyboardButton(text="◀️ Предыдущая"))
+    if page == 1:
+        nav.append(KeyboardButton(text="Следующая ▶️"))
+    if nav:
+        kb.append(nav)
     kb.append([KeyboardButton(text="❌ Выход")])
-    
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 def get_forge_kb():
@@ -733,7 +788,7 @@ def get_battle_action_kb():
     """Меню действий в бою"""
     kb = [
         [KeyboardButton(text="🗡️ Атаковать")],
-        [KeyboardButton(text="🛡️ Защиту")]
+        [KeyboardButton(text="Крит💥20%")]
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
@@ -910,12 +965,24 @@ async def clicker_logic(message: types.Message):
     update_player_points(user_id, new_points)
     update_last_click(user_id)
     
-    response = f"Прогресс пошел! 💪\n+ 📈 {player['click_power']}\nТекущие очки: {new_points}🔸"
+    material_found = random.random() < 0.01
+    if material_found:
+        new_materials = player["materials"] + 1
+        update_player_materials(user_id, new_materials)
+        response = (
+            f"Прогресс пошел! 💪\n+ 📈 {player['click_power']}\n"
+            f"Текущие очки: {new_points}🔸\n\n"
+            f"⚙️ Найден материал! Всего: {new_materials}"
+        )
+    else:
+        response = f"Прогресс пошел! 💪\n+ 📈 {player['click_power']}\nТекущие очки: {new_points}🔸"
+    
     await message.answer(response)
 
 # ============== PROFILE ==============
 @dp.message(Command("профиль"))
 @dp.message(F.text == "/профиль")
+@dp.message(F.text == "📖 Профиль")
 async def show_profile(message: types.Message):
     user_id = message.from_user.id
     player = get_player(user_id)
@@ -931,7 +998,9 @@ async def show_profile(message: types.Message):
         f"[🗒️] Профиль игрока: {player['nickname']}\n"
         f"🔸- Очки: {player['points']}\n"
         f"💠- Рейтинг: {player['rating_points']}\n"
-        f"⚡️- Мощь клика: {player['click_power']}\n\n"
+        f"⚡️- Мощь клика: {player['click_power']}\n"
+        f"⚙️ Материалов: {player['materials']}\n"
+        f"🗼 Текущий этаж рейда: {player['raid_floor']}\n\n"
         f"(⚔️) Сила: {int(player['strength'])}\n"
         f"(❤️) Здоровье: {health}\n"
         f"(💥) Урон: {damage}"
@@ -948,26 +1017,42 @@ async def open_shop(message: types.Message, state: FSMContext):
         await message.answer("Сначала зарегистрируйся! /start")
         return
     
-    shop_text = "🏪 **МАГАЗИН УЛУЧШЕНИЙ КЛИКА**\n\n"
-    shop_text += f"Твоя текущая мощь: {player['points']} ⚡\n\n"
-    shop_text += "Доступные улучшения:\n"
-    
-    for upgrade_id, upgrade_info in UPGRADES.items():
-        status = "✅ (уже куплено)" if has_purchased_click_upgrade(user_id, upgrade_id) else ""
-        shop_text += f"\n💳 {upgrade_info['display']} → Стоимость: {upgrade_info['cost']} очков {status}"
-    
-    await message.answer(shop_text, reply_markup=get_shop_kb())
     await state.set_state(ShopMenu.viewing_shop)
+    await state.update_data(shop_page=1)
+    await _send_shop_page(message, user_id, player, 1)
+
+async def _send_shop_page(message, user_id: int, player, page: int):
+    items = UPGRADES_PAGE1 if page == 1 else UPGRADES_PAGE2
+    page_label = "Страница 1" if page == 1 else "Страница 2"
+    shop_text = f"🏪 **МАГАЗИН УЛУЧШЕНИЙ КЛИКА** ({page_label})\n\n"
+    shop_text += f"Твои очки: {player['points']} 🔸 | Мощь клика: {player['click_power']} ⚡\n\n"
+    shop_text += "Доступные улучшения:\n"
+    for upgrade_id, upgrade_info in items.items():
+        status = "✅" if has_purchased_click_upgrade(user_id, upgrade_id) else ""
+        shop_text += f"\n{upgrade_info['display']} → {upgrade_info['cost']} очков {status}"
+    await message.answer(shop_text, reply_markup=get_shop_kb(page))
 
 @dp.message(ShopMenu.viewing_shop)
 async def handle_shop_purchase(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     player = get_player(user_id)
     text = message.text
+    data = await state.get_data()
+    page = data.get('shop_page', 1)
     
     if text == "❌ Выход":
         await state.clear()
         await message.answer("Вернулись в главное меню!", reply_markup=get_main_kb())
+        return
+
+    if text == "Следующая ▶️":
+        await state.update_data(shop_page=2)
+        await _send_shop_page(message, user_id, player, 2)
+        return
+
+    if text == "◀️ Предыдущая":
+        await state.update_data(shop_page=1)
+        await _send_shop_page(message, user_id, player, 1)
         return
     
     upgrade_purchased = False
@@ -975,13 +1060,13 @@ async def handle_shop_purchase(message: types.Message, state: FSMContext):
     for upgrade_id, upgrade_info in UPGRADES.items():
         if upgrade_info['display'] in text:
             if has_purchased_click_upgrade(user_id, upgrade_id):
-                await message.answer("❌ Вы уже купили данное улучшение!", reply_markup=get_shop_kb())
+                await message.answer("❌ Вы уже купили данное улучшение!", reply_markup=get_shop_kb(page))
                 return
             
             if player['points'] < upgrade_info['cost']:
                 await message.answer(
                     f"❌ Недостаточно очков!\nТребуется: {upgrade_info['cost']}\nУ вас есть: {player['points']}",
-                    reply_markup=get_shop_kb()
+                    reply_markup=get_shop_kb(page)
                 )
                 return
             
@@ -1000,7 +1085,7 @@ async def handle_shop_purchase(message: types.Message, state: FSMContext):
             break
     
     if not upgrade_purchased:
-        await message.answer("❌ Выберите корректное улучшение!", reply_markup=get_shop_kb())
+        await message.answer("❌ Выберите корректное улучшение!", reply_markup=get_shop_kb(page))
 
 # ============== FORGE (КУЗНЯ) ==============
 def _get_weapon_info(weapon_id: int) -> dict:
@@ -1350,6 +1435,202 @@ async def show_leaderboard(message: types.Message):
     
     await message.answer(response, reply_markup=get_main_kb())
 
+# ============== RAID ==============
+def _get_raid_floor_text(floor_id: int, enemy_info: dict) -> str:
+    """Вернуть текст информации об этаже рейда"""
+    return (
+        f"🐉 **РЕЙД — Этаж {floor_id}/10**\n\n"
+        f"{enemy_info['emoji']} {enemy_info['name']}\n"
+        f"🩶 {enemy_info['health']} HP\n"
+        f"⚔️ {enemy_info['base_damage']} атака\n"
+        f"💰 Награда: {enemy_info['reward']} очков"
+    )
+
+@dp.message(F.text == "🐉 Рейд")
+async def open_raid(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    player = get_player(user_id)
+
+    if not player:
+        await message.answer("Сначала зарегистрируйся! /start")
+        return
+
+    floor_id = player['raid_floor']
+    if floor_id > 10:
+        floor_id = 1
+        update_player_raid_floor(user_id, 1)
+
+    enemy_info = RAID_FLOORS[floor_id]
+    player_health = calculate_player_health(player['strength'])
+    player_damage = calculate_damage(player['strength'])
+    enemy_damage = enemy_info['base_damage']
+
+    raid_text = (
+        f"{_get_raid_floor_text(floor_id, enemy_info)}\n\n"
+        f"{'═' * 19}\n\n"
+        f"👤 {player['nickname']}\n"
+        f"❤️ {player_health}\n"
+        f"⚔️ {player_damage}\n\n"
+        f"Бой начинается!"
+    )
+
+    await state.set_state(RaidState.in_raid)
+    await state.update_data(
+        raid_floor=floor_id,
+        player_health=player_health,
+        player_damage=player_damage,
+        enemy_health=enemy_info['health'],
+        enemy_damage=enemy_damage,
+    )
+
+    # Определяем, кто ходит первым
+    player_goes_first = random.random() < 0.5
+    if player_goes_first:
+        raid_text += "\n\n🎲 Ты атакуешь первым!\nЧто ты будешь делать?"
+        await message.answer(raid_text, reply_markup=get_battle_action_kb())
+    else:
+        await message.answer(raid_text + "\n\n🎲 Враг атакует первым...",
+                             reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
+        await asyncio.sleep(2)
+
+        enemy_hit = int(round(enemy_damage * random.uniform(0.7, 1.3)))
+        new_player_health = player_health - enemy_hit
+
+        log = (
+            f"🐉 **РЕЙД — Этаж {floor_id}/10**\n\n"
+            f"{enemy_info['emoji']} {enemy_info['name']} атакует!\n"
+            f"💥 Урон: {enemy_hit}\n\n"
+        )
+
+        if new_player_health <= 0:
+            log += f"👤 {player['nickname']} повержен!\n\n❌ **ВЫ ПРОИГРАЛИ!**\n\nПрогресс этажа сохранён."
+            await message.answer(log, reply_markup=get_end_battle_kb())
+            await state.clear()
+            return
+
+        log += (
+            f"{'═' * 19}\n\n"
+            f"👤 {player['nickname']}\n❤️ {new_player_health}\n⚔️ {player_damage}\n\n"
+            f"{enemy_info['emoji']} {enemy_info['name']}\n🩶 {enemy_info['health']}\n\n"
+            "Твой ход!"
+        )
+        await state.update_data(player_health=new_player_health)
+        await message.answer(log, reply_markup=get_battle_action_kb())
+
+
+@dp.message(RaidState.in_raid)
+async def raid_battle_round(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    player = get_player(user_id)
+    data = await state.get_data()
+    action = message.text
+
+    floor_id = data['raid_floor']
+    enemy_info = RAID_FLOORS[floor_id]
+
+    if action not in ("🗡️ Атаковать", "Крит💥20%"):
+        if action == "🏠 В главное меню":
+            await state.clear()
+            await message.answer("Вернулись в главное меню!", reply_markup=get_main_kb())
+            return
+        await message.answer("Выбери действие!", reply_markup=get_battle_action_kb())
+        return
+
+    # Рассчитываем урон игрока
+    is_crit = action == "Крит💥20%" and random.random() < 0.20
+    base_dmg = int(round(data['player_damage'] * random.uniform(0.8, 1.2)))
+    player_hit = base_dmg * 2 if is_crit else base_dmg
+    new_enemy_health = int(round(data['enemy_health'] - player_hit))
+
+    crit_label = "💥 КРИТИЧЕСКИЙ УДАР!" if is_crit else ""
+    log = f"🐉 **РЕЙД — Этаж {floor_id}/10** ⚔️\n\n"
+    if crit_label:
+        log += f"{crit_label}\n"
+    log += f"👤 {player['nickname']} атакует!\n💥 Урон: {player_hit}\n\n"
+
+    if new_enemy_health <= 0:
+        # Победа на этаже
+        reward = enemy_info['reward']
+        new_points = round(player['points'] + reward, 1)
+        update_player_points(user_id, new_points)
+        update_rating_points(user_id, 5)
+        player_clan = get_player_clan(user_id)
+        clan_exp = 10 if floor_id == 10 else 5
+        if player_clan:
+            add_clan_exp(player_clan['clan_id'], clan_exp)
+
+        log += f"{enemy_info['emoji']} {enemy_info['name']} повержен!\n\n"
+        log += f"✅ **ЭТАЖ {floor_id} ПРОЙДЕН!**\n\n"
+        log += f"💰 Награда: +{reward} очков\n"
+        log += f"+5💠 очков рейтинга\n"
+        if player_clan:
+            log += f"+{clan_exp} опыта клану\n"
+        log += f"Всего очков: {new_points}\n"
+
+        if floor_id == 10:
+            update_player_raid_floor(user_id, 1)
+            log += (
+                "\n🎉 **ПОЗДРАВЛЯЕМ!**\n"
+                "Ты прошёл все 10 этажей рейда!\n"
+                "♦️💀 Зеркальный дух повержён!\n\n"
+                "Рейд начинается заново с первого этажа."
+            )
+            await message.answer(log, reply_markup=get_end_battle_kb())
+            await state.clear()
+        else:
+            next_floor = floor_id + 1
+            update_player_raid_floor(user_id, next_floor)
+            log += f"\n⬆️ Переход на этаж {next_floor}..."
+            await message.answer(log, reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
+            await asyncio.sleep(2)
+
+            # Автоматически начинаем следующий этаж
+            next_enemy = RAID_FLOORS[next_floor]
+            player_refreshed = get_player(user_id)
+            new_p_health = calculate_player_health(player_refreshed['strength'])
+            new_p_damage = calculate_damage(player_refreshed['strength'])
+
+            await state.update_data(
+                raid_floor=next_floor,
+                player_health=new_p_health,
+                player_damage=new_p_damage,
+                enemy_health=next_enemy['health'],
+                enemy_damage=next_enemy['base_damage'],
+            )
+
+            next_text = (
+                f"{_get_raid_floor_text(next_floor, next_enemy)}\n\n"
+                f"{'═' * 19}\n\n"
+                f"👤 {player_refreshed['nickname']}\n"
+                f"❤️ {new_p_health}\n"
+                f"⚔️ {new_p_damage}\n\n"
+                "Твой ход!"
+            )
+            await message.answer(next_text, reply_markup=get_battle_action_kb())
+        return
+
+    # Враг контратакует
+    enemy_hit = int(round(data['enemy_damage'] * random.uniform(0.7, 1.3)))
+    new_player_health = int(round(data['player_health'] - enemy_hit))
+
+    log += f"{enemy_info['emoji']} {enemy_info['name']} контратакует!\n💥 Урон: {enemy_hit}\n\n"
+
+    if new_player_health <= 0:
+        log += f"👤 {player['nickname']} повержен!\n\n❌ **ВЫ ПРОИГРАЛИ!**\n\nПрогресс этажа сохранён."
+        await message.answer(log, reply_markup=get_end_battle_kb())
+        await state.clear()
+        return
+
+    log += (
+        f"{'═' * 19}\n\n"
+        f"👤 {player['nickname']}\n❤️ {new_player_health}\n⚔️ {data['player_damage']}\n\n"
+        f"{enemy_info['emoji']} {enemy_info['name']}\n🩶 {new_enemy_health}\n⚔️ {data['enemy_damage']}\n\n"
+        "Что ты будешь делать?"
+    )
+    await message.answer(log, reply_markup=get_battle_action_kb())
+    await state.update_data(player_health=new_player_health, enemy_health=new_enemy_health)
+
+
 # ============== ENEMIES ==============
 @dp.message(F.text == "⚔️ Враги")
 async def show_enemies(message: types.Message, state: FSMContext):
@@ -1542,34 +1823,19 @@ async def battle_round(message: types.Message, state: FSMContext):
         await message.answer(battle_log, reply_markup=get_battle_action_kb())
         await state.update_data(player_health=new_player_health, enemy_health=new_enemy_health)
     
-    elif action == "🛡️ Защиту":
-        # Защита уменьшает полученный урон на 50%
-        enemy_damage = int(round(data['enemy_damage'] * random.uniform(0.35, 0.65)))
-        new_player_health = int(round(data['player_health'] - enemy_damage))
+    elif action == "Крит💥20%":
+        # Крит: 20% шанс двойного урона
+        is_crit = random.random() < 0.20
+        base_damage = int(round(data['player_damage'] * random.uniform(0.8, 1.2)))
+        player_damage = base_damage * 2 if is_crit else base_damage
+        new_enemy_health = int(round(data['enemy_health'] - player_damage))
         
-        battle_log = f"🛡️ **РАУНД БОЯ** 🛡️\n\n"
-        battle_log += f"👤 {player['nickname']} встал в защиту!\n\n"
-        battle_log += f"☠️ {enemy_info['name']} атакует!\n"
-        battle_log += f"💥 Урон: {enemy_damage} (защита сработала!)\n\n"
+        crit_label = "💥 КРИТИЧЕСКИЙ УДАР!" if is_crit else "⚔️ Промах крита"
+        battle_log = f"🗡️ **РАУНД БОЯ** 🗡️\n\n"
+        battle_log += f"{crit_label}\n"
+        battle_log += f"👤 {player['nickname']} атакует!\n"
+        battle_log += f"💥 Урон: {player_damage}\n\n"
         
-        # Проверяем, жив ли игрок
-        if new_player_health <= 0:
-            battle_log += f"👤 {player['nickname']} повержен!\n\n"
-            battle_log += f"❌ **ВЫ ПРОИГРАЛИ!**\n\n"
-            battle_log += f"Ты был повержен {enemy_info['name']}..."
-            
-            await message.answer(battle_log, reply_markup=get_end_battle_kb())
-            await state.clear()
-            return
-        
-        # Игрок контратакует при защите (меньший урон)
-        counter_damage = int(round(data['player_damage'] * 0.5 * random.uniform(0.8, 1.2)))
-        new_enemy_health = int(round(data['enemy_health'] - counter_damage))
-        
-        battle_log += f"⚔️ Контратака!\n"
-        battle_log += f"💥 Урон: {counter_damage}\n\n"
-        
-        # Проверяем, живого ли врага
         if new_enemy_health <= 0:
             reward = enemy_info['reward']
             new_points = round(player['points'] + reward, 1)
@@ -1589,7 +1855,22 @@ async def battle_round(message: types.Message, state: FSMContext):
             await state.clear()
             return
         
-        # Продолжаем бой
+        # Враг контратакует
+        enemy_damage = int(round(data['enemy_damage'] * random.uniform(0.7, 1.3)))
+        new_player_health = int(round(data['player_health'] - enemy_damage))
+        
+        battle_log += f"☠️ {enemy_info['name']} контратакует!\n"
+        battle_log += f"💥 Урон: {enemy_damage}\n\n"
+        
+        if new_player_health <= 0:
+            battle_log += f"👤 {player['nickname']} повержен!\n\n"
+            battle_log += f"❌ **ВЫ ПРОИГРАЛИ!**\n\n"
+            battle_log += f"Ты был повержен {enemy_info['name']}..."
+            
+            await message.answer(battle_log, reply_markup=get_end_battle_kb())
+            await state.clear()
+            return
+        
         battle_log += f"═══════════════════\n\n"
         battle_log += f"👤 {player['nickname']}\n❤️ {new_player_health}\n⚔️ {data['player_damage']}\n\n"
         battle_log += f"☠️ {enemy_info['name']}\n🩶 {new_enemy_health}\n⚔️ {data['enemy_damage']}\n\n"
@@ -1912,64 +2193,66 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
             except Exception:
                 pass
 
-    elif text == "🛡️ Защиту":
-        # Защита: снижаем входящий урон
-        taken = int(round(enemy_damage * random.uniform(0.35, 0.65)))
-        new_my_health = int(round(my_health - taken))
+    elif text == "Крит💥20%":
+        # Крит: 20% шанс двойного урона, затем враг бьёт нас
+        is_crit = random.random() < 0.20
+        base_dealt = int(round(my_damage * random.uniform(0.8, 1.2)))
+        dealt = base_dealt * 2 if is_crit else base_dealt
+        new_enemy_health = int(round(enemy_health - dealt))
 
-        battle_log = f"🛡️ **PvP БОЙ** 🛡️\n\nТы встал в защиту!\n💥 Получено урона: {taken} (снижено)\n\n"
+        crit_label = "💥 КРИТИЧЕСКИЙ УДАР!" if is_crit else "⚔️ Промах крита"
+        battle_log = f"⚔️ **PvP БОЙ** ⚔️\n\n{crit_label}\nТы атакуешь!\n💥 Урон: {dealt}\n\n"
 
-        if new_my_health <= 0:
-            battle_log += "❌ **ВЫ ПРОИГРАЛИ!**"
+        if new_enemy_health <= 0:
+            update_player_wins(user_id)
+            update_rating_points(user_id, 7)
+            winner_clan = get_player_clan(user_id)
+            if winner_clan:
+                add_clan_exp(winner_clan['clan_id'], 1)
+            battle_log += "✅ **ВЫ ПОБЕДИЛИ!**\n(+1 победа, +7💠 рейтинга)"
             await message.answer(battle_log, reply_markup=get_end_battle_kb())
             pvp_pairs.pop(user_id, None)
             pvp_pairs.pop(opponent_id, None)
             await state.clear()
 
             if opponent_id:
-                update_player_wins(opponent_id)
-                update_rating_points(opponent_id, 7)
-                opp_clan = get_player_clan(opponent_id)
-                if opp_clan:
-                    add_clan_exp(opp_clan['clan_id'], 1)
                 opp_state = dp.fsm.resolve_context(bot, opponent_id, opponent_id)
                 await opp_state.clear()
                 try:
                     await bot.send_message(
                         chat_id=opponent_id,
-                        text="✅ **ВЫ ПОБЕДИЛИ!**\n(+1 победа, +7💠 рейтинга)",
+                        text=f"⚔️ **PvP БОЙ** ⚔️\n\nСоперник атакует!\n💥 Урон: {dealt}\n\n❌ **ВЫ ПРОИГРАЛИ!**",
                         reply_markup=get_end_battle_kb()
                     )
                 except Exception:
                     pass
             return
 
+        # Передаём ход сопернику
         battle_log += (
-            f"👤 Ты: ❤️ {new_my_health}\n"
-            f"👤 Соперник: ❤️ {enemy_health}\n\n"
+            f"👤 Ты: ❤️ {my_health}\n"
+            f"👤 Соперник: ❤️ {new_enemy_health}\n\n"
             "⏳ Ход соперника..."
         )
         await message.answer(battle_log, reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
-        # Моё здоровье уменьшилось, передаём ход
-        await state.update_data(pvp_player_health=new_my_health, pvp_my_turn=False)
+        await state.update_data(pvp_enemy_health=new_enemy_health, pvp_my_turn=False)
 
         if opponent_id:
             opp_state = dp.fsm.resolve_context(bot, opponent_id, opponent_id)
             opp_data = await opp_state.get_data()
-            # С точки зрения соперника: их pvp_enemy_health (= наше здоровье) уменьшилось
-            new_opp_enemy_health = int(round(opp_data.get('pvp_enemy_health', 0) - taken))
+            new_opp_player_health = int(round(opp_data.get('pvp_player_health', 0) - dealt))
             await opp_state.update_data(
-                pvp_enemy_health=new_opp_enemy_health,
+                pvp_player_health=new_opp_player_health,
                 pvp_my_turn=True
             )
             try:
                 await bot.send_message(
                     chat_id=opponent_id,
                     text=(
-                        f"🛡️ **PvP БОЙ** 🛡️\n\n"
-                        f"Соперник встал в защиту!\n\n"
-                        f"👤 Ты: ❤️ {opp_data.get('pvp_player_health', 0)}\n"
-                        f"👤 Соперник: ❤️ {new_opp_enemy_health}\n\n"
+                        f"⚔️ **PvP БОЙ** ⚔️\n\n"
+                        f"Соперник атакует! 💥 {dealt} урона\n\n"
+                        f"👤 Ты: ❤️ {new_opp_player_health}\n"
+                        f"👤 Соперник: ❤️ {opp_data.get('pvp_enemy_health', 0)}\n\n"
                         "🗡️ Твой ход!"
                     ),
                     reply_markup=get_battle_action_kb()
