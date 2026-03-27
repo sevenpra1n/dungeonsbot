@@ -70,7 +70,35 @@ def init_database():
             FOREIGN KEY (user_id) REFERENCES players(user_id)
         )
     ''')
-    
+
+    # Таблица текущего оружия игроков (кузня)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS player_weapons (
+            user_id INTEGER PRIMARY KEY,
+            weapon_id INTEGER DEFAULT 0,
+            FOREIGN KEY (user_id) REFERENCES players(user_id)
+        )
+    ''')
+
+    # Таблица текущей брони игроков (кузня)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS player_armor (
+            user_id INTEGER PRIMARY KEY,
+            armor_id INTEGER DEFAULT 0,
+            FOREIGN KEY (user_id) REFERENCES players(user_id)
+        )
+    ''')
+
+    # Миграция: добавить записи для существующих игроков, у которых ещё нет строк
+    cursor.execute('''
+        INSERT OR IGNORE INTO player_weapons (user_id, weapon_id)
+        SELECT user_id, 0 FROM players
+    ''')
+    cursor.execute('''
+        INSERT OR IGNORE INTO player_armor (user_id, armor_id)
+        SELECT user_id, 0 FROM players
+    ''')
+
     conn.commit()
     conn.close()
 
@@ -84,6 +112,12 @@ def add_player(user_id: int, nickname: str):
             INSERT INTO players (user_id, nickname, points, click_power, strength, wins)
             VALUES (?, ?, 0.0, 1.0, 20.0, 0)
         ''', (user_id, nickname))
+        cursor.execute('''
+            INSERT OR IGNORE INTO player_weapons (user_id, weapon_id) VALUES (?, 0)
+        ''', (user_id,))
+        cursor.execute('''
+            INSERT OR IGNORE INTO player_armor (user_id, armor_id) VALUES (?, 0)
+        ''', (user_id,))
         conn.commit()
     except sqlite3.IntegrityError:
         pass
@@ -241,6 +275,46 @@ def add_equipment_purchase(user_id: int, equipment_id: int):
     conn.commit()
     conn.close()
 
+def get_player_weapon(user_id: int) -> int:
+    """Получить текущий уровень оружия игрока (0 = стартовое)"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('SELECT weapon_id FROM player_weapons WHERE user_id = ?', (user_id,))
+    result = cursor.fetchone()
+    conn.close()
+    return result[0] if result else 0
+
+def get_player_armor(user_id: int) -> int:
+    """Получить текущий уровень брони игрока (0 = стартовая)"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('SELECT armor_id FROM player_armor WHERE user_id = ?', (user_id,))
+    result = cursor.fetchone()
+    conn.close()
+    return result[0] if result else 0
+
+def set_player_weapon(user_id: int, weapon_id: int):
+    """Установить оружие игрока и пересчитать силу"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO player_weapons (user_id, weapon_id) VALUES (?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET weapon_id = excluded.weapon_id
+    ''', (user_id, weapon_id))
+    conn.commit()
+    conn.close()
+
+def set_player_armor(user_id: int, armor_id: int):
+    """Установить броню игрока и пересчитать силу"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO player_armor (user_id, armor_id) VALUES (?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET armor_id = excluded.armor_id
+    ''', (user_id, armor_id))
+    conn.commit()
+    conn.close()
+
 def get_leaderboard(limit: int = 10):
     """Получить рейтинг игроков (по силе)"""
     conn = sqlite3.connect(DB_NAME)
@@ -276,6 +350,36 @@ EQUIPMENT = {
     5: {"name": "гаечный ключ", "strength": 85, "cost": 850, "emoji": "🔧"}
 }
 
+# ============== FORGE: WEAPONS & ARMOR ==============
+DEFAULT_WEAPON = {"name": "палка", "strength": 10, "emoji": "🔹"}
+DEFAULT_ARMOR = {"name": "трусы", "strength": 10, "emoji": "🔹"}
+
+WEAPONS = {
+    1:  {"name": "большая палка",              "strength": 16,  "cost": 50,    "emoji": "🔹"},
+    2:  {"name": "деревянный меч",             "strength": 22,  "cost": 110,   "emoji": "🔹"},
+    3:  {"name": "каменная булава",            "strength": 31,  "cost": 200,   "emoji": "🔹"},
+    4:  {"name": "золотой клинок",             "strength": 40,  "cost": 345,   "emoji": "🔹"},
+    5:  {"name": "железный меч",               "strength": 55,  "cost": 650,   "emoji": "🔹"},
+    6:  {"name": "зачарованный золотой меч",   "strength": 70,  "cost": 1150,  "emoji": "🔸"},
+    7:  {"name": "алмазный клинок",            "strength": 95,  "cost": 1750,  "emoji": "🔸"},
+    8:  {"name": "катана",                     "strength": 125, "cost": 2800,  "emoji": "🔸"},
+    9:  {"name": "мурасама",                   "strength": 165, "cost": 4500,  "emoji": "🔸"},
+    10: {"name": "огненный клинок",            "strength": 200, "cost": 10000, "emoji": "♦️"},
+}
+
+ARMOR = {
+    1:  {"name": "кожаный торс и трусы",  "strength": 16,  "cost": 50,    "emoji": "🔹"},
+    2:  {"name": "тканевая одежда",        "strength": 22,  "cost": 110,   "emoji": "🔹"},
+    3:  {"name": "кожанные доспехи",       "strength": 31,  "cost": 200,   "emoji": "🔹"},
+    4:  {"name": "кольчуга",               "strength": 40,  "cost": 345,   "emoji": "🔹"},
+    5:  {"name": "железные доспехи",       "strength": 55,  "cost": 650,   "emoji": "🔹"},
+    6:  {"name": "золотые доспехи",        "strength": 70,  "cost": 1150,  "emoji": "🔸"},
+    7:  {"name": "стальные доспехи",       "strength": 95,  "cost": 1750,  "emoji": "🔸"},
+    8:  {"name": "алмазные доспехи",       "strength": 125, "cost": 2800,  "emoji": "🔸"},
+    9:  {"name": "обсидиановые доспехи",   "strength": 165, "cost": 4500,  "emoji": "🔸"},
+    10: {"name": "легендарные доспехи",    "strength": 200, "cost": 10000, "emoji": "♦️"},
+}
+
 # ============== ENEMIES ==============
 ENEMIES = {
     1: {"name": "Гоблин", "health": 50, "reward": 30, "base_damage": 8},
@@ -294,6 +398,11 @@ class ShopMenu(StatesGroup):
 
 class EquipmentMenu(StatesGroup):
     viewing_equipment = State()
+
+class ForgeMenu(StatesGroup):
+    viewing_forge = State()
+    viewing_weapons = State()
+    viewing_armor = State()
 
 class BattleState(StatesGroup):
     viewing_enemies = State()
@@ -319,9 +428,8 @@ def get_main_kb():
     """Главное меню"""
     kb = [
         [KeyboardButton(text="качать хуй")],
-        [KeyboardButton(text="🏪 Магазин"), KeyboardButton(text="⚔️ Враги")],
-        [KeyboardButton(text="🎖️ Снаряжение"), KeyboardButton(text="🏆 Рейтинг")],
-        [KeyboardButton(text="🌐 Онлайн")],
+        [KeyboardButton(text="🔨 Кузня"), KeyboardButton(text="⚔️ Враги")],
+        [KeyboardButton(text="🏆 Рейтинг"), KeyboardButton(text="🌐 Онлайн")],
         [KeyboardButton(text="/профиль")]
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
@@ -338,8 +446,34 @@ def get_shop_kb():
     
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
+def get_forge_kb():
+    """Главное меню кузни"""
+    kb = [
+        [KeyboardButton(text="⚔️ Оружие"), KeyboardButton(text="🛡️ Броня")],
+        [KeyboardButton(text="❌ Выход")]
+    ]
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+def get_weapons_kb():
+    """Меню выбора оружия"""
+    kb = []
+    for w_id, w_info in WEAPONS.items():
+        btn = f"{w_info['emoji']} {w_info['name']} (сила: {w_info['strength']}) — {w_info['cost']} оч."
+        kb.append([KeyboardButton(text=btn)])
+    kb.append([KeyboardButton(text="⬅️ Назад")])
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+def get_armor_kb():
+    """Меню выбора брони"""
+    kb = []
+    for a_id, a_info in ARMOR.items():
+        btn = f"{a_info['emoji']} {a_info['name']} (сила: {a_info['strength']}) — {a_info['cost']} оч."
+        kb.append([KeyboardButton(text=btn)])
+    kb.append([KeyboardButton(text="⬅️ Назад")])
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
 def get_equipment_kb():
-    """Меню снаряжения"""
+    """Меню снаряжения (устарело, оставлено для совместимости)"""
     kb = []
     
     for equip_id, equip_info in EQUIPMENT.items():
@@ -560,7 +694,232 @@ async def handle_shop_purchase(message: types.Message, state: FSMContext):
     if not upgrade_purchased:
         await message.answer("❌ Выберите корректное улучшение!", reply_markup=get_shop_kb())
 
-# ============== EQUIPMENT SHOP ==============
+# ============== FORGE (КУЗНЯ) ==============
+def _get_weapon_info(weapon_id: int) -> dict:
+    """Получить данные об оружии по id (0 = стартовое)"""
+    if weapon_id == 0:
+        return DEFAULT_WEAPON
+    return WEAPONS.get(weapon_id, DEFAULT_WEAPON)
+
+def _get_armor_info(armor_id: int) -> dict:
+    """Получить данные о броне по id (0 = стартовая)"""
+    if armor_id == 0:
+        return DEFAULT_ARMOR
+    return ARMOR.get(armor_id, DEFAULT_ARMOR)
+
+@dp.message(F.text == "🔨 Кузня")
+async def open_forge(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    player = get_player(user_id)
+
+    if not player:
+        await message.answer("Сначала зарегистрируйся! /start")
+        return
+
+    weapon_id = get_player_weapon(user_id)
+    armor_id = get_player_armor(user_id)
+    weapon = _get_weapon_info(weapon_id)
+    armor = _get_armor_info(armor_id)
+
+    forge_text = (
+        "🔨 **КУЗНЯ**\n\n"
+        f"💪 Общая сила: {int(player['strength'])}\n\n"
+        f"⚔️ Оружие: {weapon['emoji']} {weapon['name']} (сила: {weapon['strength']})\n"
+        f"🛡️ Броня:  {armor['emoji']} {armor['name']} (сила: {armor['strength']})\n\n"
+        "Выбери раздел для улучшения:"
+    )
+    await message.answer(forge_text, reply_markup=get_forge_kb())
+    await state.set_state(ForgeMenu.viewing_forge)
+
+@dp.message(ForgeMenu.viewing_forge)
+async def handle_forge_menu(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    player = get_player(user_id)
+    text = message.text
+
+    if text == "❌ Выход":
+        await state.clear()
+        await message.answer("Вернулись в главное меню!", reply_markup=get_main_kb())
+        return
+
+    if text == "⚔️ Оружие":
+        weapon_id = get_player_weapon(user_id)
+        weapon = _get_weapon_info(weapon_id)
+        weapons_text = (
+            "⚔️ **ОРУЖИЕ**\n\n"
+            f"Текущее оружие: {weapon['emoji']} {weapon['name']} (сила: {weapon['strength']})\n"
+            f"Очки: {player['points']}\n\n"
+            "Доступные улучшения:"
+        )
+        await message.answer(weapons_text, reply_markup=get_weapons_kb())
+        await state.set_state(ForgeMenu.viewing_weapons)
+        return
+
+    if text == "🛡️ Броня":
+        armor_id = get_player_armor(user_id)
+        armor = _get_armor_info(armor_id)
+        armor_text = (
+            "🛡️ **БРОНЯ**\n\n"
+            f"Текущая броня: {armor['emoji']} {armor['name']} (сила: {armor['strength']})\n"
+            f"Очки: {player['points']}\n\n"
+            "Доступные улучшения:"
+        )
+        await message.answer(armor_text, reply_markup=get_armor_kb())
+        await state.set_state(ForgeMenu.viewing_armor)
+        return
+
+    await message.answer("Выбери раздел!", reply_markup=get_forge_kb())
+
+@dp.message(ForgeMenu.viewing_weapons)
+async def handle_weapons_menu(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    player = get_player(user_id)
+    text = message.text
+
+    if text == "⬅️ Назад":
+        # Вернуться в главное меню кузни
+        weapon_id = get_player_weapon(user_id)
+        armor_id = get_player_armor(user_id)
+        weapon = _get_weapon_info(weapon_id)
+        armor = _get_armor_info(armor_id)
+        forge_text = (
+            "🔨 **КУЗНЯ**\n\n"
+            f"💪 Общая сила: {int(player['strength'])}\n\n"
+            f"⚔️ Оружие: {weapon['emoji']} {weapon['name']} (сила: {weapon['strength']})\n"
+            f"🛡️ Броня:  {armor['emoji']} {armor['name']} (сила: {armor['strength']})\n\n"
+            "Выбери раздел для улучшения:"
+        )
+        await message.answer(forge_text, reply_markup=get_forge_kb())
+        await state.set_state(ForgeMenu.viewing_forge)
+        return
+
+    # Определить, какое оружие выбрал игрок (точное совпадение с текстом кнопки)
+    chosen_weapon_id = None
+    for w_id, w_info in WEAPONS.items():
+        btn = f"{w_info['emoji']} {w_info['name']} (сила: {w_info['strength']}) — {w_info['cost']} оч."
+        if text == btn:
+            chosen_weapon_id = w_id
+            break
+
+    if chosen_weapon_id is None:
+        await message.answer("❌ Выбери оружие из списка!", reply_markup=get_weapons_kb())
+        return
+
+    current_weapon_id = get_player_weapon(user_id)
+    current_weapon = _get_weapon_info(current_weapon_id)
+    new_weapon = WEAPONS[chosen_weapon_id]
+
+    if new_weapon['strength'] <= current_weapon['strength']:
+        await message.answer(
+            f"❌ Нельзя надеть оружие слабее или равное текущему!\n"
+            f"Текущее: {current_weapon['emoji']} {current_weapon['name']} (сила: {current_weapon['strength']})",
+            reply_markup=get_weapons_kb()
+        )
+        return
+
+    if player['points'] < new_weapon['cost']:
+        await message.answer(
+            f"❌ Недостаточно очков!\nТребуется: {new_weapon['cost']}\nУ вас есть: {player['points']}",
+            reply_markup=get_weapons_kb()
+        )
+        return
+
+    # Купить оружие: сила заменяется, не суммируется
+    armor_id = get_player_armor(user_id)
+    armor = _get_armor_info(armor_id)
+    new_weapon_strength = new_weapon['strength']
+    new_total_strength = new_weapon_strength + armor['strength']
+    new_points = round(player['points'] - new_weapon['cost'], 1)
+
+    set_player_weapon(user_id, chosen_weapon_id)
+    update_player_strength(user_id, new_total_strength)
+    update_player_points(user_id, new_points)
+
+    await message.answer(
+        f"✅ Оружие улучшено!\n\n"
+        f"{new_weapon['emoji']} {new_weapon['name']}\n"
+        f"⚔️ Сила оружия: {new_weapon_strength}\n"
+        f"🛡️ Сила брони: {armor['strength']}\n"
+        f"💪 Общая сила: {int(new_total_strength)}\n\n"
+        f"- {new_weapon['cost']} очков\nОсталось: {new_points}",
+        reply_markup=get_weapons_kb()
+    )
+
+@dp.message(ForgeMenu.viewing_armor)
+async def handle_armor_menu(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    player = get_player(user_id)
+    text = message.text
+
+    if text == "⬅️ Назад":
+        weapon_id = get_player_weapon(user_id)
+        armor_id = get_player_armor(user_id)
+        weapon = _get_weapon_info(weapon_id)
+        armor = _get_armor_info(armor_id)
+        forge_text = (
+            "🔨 **КУЗНЯ**\n\n"
+            f"💪 Общая сила: {int(player['strength'])}\n\n"
+            f"⚔️ Оружие: {weapon['emoji']} {weapon['name']} (сила: {weapon['strength']})\n"
+            f"🛡️ Броня:  {armor['emoji']} {armor['name']} (сила: {armor['strength']})\n\n"
+            "Выбери раздел для улучшения:"
+        )
+        await message.answer(forge_text, reply_markup=get_forge_kb())
+        await state.set_state(ForgeMenu.viewing_forge)
+        return
+
+    # Определить, какую броню выбрал игрок (точное совпадение с текстом кнопки)
+    chosen_armor_id = None
+    for a_id, a_info in ARMOR.items():
+        btn = f"{a_info['emoji']} {a_info['name']} (сила: {a_info['strength']}) — {a_info['cost']} оч."
+        if text == btn:
+            chosen_armor_id = a_id
+            break
+
+    if chosen_armor_id is None:
+        await message.answer("❌ Выбери броню из списка!", reply_markup=get_armor_kb())
+        return
+
+    current_armor_id = get_player_armor(user_id)
+    current_armor = _get_armor_info(current_armor_id)
+    new_armor = ARMOR[chosen_armor_id]
+
+    if new_armor['strength'] <= current_armor['strength']:
+        await message.answer(
+            f"❌ Нельзя надеть броню слабее или равную текущей!\n"
+            f"Текущая: {current_armor['emoji']} {current_armor['name']} (сила: {current_armor['strength']})",
+            reply_markup=get_armor_kb()
+        )
+        return
+
+    if player['points'] < new_armor['cost']:
+        await message.answer(
+            f"❌ Недостаточно очков!\nТребуется: {new_armor['cost']}\nУ вас есть: {player['points']}",
+            reply_markup=get_armor_kb()
+        )
+        return
+
+    # Купить броню: сила заменяется, не суммируется
+    weapon_id = get_player_weapon(user_id)
+    weapon = _get_weapon_info(weapon_id)
+    new_armor_strength = new_armor['strength']
+    new_total_strength = weapon['strength'] + new_armor_strength
+    new_points = round(player['points'] - new_armor['cost'], 1)
+
+    set_player_armor(user_id, chosen_armor_id)
+    update_player_strength(user_id, new_total_strength)
+    update_player_points(user_id, new_points)
+
+    await message.answer(
+        f"✅ Броня улучшена!\n\n"
+        f"{new_armor['emoji']} {new_armor['name']}\n"
+        f"⚔️ Сила оружия: {weapon['strength']}\n"
+        f"🛡️ Сила брони: {new_armor_strength}\n"
+        f"💪 Общая сила: {int(new_total_strength)}\n\n"
+        f"- {new_armor['cost']} очков\nОсталось: {new_points}",
+        reply_markup=get_armor_kb()
+    )
+
+# ============== EQUIPMENT SHOP (устарело — кузня заменяет) ==============
 @dp.message(F.text == "🎖️ Снаряжение")
 async def open_equipment_shop(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
