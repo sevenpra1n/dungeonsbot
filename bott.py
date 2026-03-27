@@ -36,18 +36,23 @@ def init_database():
             click_power REAL DEFAULT 1.0,
             strength REAL DEFAULT 20.0,
             wins INTEGER DEFAULT 0,
+            rating_points INTEGER DEFAULT 0,
             last_click TIMESTAMP DEFAULT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    # Добавить столбец wins, если его нет (миграция)
-    try:
-        cursor.execute('ALTER TABLE players ADD COLUMN wins INTEGER DEFAULT 0')
-        conn.commit()
-    except sqlite3.OperationalError as e:
-        if "duplicate column name" not in str(e).lower():
-            logging.warning(f"Migration warning: {e}")
+    # Миграция: добавить столбцы wins и rating_points, если их нет
+    for col_sql in [
+        'ALTER TABLE players ADD COLUMN wins INTEGER DEFAULT 0',
+        'ALTER TABLE players ADD COLUMN rating_points INTEGER DEFAULT 0',
+    ]:
+        try:
+            cursor.execute(col_sql)
+            conn.commit()
+        except sqlite3.OperationalError as e:
+            if "duplicate column name" not in str(e).lower():
+                logging.warning(f"Migration warning: {e}")
     
     # Таблица покупок улучшений клика
     cursor.execute('''
@@ -99,6 +104,44 @@ def init_database():
         SELECT user_id, 0 FROM players
     ''')
 
+    # Таблица кланов
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS clans (
+            clan_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            clan_name TEXT NOT NULL UNIQUE,
+            leader_id INTEGER NOT NULL,
+            description TEXT,
+            min_power INTEGER DEFAULT 0,
+            clan_level INTEGER DEFAULT 1,
+            clan_exp INTEGER DEFAULT 0,
+            members_count INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (leader_id) REFERENCES players(user_id)
+        )
+    ''')
+
+    # Таблица членов кланов
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS clan_members (
+            user_id INTEGER NOT NULL,
+            clan_id INTEGER NOT NULL,
+            joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, clan_id),
+            FOREIGN KEY (user_id) REFERENCES players(user_id),
+            FOREIGN KEY (clan_id) REFERENCES clans(clan_id)
+        )
+    ''')
+
+    # Таблица статистики кланов
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS clan_stats (
+            clan_id INTEGER PRIMARY KEY,
+            total_wins INTEGER DEFAULT 0,
+            total_enemies_defeated INTEGER DEFAULT 0,
+            FOREIGN KEY (clan_id) REFERENCES clans(clan_id)
+        )
+    ''')
+
     conn.commit()
     conn.close()
 
@@ -130,7 +173,7 @@ def get_player(user_id: int):
     cursor = conn.cursor()
     
     cursor.execute('''
-        SELECT user_id, nickname, points, click_power, strength, wins, last_click FROM players
+        SELECT user_id, nickname, points, click_power, strength, wins, last_click, rating_points FROM players
         WHERE user_id = ?
     ''', (user_id,))
     
@@ -145,7 +188,8 @@ def get_player(user_id: int):
             "click_power": result[3],
             "strength": result[4],
             "wins": result[5] if result[5] is not None else 0,
-            "last_click": result[6]
+            "last_click": result[6],
+            "rating_points": result[7] if result[7] is not None else 0
         }
     return None
 
@@ -321,7 +365,7 @@ def get_leaderboard(limit: int = 10):
     cursor = conn.cursor()
     
     cursor.execute('''
-        SELECT nickname, strength, COALESCE(wins, 0) FROM players
+        SELECT nickname, strength, COALESCE(wins, 0), COALESCE(rating_points, 0) FROM players
         WHERE strength > 0
         ORDER BY strength DESC
         LIMIT ?
@@ -330,6 +374,176 @@ def get_leaderboard(limit: int = 10):
     results = cursor.fetchall()
     conn.close()
     
+    return results
+
+# ============== CLAN DB FUNCTIONS ==============
+CLAN_LEVEL_EXP = {1: 100, 2: 250, 3: 500, 4: 950, 5: 1500}
+MAX_CLAN_LEVEL = 5
+
+def update_rating_points(user_id: int, points: int):
+    """Добавить очки рейтинга игроку"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE players
+        SET rating_points = COALESCE(rating_points, 0) + ?, updated_at = CURRENT_TIMESTAMP
+        WHERE user_id = ?
+    ''', (points, user_id))
+    conn.commit()
+    conn.close()
+
+def get_player_clan(user_id: int):
+    """Получить клан игрока (None если нет клана)"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT c.clan_id, c.clan_name, c.leader_id, c.description, c.min_power,
+               c.clan_level, c.clan_exp, c.members_count
+        FROM clans c
+        JOIN clan_members cm ON c.clan_id = cm.clan_id
+        WHERE cm.user_id = ?
+    ''', (user_id,))
+    result = cursor.fetchone()
+    conn.close()
+    if result:
+        return {
+            "clan_id": result[0],
+            "clan_name": result[1],
+            "leader_id": result[2],
+            "description": result[3],
+            "min_power": result[4],
+            "clan_level": result[5],
+            "clan_exp": result[6],
+            "members_count": result[7]
+        }
+    return None
+
+def get_clan(clan_id: int):
+    """Получить клан по ID"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT clan_id, clan_name, leader_id, description, min_power,
+               clan_level, clan_exp, members_count
+        FROM clans WHERE clan_id = ?
+    ''', (clan_id,))
+    result = cursor.fetchone()
+    conn.close()
+    if result:
+        return {
+            "clan_id": result[0],
+            "clan_name": result[1],
+            "leader_id": result[2],
+            "description": result[3],
+            "min_power": result[4],
+            "clan_level": result[5],
+            "clan_exp": result[6],
+            "members_count": result[7]
+        }
+    return None
+
+def create_clan(clan_name: str, leader_id: int, description: str) -> int:
+    """Создать клан, вернуть clan_id (или -1 при ошибке)"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            INSERT INTO clans (clan_name, leader_id, description, members_count)
+            VALUES (?, ?, ?, 1)
+        ''', (clan_name, leader_id, description))
+        clan_id = cursor.lastrowid
+        cursor.execute('INSERT INTO clan_members (user_id, clan_id) VALUES (?, ?)', (leader_id, clan_id))
+        cursor.execute('INSERT INTO clan_stats (clan_id) VALUES (?)', (clan_id,))
+        conn.commit()
+        return clan_id
+    except sqlite3.IntegrityError:
+        return -1
+    finally:
+        conn.close()
+
+def join_clan(user_id: int, clan_id: int):
+    """Вступить в клан"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('INSERT OR IGNORE INTO clan_members (user_id, clan_id) VALUES (?, ?)', (user_id, clan_id))
+    cursor.execute('UPDATE clans SET members_count = members_count + 1 WHERE clan_id = ?', (clan_id,))
+    conn.commit()
+    conn.close()
+
+def leave_clan(user_id: int, clan_id: int):
+    """Выйти из клана"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM clan_members WHERE user_id = ? AND clan_id = ?', (user_id, clan_id))
+    cursor.execute('UPDATE clans SET members_count = MAX(0, members_count - 1) WHERE clan_id = ?', (clan_id,))
+    conn.commit()
+    conn.close()
+
+def kick_clan_member(user_id: int, clan_id: int):
+    """Кикнуть члена из клана"""
+    leave_clan(user_id, clan_id)
+
+def delete_clan(clan_id: int):
+    """Удалить клан и всех его членов"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM clan_members WHERE clan_id = ?', (clan_id,))
+    cursor.execute('DELETE FROM clan_stats WHERE clan_id = ?', (clan_id,))
+    cursor.execute('DELETE FROM clans WHERE clan_id = ?', (clan_id,))
+    conn.commit()
+    conn.close()
+
+def set_clan_min_power(clan_id: int, min_power: int):
+    """Установить минимальный порог входа"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('UPDATE clans SET min_power = ? WHERE clan_id = ?', (min_power, clan_id))
+    conn.commit()
+    conn.close()
+
+def add_clan_exp(clan_id: int, exp: int):
+    """Добавить опыт клану, автоматически повышает уровень"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('SELECT clan_exp, clan_level FROM clans WHERE clan_id = ?', (clan_id,))
+    result = cursor.fetchone()
+    if result:
+        new_exp = result[0] + exp
+        level = result[1]
+        while level < MAX_CLAN_LEVEL and new_exp >= CLAN_LEVEL_EXP[level]:
+            level += 1
+        cursor.execute('UPDATE clans SET clan_exp = ?, clan_level = ? WHERE clan_id = ?',
+                       (new_exp, level, clan_id))
+    conn.commit()
+    conn.close()
+
+def get_all_clans():
+    """Получить список всех кланов"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT c.clan_id, c.clan_name, c.clan_level, c.members_count, c.min_power,
+               p.nickname AS leader_name
+        FROM clans c
+        JOIN players p ON c.leader_id = p.user_id
+        ORDER BY c.clan_level DESC, c.clan_exp DESC
+    ''')
+    results = cursor.fetchall()
+    conn.close()
+    return results
+
+def get_clan_members(clan_id: int):
+    """Получить список членов клана"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT p.user_id, p.nickname, p.strength
+        FROM players p
+        JOIN clan_members cm ON p.user_id = cm.user_id
+        WHERE cm.clan_id = ?
+    ''', (clan_id,))
+    results = cursor.fetchall()
+    conn.close()
     return results
 
 # ============== UPGRADES ==============
@@ -415,6 +629,16 @@ class OnlineState(StatesGroup):
     waiting_accept = State()
     in_pvp_battle = State()
 
+class ClanMenu(StatesGroup):
+    viewing_clans = State()
+    creating_clan_confirm = State()
+    creating_clan_name = State()
+    creating_clan_description = State()
+    viewing_my_clan = State()
+    kicking_member = State()
+    changing_min_power = State()
+    deleting_clan_confirm = State()
+
 # Словарь для отслеживания cooldown клика
 click_cooldowns = {}
 
@@ -430,6 +654,7 @@ def get_main_kb():
         [KeyboardButton(text="качать хуй")],
         [KeyboardButton(text="🔨 Кузня"), KeyboardButton(text="⚔️ Враги")],
         [KeyboardButton(text="🏆 Рейтинг"), KeyboardButton(text="🌐 Онлайн")],
+        [KeyboardButton(text="🛡️ Кланы")],
         [KeyboardButton(text="/профиль")]
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
@@ -534,6 +759,88 @@ def get_pvp_accept_kb():
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
+def get_next_weapon_kb(current_weapon_id: int) -> ReplyKeyboardMarkup:
+    """Клавиатура для следующего уровня оружия"""
+    next_id = current_weapon_id + 1
+    if next_id > max(WEAPONS.keys()):
+        kb = [
+            [KeyboardButton(text="✅ Вы достигли максимума")],
+            [KeyboardButton(text="⬅️ Назад")]
+        ]
+    else:
+        w = WEAPONS[next_id]
+        btn = f"{w['emoji']} {w['name']} (сила: {w['strength']}) — {w['cost']} оч."
+        kb = [
+            [KeyboardButton(text=btn)],
+            [KeyboardButton(text="⬅️ Назад")]
+        ]
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+def get_next_armor_kb(current_armor_id: int) -> ReplyKeyboardMarkup:
+    """Клавиатура для следующего уровня брони"""
+    next_id = current_armor_id + 1
+    if next_id > max(ARMOR.keys()):
+        kb = [
+            [KeyboardButton(text="✅ Вы достигли максимума")],
+            [KeyboardButton(text="⬅️ Назад")]
+        ]
+    else:
+        a = ARMOR[next_id]
+        btn = f"{a['emoji']} {a['name']} (сила: {a['strength']}) — {a['cost']} оч."
+        kb = [
+            [KeyboardButton(text=btn)],
+            [KeyboardButton(text="⬅️ Назад")]
+        ]
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+def get_clans_list_kb(clans: list) -> ReplyKeyboardMarkup:
+    """Клавиатура со списком кланов"""
+    kb = []
+    for clan in clans:
+        clan_id, clan_name, clan_level, members_count, min_power, leader_name = clan
+        btn = f"🛡️ {clan_name} [ур.{clan_level}] [{members_count}👥] [{min_power}⚔️]"
+        kb.append([KeyboardButton(text=btn)])
+    kb.append([KeyboardButton(text="➕ Создать клан")])
+    kb.append([KeyboardButton(text="❌ Вернуться")])
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+def get_create_clan_confirm_kb() -> ReplyKeyboardMarkup:
+    """Подтверждение создания клана"""
+    kb = [
+        [KeyboardButton(text="✅ Да, создать")],
+        [KeyboardButton(text="❌ Нет")]
+    ]
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+def get_my_clan_kb(is_leader: bool) -> ReplyKeyboardMarkup:
+    """Меню своего клана"""
+    kb = []
+    if is_leader:
+        kb.append([KeyboardButton(text="👢 Кикнуть игрока")])
+        kb.append([KeyboardButton(text="⚙️ Изменить порог")])
+        kb.append([KeyboardButton(text="🗑️ Удалить клан")])
+    else:
+        kb.append([KeyboardButton(text="🚪 Выйти из клана")])
+    kb.append([KeyboardButton(text="🔙 Вернуться")])
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+def get_kick_members_kb(members: list, leader_id: int) -> ReplyKeyboardMarkup:
+    """Клавиатура со списком членов для кика"""
+    kb = []
+    for user_id, nickname, strength in members:
+        if user_id != leader_id:
+            kb.append([KeyboardButton(text=f"👤 {nickname}")])
+    kb.append([KeyboardButton(text="❌ Отмена")])
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+def get_delete_clan_confirm_kb() -> ReplyKeyboardMarkup:
+    """Подтверждение удаления клана"""
+    kb = [
+        [KeyboardButton(text="✅ Да, удалить")],
+        [KeyboardButton(text="❌ Нет")]
+    ]
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
 # ============== HELPER FUNCTIONS ==============
 def calculate_player_health(strength: float) -> int:
     """Рассчитать здоровье игрока (сила * 0.9)"""
@@ -603,7 +910,7 @@ async def clicker_logic(message: types.Message):
     update_player_points(user_id, new_points)
     update_last_click(user_id)
     
-    response = f"Прогресс пошел! 💪\nТекущие очки: {new_points}\nМощь клика: {player['click_power']}"
+    response = f"Прогресс пошел! 💪\n+ 📈 {player['click_power']}\nТекущие очки: {new_points}🔸"
     await message.answer(response)
 
 # ============== PROFILE ==============
@@ -621,12 +928,13 @@ async def show_profile(message: types.Message):
     damage = calculate_damage(player['strength'])
     
     response = (
-        f"👤 Профиль игрока: {player['nickname']}\n"
-        f"📊 Очки: {player['points']}\n"
-        f"⚡ Мощь клика: {player['click_power']}\n"
-        f"💪 Сила: {player['strength']}\n"
-        f"❤️ Здоровье: {health}\n"
-        f"⚔️ Урон: {damage}"
+        f"[🗒️] Профиль игрока: {player['nickname']}\n"
+        f"🔸- Очки: {player['points']}\n"
+        f"💠- Рейтинг: {player['rating_points']}\n"
+        f"⚡️- Мощь клика: {player['click_power']}\n\n"
+        f"(⚔️) Сила: {int(player['strength'])}\n"
+        f"(❤️) Здоровье: {health}\n"
+        f"(💥) Урон: {damage}"
     )
     await message.answer(response, reply_markup=get_main_kb())
 
@@ -745,26 +1053,48 @@ async def handle_forge_menu(message: types.Message, state: FSMContext):
     if text == "⚔️ Оружие":
         weapon_id = get_player_weapon(user_id)
         weapon = _get_weapon_info(weapon_id)
-        weapons_text = (
-            "⚔️ **ОРУЖИЕ**\n\n"
-            f"Текущее оружие: {weapon['emoji']} {weapon['name']} (сила: {weapon['strength']})\n"
-            f"Очки: {player['points']}\n\n"
-            "Доступные улучшения:"
-        )
-        await message.answer(weapons_text, reply_markup=get_weapons_kb())
+        next_weapon_id = weapon_id + 1
+        if next_weapon_id > max(WEAPONS.keys()):
+            weapons_text = (
+                "⚔️ **ОРУЖИЕ**\n\n"
+                f"Текущее оружие: {weapon['emoji']} {weapon['name']} (сила: {weapon['strength']})\n"
+                f"Очки: {player['points']}\n\n"
+                "✅ Вы достигли максимума"
+            )
+        else:
+            next_w = WEAPONS[next_weapon_id]
+            weapons_text = (
+                "⚔️ **ОРУЖИЕ**\n\n"
+                f"Текущее оружие: {weapon['emoji']} {weapon['name']} (сила: {weapon['strength']})\n"
+                f"Очки: {player['points']}\n\n"
+                f"Следующее улучшение:\n"
+                f"{next_w['emoji']} {next_w['name']} (сила: {next_w['strength']}) — {next_w['cost']} оч."
+            )
+        await message.answer(weapons_text, reply_markup=get_next_weapon_kb(weapon_id))
         await state.set_state(ForgeMenu.viewing_weapons)
         return
 
     if text == "🛡️ Броня":
         armor_id = get_player_armor(user_id)
         armor = _get_armor_info(armor_id)
-        armor_text = (
-            "🛡️ **БРОНЯ**\n\n"
-            f"Текущая броня: {armor['emoji']} {armor['name']} (сила: {armor['strength']})\n"
-            f"Очки: {player['points']}\n\n"
-            "Доступные улучшения:"
-        )
-        await message.answer(armor_text, reply_markup=get_armor_kb())
+        next_armor_id = armor_id + 1
+        if next_armor_id > max(ARMOR.keys()):
+            armor_text = (
+                "🛡️ **БРОНЯ**\n\n"
+                f"Текущая броня: {armor['emoji']} {armor['name']} (сила: {armor['strength']})\n"
+                f"Очки: {player['points']}\n\n"
+                "✅ Вы достигли максимума"
+            )
+        else:
+            next_a = ARMOR[next_armor_id]
+            armor_text = (
+                "🛡️ **БРОНЯ**\n\n"
+                f"Текущая броня: {armor['emoji']} {armor['name']} (сила: {armor['strength']})\n"
+                f"Очки: {player['points']}\n\n"
+                f"Следующее улучшение:\n"
+                f"{next_a['emoji']} {next_a['name']} (сила: {next_a['strength']}) — {next_a['cost']} оч."
+            )
+        await message.answer(armor_text, reply_markup=get_next_armor_kb(armor_id))
         await state.set_state(ForgeMenu.viewing_armor)
         return
 
@@ -794,6 +1124,11 @@ async def handle_weapons_menu(message: types.Message, state: FSMContext):
         return
 
     # Определить, какое оружие выбрал игрок (точное совпадение с текстом кнопки)
+    if text == "✅ Вы достигли максимума":
+        current_wid = get_player_weapon(user_id)
+        await message.answer("✅ Вы уже достигли максимального уровня оружия!", reply_markup=get_next_weapon_kb(current_wid))
+        return
+
     chosen_weapon_id = None
     for w_id, w_info in WEAPONS.items():
         btn = f"{w_info['emoji']} {w_info['name']} (сила: {w_info['strength']}) — {w_info['cost']} оч."
@@ -802,7 +1137,8 @@ async def handle_weapons_menu(message: types.Message, state: FSMContext):
             break
 
     if chosen_weapon_id is None:
-        await message.answer("❌ Выбери оружие из списка!", reply_markup=get_weapons_kb())
+        current_wid = get_player_weapon(user_id)
+        await message.answer("❌ Выбери оружие из списка!", reply_markup=get_next_weapon_kb(current_wid))
         return
 
     current_weapon_id = get_player_weapon(user_id)
@@ -813,14 +1149,14 @@ async def handle_weapons_menu(message: types.Message, state: FSMContext):
         await message.answer(
             f"❌ Нельзя надеть оружие слабее или равное текущему!\n"
             f"Текущее: {current_weapon['emoji']} {current_weapon['name']} (сила: {current_weapon['strength']})",
-            reply_markup=get_weapons_kb()
+            reply_markup=get_next_weapon_kb(current_weapon_id)
         )
         return
 
     if player['points'] < new_weapon['cost']:
         await message.answer(
             f"❌ Недостаточно очков!\nТребуется: {new_weapon['cost']}\nУ вас есть: {player['points']}",
-            reply_markup=get_weapons_kb()
+            reply_markup=get_next_weapon_kb(current_weapon_id)
         )
         return
 
@@ -838,11 +1174,11 @@ async def handle_weapons_menu(message: types.Message, state: FSMContext):
     await message.answer(
         f"✅ Оружие улучшено!\n\n"
         f"{new_weapon['emoji']} {new_weapon['name']}\n"
-        f"⚔️ Сила оружия: {new_weapon_strength}\n"
+        f"(⚔️) Сила оружия: {new_weapon_strength}\n"
         f"🛡️ Сила брони: {armor['strength']}\n"
-        f"💪 Общая сила: {int(new_total_strength)}\n\n"
+        f"(⚔️) Общая сила: {int(new_total_strength)}\n\n"
         f"- {new_weapon['cost']} очков\nОсталось: {new_points}",
-        reply_markup=get_weapons_kb()
+        reply_markup=get_next_weapon_kb(chosen_weapon_id)
     )
 
 @dp.message(ForgeMenu.viewing_armor)
@@ -868,6 +1204,11 @@ async def handle_armor_menu(message: types.Message, state: FSMContext):
         return
 
     # Определить, какую броню выбрал игрок (точное совпадение с текстом кнопки)
+    if text == "✅ Вы достигли максимума":
+        current_aid = get_player_armor(user_id)
+        await message.answer("✅ Вы уже достигли максимального уровня брони!", reply_markup=get_next_armor_kb(current_aid))
+        return
+
     chosen_armor_id = None
     for a_id, a_info in ARMOR.items():
         btn = f"{a_info['emoji']} {a_info['name']} (сила: {a_info['strength']}) — {a_info['cost']} оч."
@@ -876,7 +1217,8 @@ async def handle_armor_menu(message: types.Message, state: FSMContext):
             break
 
     if chosen_armor_id is None:
-        await message.answer("❌ Выбери броню из списка!", reply_markup=get_armor_kb())
+        current_aid = get_player_armor(user_id)
+        await message.answer("❌ Выбери броню из списка!", reply_markup=get_next_armor_kb(current_aid))
         return
 
     current_armor_id = get_player_armor(user_id)
@@ -887,14 +1229,14 @@ async def handle_armor_menu(message: types.Message, state: FSMContext):
         await message.answer(
             f"❌ Нельзя надеть броню слабее или равную текущей!\n"
             f"Текущая: {current_armor['emoji']} {current_armor['name']} (сила: {current_armor['strength']})",
-            reply_markup=get_armor_kb()
+            reply_markup=get_next_armor_kb(current_armor_id)
         )
         return
 
     if player['points'] < new_armor['cost']:
         await message.answer(
             f"❌ Недостаточно очков!\nТребуется: {new_armor['cost']}\nУ вас есть: {player['points']}",
-            reply_markup=get_armor_kb()
+            reply_markup=get_next_armor_kb(current_armor_id)
         )
         return
 
@@ -912,11 +1254,11 @@ async def handle_armor_menu(message: types.Message, state: FSMContext):
     await message.answer(
         f"✅ Броня улучшена!\n\n"
         f"{new_armor['emoji']} {new_armor['name']}\n"
-        f"⚔️ Сила оружия: {weapon['strength']}\n"
+        f"(⚔️) Сила оружия: {weapon['strength']}\n"
         f"🛡️ Сила брони: {new_armor_strength}\n"
-        f"💪 Общая сила: {int(new_total_strength)}\n\n"
+        f"(⚔️) Общая сила: {int(new_total_strength)}\n\n"
         f"- {new_armor['cost']} очков\nОсталось: {new_points}",
-        reply_markup=get_armor_kb()
+        reply_markup=get_next_armor_kb(chosen_armor_id)
     )
 
 # ============== EQUIPMENT SHOP (устарело — кузня заменяет) ==============
@@ -1000,11 +1342,11 @@ async def show_leaderboard(message: types.Message):
         await message.answer("📊 Рейтинг пуст. Прокачайся!", reply_markup=get_main_kb())
         return
     
-    response = "🏆 **РЕЙТИНГ ИГРОКОВ**\n\n"
+    response = "(🏆) РЕЙТИНГ ИГРОКОВ\n\n"
     
-    for index, (nickname, strength, wins) in enumerate(leaderboard, 1):
+    for index, (nickname, strength, wins, rating_pts) in enumerate(leaderboard, 1):
         medal = "🥇" if index == 1 else "🥈" if index == 2 else "🥉" if index == 3 else f"{index}."
-        response += f"{medal} {nickname} — {int(strength)}🗡️ {wins}🏆\n"
+        response += f"{medal} {nickname} — | {int(strength)}🗡️ | | {wins}🏆 | | {rating_pts}💠 |\n"
     
     await message.answer(response, reply_markup=get_main_kb())
 
@@ -1158,10 +1500,15 @@ async def battle_round(message: types.Message, state: FSMContext):
             reward = enemy_info['reward']
             new_points = round(player['points'] + reward, 1)
             update_player_points(user_id, new_points)
+            update_rating_points(user_id, 5)
+            player_clan = get_player_clan(user_id)
+            if player_clan:
+                add_clan_exp(player_clan['clan_id'], 5)
             
             battle_log += f"☠️ {enemy_info['name']} повержен!\n\n"
             battle_log += f"✅ **ВЫ ПОБЕДИЛИ!**\n\n"
             battle_log += f"💰 Награда: +{reward} очков\n"
+            battle_log += f"+5💠 очков рейтинга\n"
             battle_log += f"Всего очков: {new_points}"
             
             await message.answer(battle_log, reply_markup=get_end_battle_kb())
@@ -1227,10 +1574,15 @@ async def battle_round(message: types.Message, state: FSMContext):
             reward = enemy_info['reward']
             new_points = round(player['points'] + reward, 1)
             update_player_points(user_id, new_points)
+            update_rating_points(user_id, 5)
+            player_clan = get_player_clan(user_id)
+            if player_clan:
+                add_clan_exp(player_clan['clan_id'], 5)
             
             battle_log += f"☠️ {enemy_info['name']} повержен!\n\n"
             battle_log += f"✅ **ВЫ ПОБЕДИЛИ!**\n\n"
             battle_log += f"💰 Награда: +{reward} очков\n"
+            battle_log += f"+5💠 очков рейтинга\n"
             battle_log += f"Всего очков: {new_points}"
             
             await message.answer(battle_log, reply_markup=get_end_battle_kb())
@@ -1499,7 +1851,11 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
 
         if new_enemy_health <= 0:
             update_player_wins(user_id)
-            battle_log += "✅ **ВЫ ПОБЕДИЛИ!**\n(+1 победа, очки не начисляются)"
+            update_rating_points(user_id, 7)
+            winner_clan = get_player_clan(user_id)
+            if winner_clan:
+                add_clan_exp(winner_clan['clan_id'], 1)
+            battle_log += "✅ **ВЫ ПОБЕДИЛИ!**\n(+1 победа, +7💠 рейтинга)"
             await message.answer(battle_log, reply_markup=get_end_battle_kb())
             pvp_pairs.pop(user_id, None)
             pvp_pairs.pop(opponent_id, None)
@@ -1572,12 +1928,16 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
 
             if opponent_id:
                 update_player_wins(opponent_id)
+                update_rating_points(opponent_id, 7)
+                opp_clan = get_player_clan(opponent_id)
+                if opp_clan:
+                    add_clan_exp(opp_clan['clan_id'], 1)
                 opp_state = dp.fsm.resolve_context(bot, opponent_id, opponent_id)
                 await opp_state.clear()
                 try:
                     await bot.send_message(
                         chat_id=opponent_id,
-                        text="✅ **ВЫ ПОБЕДИЛИ!**\n(+1 победа, очки не начисляются)",
+                        text="✅ **ВЫ ПОБЕДИЛИ!**\n(+1 победа, +7💠 рейтинга)",
                         reply_markup=get_end_battle_kb()
                     )
                 except Exception:
@@ -1618,6 +1978,323 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
                 pass
     else:
         await message.answer("Выбери действие!", reply_markup=get_battle_action_kb())
+
+# ============== CLANS ==============
+def _format_clan_menu(clan: dict, leader_nickname: str) -> str:
+    """Форматировать текст меню клана"""
+    if clan['clan_level'] >= MAX_CLAN_LEVEL:
+        exp_display = f"{clan['clan_exp']}📈 (МАКС 🧬)"
+    else:
+        max_exp = CLAN_LEVEL_EXP[clan['clan_level']]
+        exp_display = f"{clan['clan_exp']} / {max_exp}📈"
+    return (
+        f"[🛡️] Клан: {clan['clan_name']}\n"
+        f"[👑] Глава: {leader_nickname}\n"
+        f"👥 - {clan['members_count']} соклановцев\n"
+        f"(Минимальный порог входа) - {clan['min_power']}⚔️\n"
+        f"Уровень клана - {clan['clan_level']}🧬\n"
+        f"{exp_display}\n\n"
+        f"(🗒️) Описание клана:\n{clan['description'] or '—'}"
+    )
+
+@dp.message(F.text == "🛡️ Кланы")
+async def open_clans(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    player = get_player(user_id)
+    if not player:
+        await message.answer("Сначала зарегистрируйся! /start")
+        return
+
+    my_clan = get_player_clan(user_id)
+    if my_clan:
+        leader = get_player(my_clan['leader_id'])
+        leader_name = leader['nickname'] if leader else "—"
+        clan_text = _format_clan_menu(my_clan, leader_name)
+        is_leader = (my_clan['leader_id'] == user_id)
+        await message.answer(clan_text, reply_markup=get_my_clan_kb(is_leader))
+        await state.set_state(ClanMenu.viewing_my_clan)
+        await state.update_data(clan_id=my_clan['clan_id'])
+    else:
+        clans = get_all_clans()
+        if clans:
+            clans_text = "🛡️ **СПИСОК КЛАНОВ**\n\n"
+            for clan in clans:
+                _, name, lvl, members, min_power, ldr = clan
+                clans_text += f"🛡️ {name} — ур.{lvl} | {members}👥 | порог: {min_power}⚔️\n"
+        else:
+            clans_text = "🛡️ **КЛАНОВ ЕЩЁ НЕТ**\n\nСтань первым!"
+        await message.answer(clans_text, reply_markup=get_clans_list_kb(clans))
+        await state.set_state(ClanMenu.viewing_clans)
+
+@dp.message(ClanMenu.viewing_clans)
+async def handle_clans_list(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    player = get_player(user_id)
+    text = message.text
+
+    if text == "❌ Вернуться":
+        await state.clear()
+        await message.answer("Вернулись в главное меню!", reply_markup=get_main_kb())
+        return
+
+    if text == "➕ Создать клан":
+        if get_player_clan(user_id):
+            await message.answer("❌ Вы уже состоите в клане!", reply_markup=get_clans_list_kb(get_all_clans()))
+            return
+        if player['points'] < 2000:
+            await message.answer(
+                f"❌ Недостаточно очков!\nТребуется: 2000🔸\nУ вас: {player['points']}🔸",
+                reply_markup=get_clans_list_kb(get_all_clans())
+            )
+            return
+        await message.answer(
+            "Вы хотите потратить 2000🔸 очков на создание клана?",
+            reply_markup=get_create_clan_confirm_kb()
+        )
+        await state.set_state(ClanMenu.creating_clan_confirm)
+        return
+
+    # Попытка вступить в клан по кнопке
+    clans = get_all_clans()
+    for clan_data in clans:
+        clan_id, clan_name, clan_level, members_count, min_power, leader_name = clan_data
+        expected_btn = f"🛡️ {clan_name} [ур.{clan_level}] [{members_count}👥] [{min_power}⚔️]"
+        if text == expected_btn:
+            if get_player_clan(user_id):
+                await message.answer("❌ Вы уже состоите в клане!")
+                return
+            if player['strength'] < min_power:
+                await message.answer(
+                    f"❌ Ваша мощь недостаточна. Требуется {min_power}⚔️\nВаша мощь: {int(player['strength'])}⚔️",
+                    reply_markup=get_clans_list_kb(clans)
+                )
+                return
+            join_clan(user_id, clan_id)
+            updated_clan = get_player_clan(user_id)
+            leader = get_player(updated_clan['leader_id'])
+            leader_name_str = leader['nickname'] if leader else "—"
+            clan_text = _format_clan_menu(updated_clan, leader_name_str)
+            await message.answer(f"✅ Вы вступили в {clan_name}!\n\n" + clan_text,
+                                 reply_markup=get_my_clan_kb(False))
+            await state.set_state(ClanMenu.viewing_my_clan)
+            await state.update_data(clan_id=clan_id)
+            return
+
+    await message.answer("Выбери клан из списка или создай новый!", reply_markup=get_clans_list_kb(clans))
+
+@dp.message(ClanMenu.creating_clan_confirm)
+async def handle_create_clan_confirm(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    player = get_player(user_id)
+    text = message.text
+
+    if text == "❌ Нет":
+        clans = get_all_clans()
+        await message.answer("Отменено.", reply_markup=get_clans_list_kb(clans))
+        await state.set_state(ClanMenu.viewing_clans)
+        return
+
+    if text == "✅ Да, создать":
+        if player['points'] < 2000:
+            await message.answer("❌ Недостаточно очков для создания клана!", reply_markup=get_main_kb())
+            await state.clear()
+            return
+        update_player_points(user_id, round(player['points'] - 2000, 1))
+        await message.answer("Введите название клана:", reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
+        await state.set_state(ClanMenu.creating_clan_name)
+        return
+
+    await message.answer("Нажмите ✅ Да, создать или ❌ Нет", reply_markup=get_create_clan_confirm_kb())
+
+@dp.message(ClanMenu.creating_clan_name)
+async def handle_create_clan_name(message: types.Message, state: FSMContext):
+    clan_name = message.text.strip()
+    if not clan_name or len(clan_name) > 32:
+        await message.answer("❌ Название должно быть от 1 до 32 символов. Введите ещё раз:")
+        return
+    await state.update_data(new_clan_name=clan_name)
+    await message.answer("Введите описание клана:")
+    await state.set_state(ClanMenu.creating_clan_description)
+
+@dp.message(ClanMenu.creating_clan_description)
+async def handle_create_clan_description(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    description = message.text.strip()
+    data = await state.get_data()
+    clan_name = data.get('new_clan_name', '')
+
+    clan_id = create_clan(clan_name, user_id, description)
+    if clan_id == -1:
+        await message.answer("❌ Клан с таким названием уже существует! Попробуйте другое.")
+        await state.set_state(ClanMenu.creating_clan_name)
+        await message.answer("Введите название клана:")
+        return
+
+    clan = get_player_clan(user_id)
+    leader = get_player(user_id)
+    clan_text = _format_clan_menu(clan, leader['nickname'])
+    await message.answer(f"✅ Клан создан!\n\n" + clan_text, reply_markup=get_my_clan_kb(True))
+    await state.set_state(ClanMenu.viewing_my_clan)
+    await state.update_data(clan_id=clan_id)
+
+@dp.message(ClanMenu.viewing_my_clan)
+async def handle_my_clan(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+    data = await state.get_data()
+    clan_id = data.get('clan_id')
+
+    if text == "🔙 Вернуться":
+        await state.clear()
+        await message.answer("Вернулись в главное меню!", reply_markup=get_main_kb())
+        return
+
+    clan = get_clan(clan_id) if clan_id else None
+    if not clan:
+        await state.clear()
+        await message.answer("Клан не найден.", reply_markup=get_main_kb())
+        return
+
+    is_leader = (clan['leader_id'] == user_id)
+
+    if text == "🚪 Выйти из клана" and not is_leader:
+        leave_clan(user_id, clan_id)
+        await state.clear()
+        clans = get_all_clans()
+        await message.answer("Вы вышли из клана.", reply_markup=get_clans_list_kb(clans))
+        await state.set_state(ClanMenu.viewing_clans)
+        return
+
+    if text == "👢 Кикнуть игрока" and is_leader:
+        members = get_clan_members(clan_id)
+        non_leaders = [(uid, nick, st) for uid, nick, st in members if uid != clan['leader_id']]
+        if not non_leaders:
+            await message.answer("В клане нет участников для кика.", reply_markup=get_my_clan_kb(True))
+            return
+        await message.answer("Выберите игрока для кика:", reply_markup=get_kick_members_kb(members, clan['leader_id']))
+        await state.set_state(ClanMenu.kicking_member)
+        return
+
+    if text == "⚙️ Изменить порог" and is_leader:
+        await message.answer("Введите новый минимальный порог мощи для вступления (число):",
+                             reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
+        await state.set_state(ClanMenu.changing_min_power)
+        return
+
+    if text == "🗑️ Удалить клан" and is_leader:
+        await message.answer("Вы уверены, что хотите удалить клан? Это действие необратимо.",
+                             reply_markup=get_delete_clan_confirm_kb())
+        await state.set_state(ClanMenu.deleting_clan_confirm)
+        return
+
+    # Обновить и показать информацию о клане
+    leader = get_player(clan['leader_id'])
+    leader_name = leader['nickname'] if leader else "—"
+    clan_text = _format_clan_menu(clan, leader_name)
+    await message.answer(clan_text, reply_markup=get_my_clan_kb(is_leader))
+
+@dp.message(ClanMenu.kicking_member)
+async def handle_kick_member(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+    data = await state.get_data()
+    clan_id = data.get('clan_id')
+    clan = get_clan(clan_id) if clan_id else None
+
+    if text == "❌ Отмена" or not clan:
+        if clan:
+            leader = get_player(clan['leader_id'])
+            leader_name = leader['nickname'] if leader else "—"
+            clan_text = _format_clan_menu(clan, leader_name)
+            await message.answer(clan_text, reply_markup=get_my_clan_kb(True))
+        else:
+            await message.answer("Вернулись в меню клана.", reply_markup=get_main_kb())
+        await state.set_state(ClanMenu.viewing_my_clan)
+        return
+
+    # Найти участника по нику
+    members = get_clan_members(clan_id)
+    kicked = False
+    for member_id, nickname, strength in members:
+        if member_id != clan['leader_id'] and text == f"👤 {nickname}":
+            kick_clan_member(member_id, clan_id)
+            kicked = True
+            await message.answer(f"✅ Игрок {nickname} исключён из клана.")
+            break
+
+    if not kicked:
+        await message.answer("❌ Игрок не найден!", reply_markup=get_kick_members_kb(members, clan['leader_id']))
+        return
+
+    updated_clan = get_clan(clan_id)
+    leader = get_player(updated_clan['leader_id'])
+    leader_name = leader['nickname'] if leader else "—"
+    clan_text = _format_clan_menu(updated_clan, leader_name)
+    await message.answer(clan_text, reply_markup=get_my_clan_kb(True))
+    await state.set_state(ClanMenu.viewing_my_clan)
+
+@dp.message(ClanMenu.changing_min_power)
+async def handle_change_min_power(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+    data = await state.get_data()
+    clan_id = data.get('clan_id')
+    clan = get_clan(clan_id) if clan_id else None
+
+    if not clan:
+        await state.clear()
+        await message.answer("Клан не найден.", reply_markup=get_main_kb())
+        return
+
+    try:
+        new_power = int(text)
+        if new_power < 0:
+            raise ValueError
+    except ValueError:
+        await message.answer("❌ Введите корректное число (≥ 0):")
+        return
+
+    set_clan_min_power(clan_id, new_power)
+    updated_clan = get_clan(clan_id)
+    leader = get_player(updated_clan['leader_id'])
+    leader_name = leader['nickname'] if leader else "—"
+    clan_text = _format_clan_menu(updated_clan, leader_name)
+    await message.answer(f"✅ Порог входа обновлён: {new_power}⚔️\n\n" + clan_text,
+                         reply_markup=get_my_clan_kb(True))
+    await state.set_state(ClanMenu.viewing_my_clan)
+
+@dp.message(ClanMenu.deleting_clan_confirm)
+async def handle_delete_clan_confirm(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+    data = await state.get_data()
+    clan_id = data.get('clan_id')
+
+    if text == "❌ Нет":
+        clan = get_clan(clan_id) if clan_id else None
+        if clan:
+            leader = get_player(clan['leader_id'])
+            leader_name = leader['nickname'] if leader else "—"
+            clan_text = _format_clan_menu(clan, leader_name)
+            await message.answer(clan_text, reply_markup=get_my_clan_kb(True))
+        await state.set_state(ClanMenu.viewing_my_clan)
+        return
+
+    if text == "✅ Да, удалить":
+        clan = get_clan(clan_id) if clan_id else None
+        if clan and clan['leader_id'] == user_id:
+            clan_name = clan['clan_name']
+            delete_clan(clan_id)
+            await state.clear()
+            clans = get_all_clans()
+            await message.answer(f"✅ Клан «{clan_name}» удалён.", reply_markup=get_clans_list_kb(clans))
+            await state.set_state(ClanMenu.viewing_clans)
+        else:
+            await state.clear()
+            await message.answer("❌ Ошибка при удалении клана.", reply_markup=get_main_kb())
+        return
+
+    await message.answer("Нажмите ✅ Да, удалить или ❌ Нет", reply_markup=get_delete_clan_confirm_kb())
 
 # ============== MAIN ==============
 async def main():
