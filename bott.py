@@ -1027,7 +1027,7 @@ def get_skills_kb(user_id: int) -> ReplyKeyboardMarkup:
         status = "✅" if owned else f"{skill['price']}⚡️"
         kb.append([KeyboardButton(text=f"{skill['emoji']} {skill['name']} [{status}]")])
     kb.append([KeyboardButton(text="⬅️ Назад")])
-    return ReplyKeyboardMarkup(kb, resize_keyboard=True)
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 def get_clans_list_kb(clans: list) -> ReplyKeyboardMarkup:
     """Клавиатура со списком кланов"""
@@ -3051,7 +3051,18 @@ async def handle_kick_member(message: types.Message, state: FSMContext):
         if member_id != clan['leader_id'] and text == f"👤 {nickname}":
             kick_clan_member(member_id, clan_id)
             kicked = True
+            clan_name = clan['clan_name']
             await message.answer(f"✅ Игрок {nickname} исключён из клана.")
+
+            # Отправляем уведомление кикнутому игроку
+            try:
+                await bot.send_message(
+                    chat_id=member_id,
+                    text=f"Вас кикнули из клана \"{clan_name}\" 😡"
+                )
+            except Exception:
+                pass
+
             break
 
     if not kicked:
