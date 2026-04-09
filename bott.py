@@ -1028,6 +1028,8 @@ def get_skills_kb(user_id: int) -> ReplyKeyboardMarkup:
         kb.append([KeyboardButton(text=f"{skill['emoji']} {skill['name']} [{status}]")])
     kb.append([KeyboardButton(text="⬅️ Назад")])
     return ReplyKeyboardMarkup(kb, resize_keyboard=True)
+
+def get_clans_list_kb(clans: list) -> ReplyKeyboardMarkup:
     """Клавиатура со списком кланов"""
     kb = []
     for clan in clans:
@@ -1038,7 +1040,7 @@ def get_skills_kb(user_id: int) -> ReplyKeyboardMarkup:
     kb.append([KeyboardButton(text="❌ Вернуться")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
-def get_create_clan_confirm_kb() -> ReplyKeyboardMarkup:
+def get_create_clan_confirm_kb()-> ReplyKeyboardMarkup:
     """Подтверждение создания клана"""
     kb = [
         [KeyboardButton(text="✅ Да, создать")],
