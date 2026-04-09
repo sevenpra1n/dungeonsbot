@@ -39,8 +39,8 @@ TOKEN = "Ваш токен"
 # Оставьте None чтобы не использовать прокси.
 PROXY_URL = None
 
-# ID администратора (Telegram user_id). Установите свой ID для доступа к /adminpanel672030
-ADMIN_ID = 0
+# ID администраторов (Telegram user_id). Добавьте нужные ID в список для доступа к /67
+ADMIN_IDS = [0]
 
 # Директория с картинками меню
 IMAGES_DIR = "images"
@@ -1272,6 +1272,11 @@ def apply_clan_strength_buff(strength: float, clan_level: int) -> float:
     buff = CLAN_BUFFS.get(clan_level, CLAN_BUFFS[1])
     return strength * (1 + buff['power_pct'])
 
+def get_clan_click_bonus(clan_level: int) -> float:
+    """Получить бонус мощи клика от клана"""
+    buff = CLAN_BUFFS.get(clan_level, CLAN_BUFFS[1])
+    return buff['click_bonus']
+
 def roll_miss(extra_miss_chance: float = 0.0) -> bool:
     """Вернуть True если атака промахивается (10% база + доп. шанс от ослепления)"""
     return random.random() < (0.10 + extra_miss_chance)
@@ -1324,7 +1329,11 @@ async def clicker_logic(message: types.Message):
         await message.answer("⏳ Подожди 1 секунду перед следующим кликом!")
         return
     
-    new_points = round(player["points"] + player["click_power"], 1)
+    player_clan = get_player_clan(user_id)
+    clan_level = player_clan['clan_level'] if player_clan else 1
+    effective_click_power = player["click_power"] + get_clan_click_bonus(clan_level)
+
+    new_points = round(player["points"] + effective_click_power, 1)
     update_player_points(user_id, new_points)
     update_last_click(user_id)
     
@@ -1334,14 +1343,14 @@ async def clicker_logic(message: types.Message):
         update_player_materials(user_id, new_materials)
         response = (
             f'Прогресс пошел! {E_DRILL}\n'
-            f'+ {E_COINS} {player["click_power"]}\n'
+            f'+ {E_COINS} {effective_click_power}\n'
             f'Текущие очки: {new_points}{E_COINS}\n\n'
             f'⚙️ Найден материал! Всего: {new_materials}'
         )
     else:
         response = (
             f'Прогресс пошел! {E_DRILL}\n'
-            f'+ {E_COINS} {player["click_power"]}\n'
+            f'+ {E_COINS} {effective_click_power}\n'
             f'Текущие очки: {new_points}{E_COINS}'
         )
     
@@ -3518,9 +3527,9 @@ async def handle_delete_clan_confirm(message: types.Message, state: FSMContext):
     await message.answer("Нажмите ✅ Да, удалить или ❌ Нет", reply_markup=get_delete_clan_confirm_kb())
 
 # ============== ADMIN PANEL ==============
-@dp.message(Command("adminpanel672030"))
+@dp.message(Command("67"))
 async def open_admin_panel(message: types.Message, state: FSMContext):
-    if message.from_user.id != ADMIN_ID:
+    if message.from_user.id not in ADMIN_IDS:
         return
     await message.answer("🔐 Админ панель", reply_markup=get_admin_kb())
     await state.set_state(AdminPanel.main_menu)
