@@ -1441,7 +1441,7 @@ async def handle_forge_menu(message: types.Message, state: FSMContext):
             skills_text += (
                 f'{skill["emoji"]} {skill["name"]}\n'
                 f'  {skill["desc"]}\n'
-                f'  Мана: {skill["mana_cost"]}{E_MANA} | {status}\n\nf'
+                f'  Мана: {skill["mana_cost"]}{E_MANA} | {status}\n\n'
             )
         await message.answer(skills_text, reply_markup=get_skills_kb(user_id))
         await state.set_state(ForgeMenu.viewing_skills)
@@ -2427,7 +2427,7 @@ async def open_online(message: types.Message, state: FSMContext):
         return
 
     if user_id in pvp_queue:
-        await message.answer("Ты уже в очереди поиска!f", reply_markup=get_searching_kb())
+        await message.answer("Ты уже в очереди поиска!", reply_markup=get_searching_kb())
         await state.set_state(OnlineState.searching)
         return
 
@@ -2564,7 +2564,7 @@ async def handle_pvp_accept(message: types.Message, state: FSMContext):
         return
 
     if text != "✅ Принять игру":
-        await message.answer("Нажмите ✅ Принять игру или ❌ Отклонитьf", reply_markup=get_pvp_accept_kb())
+        await message.answer("Нажмите ✅ Принять игру или ❌ Отклонить", reply_markup=get_pvp_accept_kb())
         return
 
     # Игрок принял — помечаем
