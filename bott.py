@@ -162,7 +162,7 @@ def init_database():
         CREATE TABLE IF NOT EXISTS clan_members (
             user_id INTEGER NOT NULL,
             clan_id INTEGER NOT NULL,
-            role TEXT DEFAULT 'member',
+            role TEXT DEFAULT 'member' CHECK(role IN ('member', 'co_leader')),
             joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (user_id, clan_id),
             FOREIGN KEY (user_id) REFERENCES players(user_id),
@@ -570,6 +570,8 @@ CLAN_BUFFS = {
     4: {"power_pct": 0.30, "click_bonus": 100},
     5: {"power_pct": 0.60, "click_bonus": 250},
 }
+
+CLAN_CHAT_MAX_MSG_LEN = 200  # Максимальная длина сообщения в чате клана
 
 def update_rating_points(user_id: int, points: int):
     """Добавить очки рейтинга игроку"""
@@ -3421,8 +3423,8 @@ async def handle_clan_chat(message: types.Message, state: FSMContext):
         return
 
     # Validate message length
-    if len(text) > 200:
-        await message.answer("❌ Сообщение слишком длинное (максимум 200 символов).",
+    if len(text) > CLAN_CHAT_MAX_MSG_LEN:
+        await message.answer(f"❌ Сообщение слишком длинное (максимум {CLAN_CHAT_MAX_MSG_LEN} символов).",
                              reply_markup=get_clan_chat_kb())
         return
 
