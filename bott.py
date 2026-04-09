@@ -5,12 +5,31 @@ import sqlite3
 import random
 from datetime import datetime
 from aiogram import Bot, Dispatcher, types, F
+from aiogram.client.default import DefaultBotProperties
 from aiogram.client.session.aiohttp import AiohttpSession
+from aiogram.enums import ParseMode
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, FSInputFile
+
+# ============== CUSTOM EMOJI CONSTANTS ==============
+E_DRILL  = '<tg-emoji emoji-id="5195240510515595370">⛏</tg-emoji>'   # качать хуй
+E_COINS  = '<tg-emoji emoji-id="4972482444025398275">👛</tg-emoji>'   # очки
+E_ONLINE = '<tg-emoji emoji-id="5447410659077661506">🌐</tg-emoji>'   # онлайн режим
+E_NICK   = '<tg-emoji emoji-id="5280968723463680459">🆔</tg-emoji>'   # никнейм
+E_HP     = '<tg-emoji emoji-id="5267283746477861842">❤️</tg-emoji>'   # HP
+E_DMG    = '<tg-emoji emoji-id="5429507440091612100">💥</tg-emoji>'   # урон
+E_POW    = '<tg-emoji emoji-id="5242487302550199778">👊</tg-emoji>'   # мощь/сила
+E_SWORD  = '<tg-emoji emoji-id="5393607290228067750">🗡</tg-emoji>'   # боевой меч / начало боя
+E_CURSOR = '<tg-emoji emoji-id="5438335517735267694">🖱</tg-emoji>'   # твой ход (начало)
+E_MANA   = '<tg-emoji emoji-id="6280806319351927135">💜</tg-emoji>'   # мана
+E_CROWN  = '<tg-emoji emoji-id="5217822164362739968">👑</tg-emoji>'   # ты (PvP)
+E_SKULL  = '<tg-emoji emoji-id="5274108672849491069">💀</tg-emoji>'   # враг (PvP)
+E_ESWORD = '<tg-emoji emoji-id="5438255528264348146">🗡</tg-emoji>'   # враг меч (PvP)
+E_ANGRY  = '<tg-emoji emoji-id="5406708155956621268">😡</tg-emoji>'   # кик из клана
+
 
 # Ваш токен от BotFather
 TOKEN = "Ваш токен"
@@ -30,7 +49,8 @@ IMAGES_DIR = "images"
 logging.basicConfig(level=logging.INFO)
 
 _session = AiohttpSession(proxy=PROXY_URL) if PROXY_URL else None
-bot = Bot(token=TOKEN, session=_session) if _session else Bot(token=TOKEN)
+_default = DefaultBotProperties(parse_mode=ParseMode.HTML)
+bot = Bot(token=TOKEN, session=_session, default=_default) if _session else Bot(token=TOKEN, default=_default)
 dp = Dispatcher(storage=MemoryStorage())
 
 # ============== DATABASE SETUP ==============
@@ -1195,12 +1215,17 @@ async def clicker_logic(message: types.Message):
         new_materials = player["materials"] + 1
         update_player_materials(user_id, new_materials)
         response = (
-            f"Прогресс пошел! 💪\n+ 📈 {player['click_power']}\n"
-            f"Текущие очки: {new_points}🔸\n\n"
-            f"⚙️ Найден материал! Всего: {new_materials}"
+            f'Прогресс пошел! {E_DRILL}\n'
+            f'+ {E_COINS} {player["click_power"]}\n'
+            f'Текущие очки: {new_points}{E_COINS}\n\n'
+            f'⚙️ Найден материал! Всего: {new_materials}'
         )
     else:
-        response = f"Прогресс пошел! 💪\n+ 📈 {player['click_power']}\nТекущие очки: {new_points}🔸"
+        response = (
+            f'Прогресс пошел! {E_DRILL}\n'
+            f'+ {E_COINS} {player["click_power"]}\n'
+            f'Текущие очки: {new_points}{E_COINS}'
+        )
     
     await message.answer(response)
 
@@ -1220,15 +1245,15 @@ async def show_profile(message: types.Message):
     damage = calculate_damage(player['strength'])
     
     response = (
-        f"[🗒️] Профиль игрока: {player['nickname']}\n"
-        f"🔸- Очки: {player['points']}\n"
-        f"💠- Рейтинг: {player['rating_points']}\n"
-        f"⚡️- Мощь клика: {player['click_power']}\n"
-        f"⚙️ Материалов: {player['materials']}\n"
-        f"🗼 Рекорд рейда: {player['raid_max_floor']} этаж\n\n"
-        f"(⚔️) Сила: {int(player['strength'])}\n"
-        f"(❤️) Здоровье: {health}\n"
-        f"(💥) Урон: {damage}"
+        f'[🗒️] Профиль игрока: {player["nickname"]}\n'
+        f'{E_COINS}- Очки: {player["points"]}\n'
+        f'💠- Рейтинг: {player["rating_points"]}\n'
+        f'{E_POW}- Мощь клика: {player["click_power"]}\n'
+        f'⚙️ Материалов: {player["materials"]}\n'
+        f'🗼 Рекорд рейда: {player["raid_max_floor"]} этаж\n\n'
+        f'(⚔️) Сила: {int(player["strength"])}\n'
+        f'({E_HP}) Здоровье: {health}\n'
+        f'({E_DMG}) Урон: {damage}'
     )
     await send_image_with_text(message, "profile.png", response, reply_markup=get_main_kb())
 
@@ -1249,8 +1274,8 @@ async def open_shop(message: types.Message, state: FSMContext):
 async def _send_shop_page(message, user_id: int, player, page: int):
     items = UPGRADES_PAGE1 if page == 1 else UPGRADES_PAGE2
     page_label = "Страница 1" if page == 1 else "Страница 2"
-    shop_text = f"🏪 **МАГАЗИН УЛУЧШЕНИЙ КЛИКА** ({page_label})\n\n"
-    shop_text += f"Твои очки: {player['points']} 🔸 | Мощь клика: {player['click_power']} ⚡\n\n"
+    shop_text = f'🏪 <b>МАГАЗИН УЛУЧШЕНИЙ КЛИКА</b> ({page_label})\n\n'
+    shop_text += f'Твои очки: {player["points"]} {E_COINS} | Мощь клика: {player["click_power"]} {E_POW}\n\n'
     shop_text += "Доступные улучшения:\n"
     for upgrade_id, upgrade_info in items.items():
         status = "✅" if has_purchased_click_upgrade(user_id, upgrade_id) else ""
@@ -1340,8 +1365,8 @@ async def open_forge(message: types.Message, state: FSMContext):
     armor = _get_armor_info(armor_id)
 
     forge_text = (
-        "🔨 **КУЗНЯ**\n\n"
-        f"💪 Общая сила: {int(player['strength'])}\n\n"
+        "🔨 <b>КУЗНЯ</b>\n\n"
+        f"{E_POW} Общая сила: {int(player['strength'])}\n\n"
         f"⚔️ Оружие: {weapon['emoji']} {weapon['name']} (сила: {weapon['strength']})\n"
         f"🛡️ Броня:  {armor['emoji']} {armor['name']} (сила: {armor['strength']})\n\n"
         "Выбери раздел для улучшения:"
@@ -1366,7 +1391,7 @@ async def handle_forge_menu(message: types.Message, state: FSMContext):
         next_weapon_id = weapon_id + 1
         if next_weapon_id > max(WEAPONS.keys()):
             weapons_text = (
-                "⚔️ **ОРУЖИЕ**\n\n"
+                "⚔️ <b>ОРУЖИЕ</b>\n\n"
                 f"Текущее оружие: {weapon['emoji']} {weapon['name']} (сила: {weapon['strength']})\n"
                 f"Очки: {player['points']}\n\n"
                 "✅ Вы достигли максимума"
@@ -1374,7 +1399,7 @@ async def handle_forge_menu(message: types.Message, state: FSMContext):
         else:
             next_w = WEAPONS[next_weapon_id]
             weapons_text = (
-                "⚔️ **ОРУЖИЕ**\n\n"
+                "⚔️ <b>ОРУЖИЕ</b>\n\n"
                 f"Текущее оружие: {weapon['emoji']} {weapon['name']} (сила: {weapon['strength']})\n"
                 f"Очки: {player['points']}\n\n"
                 f"Следующее улучшение:\n"
@@ -1390,7 +1415,7 @@ async def handle_forge_menu(message: types.Message, state: FSMContext):
         next_armor_id = armor_id + 1
         if next_armor_id > max(ARMOR.keys()):
             armor_text = (
-                "🛡️ **БРОНЯ**\n\n"
+                "🛡️ <b>БРОНЯ</b>\n\n"
                 f"Текущая броня: {armor['emoji']} {armor['name']} (сила: {armor['strength']})\n"
                 f"Очки: {player['points']}\n\n"
                 "✅ Вы достигли максимума"
@@ -1398,7 +1423,7 @@ async def handle_forge_menu(message: types.Message, state: FSMContext):
         else:
             next_a = ARMOR[next_armor_id]
             armor_text = (
-                "🛡️ **БРОНЯ**\n\n"
+                "🛡️ <b>БРОНЯ</b>\n\n"
                 f"Текущая броня: {armor['emoji']} {armor['name']} (сила: {armor['strength']})\n"
                 f"Очки: {player['points']}\n\n"
                 f"Следующее улучшение:\n"
@@ -1409,14 +1434,14 @@ async def handle_forge_menu(message: types.Message, state: FSMContext):
         return
 
     if text == "✨ Скиллы":
-        skills_text = "✨ **СКИЛЛЫ**\n\nОчки: {}\n\n".format(player['points'])
+        skills_text = '✨ <b>СКИЛЛЫ</b>\n\nОчки: {}\n\n'.format(player['points'])
         for skill_id, skill in SKILLS.items():
             owned = has_purchased_skill(user_id, skill_id)
-            status = "✅ Куплено" if owned else f"Цена: {skill['price']}⚡️"
+            status = "✅ Куплено" if owned else f'Цена: {skill["price"]}{E_COINS}'
             skills_text += (
-                f"{skill['emoji']} {skill['name']}\n"
-                f"  {skill['desc']}\n"
-                f"  Мана: {skill['mana_cost']}🔮 | {status}\n\n"
+                f'{skill["emoji"]} {skill["name"]}\n'
+                f'  {skill["desc"]}\n'
+                f'  Мана: {skill["mana_cost"]}{E_MANA} | {status}\n\nf'
             )
         await message.answer(skills_text, reply_markup=get_skills_kb(user_id))
         await state.set_state(ForgeMenu.viewing_skills)
@@ -1437,8 +1462,8 @@ async def handle_weapons_menu(message: types.Message, state: FSMContext):
         weapon = _get_weapon_info(weapon_id)
         armor = _get_armor_info(armor_id)
         forge_text = (
-            "🔨 **КУЗНЯ**\n\n"
-            f"💪 Общая сила: {int(player['strength'])}\n\n"
+            "🔨 <b>КУЗНЯ</b>\n\n"
+            f"{E_POW} Общая сила: {int(player['strength'])}\n\n"
             f"⚔️ Оружие: {weapon['emoji']} {weapon['name']} (сила: {weapon['strength']})\n"
             f"🛡️ Броня:  {armor['emoji']} {armor['name']} (сила: {armor['strength']})\n\n"
             "Выбери раздел для улучшения:"
@@ -1517,8 +1542,8 @@ async def handle_armor_menu(message: types.Message, state: FSMContext):
         weapon = _get_weapon_info(weapon_id)
         armor = _get_armor_info(armor_id)
         forge_text = (
-            "🔨 **КУЗНЯ**\n\n"
-            f"💪 Общая сила: {int(player['strength'])}\n\n"
+            "🔨 <b>КУЗНЯ</b>\n\n"
+            f"{E_POW} Общая сила: {int(player['strength'])}\n\n"
             f"⚔️ Оружие: {weapon['emoji']} {weapon['name']} (сила: {weapon['strength']})\n"
             f"🛡️ Броня:  {armor['emoji']} {armor['name']} (сила: {armor['strength']})\n\n"
             "Выбери раздел для улучшения:"
@@ -1597,8 +1622,8 @@ async def handle_skills_menu(message: types.Message, state: FSMContext):
         weapon = _get_weapon_info(weapon_id)
         armor = _get_armor_info(armor_id)
         forge_text = (
-            "🔨 **КУЗНЯ**\n\n"
-            f"💪 Общая сила: {int(player['strength'])}\n\n"
+            "🔨 <b>КУЗНЯ</b>\n\n"
+            f"{E_POW} Общая сила: {int(player['strength'])}\n\n"
             f"⚔️ Оружие: {weapon['emoji']} {weapon['name']} (сила: {weapon['strength']})\n"
             f"🛡️ Броня:  {armor['emoji']} {armor['name']} (сила: {armor['strength']})\n\n"
             "Выбери раздел для улучшения:"
@@ -1621,7 +1646,7 @@ async def handle_skills_menu(message: types.Message, state: FSMContext):
                 return
             if player['points'] < skill['price']:
                 await message.answer(
-                    f"❌ Недостаточно очков!\nТребуется: {skill['price']}⚡️\nУ вас: {player['points']}",
+                    f'❌ Недостаточно очков!\nТребуется: {skill["price"]}{E_COINS}\nУ вас: {player["points"]}',
                     reply_markup=get_skills_kb(user_id)
                 )
                 return
@@ -1629,9 +1654,9 @@ async def handle_skills_menu(message: types.Message, state: FSMContext):
             update_player_points(user_id, new_points)
             add_skill_purchase(user_id, skill_id)
             await message.answer(
-                f"✅ Скилл «{skill['name']}» куплен!\n"
-                f"- {skill['price']}⚡️\nОсталось: {new_points}⚡️\n\n"
-                f"{skill['desc']}\nТребует маны: {skill['mana_cost']}🔮",
+                f'✅ Скилл «{skill["name"]}» куплен!\n'
+                f'- {skill["price"]}{E_COINS}\nОсталось: {new_points}{E_COINS}\n\n'
+                f'{skill["desc"]}\nТребует маны: {skill["mana_cost"]}{E_MANA}',
                 reply_markup=get_skills_kb(user_id)
             )
             return
@@ -1646,9 +1671,9 @@ async def open_equipment_shop(message: types.Message, state: FSMContext):
         await message.answer("Сначала зарегистрируйся! /start")
         return
     
-    equip_text = "🎖️ **МАГАЗИН СНАРЯЖЕНИЯ**\n\n"
-    equip_text += f"Твои очки: {player['points']} ⚡\n"
-    equip_text += f"Твоя сила: {player['strength']} 💪\n\n"
+    equip_text = "🎖️ <b>МАГАЗИН СНАРЯЖЕНИЯ</b>\n\n"
+    equip_text += f'Твои очки: {player["points"]} {E_COINS}\n'
+    equip_text += f'Твоя сила: {player["strength"]} {E_POW}\n\n'
     equip_text += "Доступное снаряжение:\n"
     
     for equip_id, equip_info in EQUIPMENT.items():
@@ -1729,7 +1754,7 @@ async def show_leaderboard(message: types.Message):
 def _get_raid_floor_text(floor_id: int, enemy_info: dict) -> str:
     """Вернуть текст информации об этаже рейда"""
     return (
-        f"🐉 **РЕЙД — Этаж {floor_id}/10**\n\n"
+        f"🐉 <b>РЕЙД — Этаж {floor_id}/10</b>\n\n"
         f"{enemy_info['emoji']} {enemy_info['name']}\n"
         f"🩶 {enemy_info['health']} HP\n"
         f"⚔️ {enemy_info['base_damage']} атака\n"
@@ -1765,9 +1790,9 @@ async def open_raid(message: types.Message, state: FSMContext):
         f"{_get_raid_floor_text(floor_id, enemy_info)}\n\n"
         f"{'═' * 19}\n\n"
         f"👤 {player['nickname']}\n"
-        f"❤️ {player_health}\n"
+        f"{E_HP} {player_health}\n"
         f"⚔️ {player_damage}\n"
-        f"🔮 Мана: {mana}/100\n\n"
+        f"{E_MANA} Мана: {mana}/100\n\n"
         f"Бой начинается!"
     )
 
@@ -1798,14 +1823,14 @@ async def open_raid(message: types.Message, state: FSMContext):
         new_player_health = player_health - enemy_hit
 
         log = (
-            f"🐉 **РЕЙД — Этаж {floor_id}/10**\n\n"
+            f"🐉 <b>РЕЙД — Этаж {floor_id}/10</b>\n\n"
             f"{enemy_info['emoji']} {enemy_info['name']} атакует!\n"
-            f"💥 Урон: {enemy_hit}\n\n"
+            f"{E_DMG} Урон: {enemy_hit}\n\n"
         )
 
         if new_player_health <= 0:
             update_player_raid_floor(user_id, 0)
-            log += (f"👤 {player['nickname']} повержен!\n\n❌ **ВЫ ПРОИГРАЛИ!**\n\n"
+            log += (f"👤 {player['nickname']} повержен!\n\n❌ <b>ВЫ ПРОИГРАЛИ!</b>\n\n"
                     f"Рекорд: {player['raid_max_floor']} этаж.")
             await message.answer(log, reply_markup=get_end_battle_kb())
             await state.clear()
@@ -1813,7 +1838,7 @@ async def open_raid(message: types.Message, state: FSMContext):
 
         log += (
             f"{'═' * 19}\n\n"
-            f"👤 {player['nickname']}\n❤️ {new_player_health}\n⚔️ {player_damage}\n🔮 Мана: {mana}/100\n\n"
+            f"👤 {player['nickname']}\n{E_HP} {new_player_health}\n⚔️ {player_damage}\n{E_MANA} Мана: {mana}/100\n\n"
             f"{enemy_info['emoji']} {enemy_info['name']}\n🩶 {enemy_info['health']}\n\n"
             "Твой ход!"
         )
@@ -1853,7 +1878,7 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
         await message.answer("⏳ Подожди перед следующим ходом!")
         return
 
-    log = f"🐉 **РЕЙД — Этаж {floor_id}/10** ⚔️\n\n"
+    log = f"🐉 <b>РЕЙД — Этаж {floor_id}/10</b> ⚔️\n\n"
     new_enemy_health = data['enemy_health']
     new_player_health = data['player_health']
     new_mana = mana
@@ -1872,7 +1897,7 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
         # Проверка маны
         if mana < sk['mana_cost']:
             await message.answer(
-                f"❌ Недостаточно маны! Требуется {sk['mana_cost']}🔮",
+                f"❌ Недостаточно маны! Требуется {sk['mana_cost']}{E_MANA}",
                 reply_markup=get_battle_action_kb(user_id, mana)
             )
             return
@@ -1911,7 +1936,7 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
                 log += f"😵 {enemy_info['emoji']} {enemy_info['name']} оглушён, пропускает ход!\n\n"
                 log += (
                     f"{'═' * 19}\n\n"
-                    f"👤 {player['nickname']}\n❤️ {new_player_health}\n⚔️ {data['player_damage']}\n🔮 Мана: {new_mana}/100\n\n"
+                    f"👤 {player['nickname']}\n{E_HP} {new_player_health}\n⚔️ {data['player_damage']}\n{E_MANA} Мана: {new_mana}/100\n\n"
                     f"{enemy_info['emoji']} {enemy_info['name']}\n🩶 {new_enemy_health}\n\n"
                     "Что ты будешь делать?"
                 )
@@ -1921,21 +1946,21 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
                 return
             enemy_hit = int(round(data['enemy_damage'] * random.uniform(0.7, 1.3)))
             new_player_health = int(round(new_player_health - enemy_hit))
-            log += f"{enemy_info['emoji']} {enemy_info['name']} атакует (без ответа)!\n💥 Урон: {enemy_hit}\n\n"
+            log += f"{enemy_info['emoji']} {enemy_info['name']} атакует (без ответа)!\n{E_DMG} Урон: {enemy_hit}\n\n"
             if new_player_health <= 0:
                 floors_completed = floor_id - 1
                 new_max = max(player['raid_max_floor'], floors_completed)
                 if new_max > player['raid_max_floor']:
                     update_player_raid_max_floor(user_id, new_max)
                 update_player_raid_floor(user_id, 0)
-                log += (f"👤 {player['nickname']} повержен!\n\n❌ **ВЫ ПРОИГРАЛИ!**\n\n"
+                log += (f"👤 {player['nickname']} повержен!\n\n❌ <b>ВЫ ПРОИГРАЛИ!</b>\n\n"
                         f"Пройдено этажей: {floors_completed}. Рекорд: {new_max}.")
                 await message.answer(log, reply_markup=get_end_battle_kb())
                 await state.clear()
                 return
             log += (
                 f"{'═' * 19}\n\n"
-                f"👤 {player['nickname']}\n❤️ {new_player_health}\n⚔️ {data['player_damage']}\n🔮 Мана: {new_mana}/100\n\n"
+                f"👤 {player['nickname']}\n{E_HP} {new_player_health}\n⚔️ {data['player_damage']}\n{E_MANA} Мана: {new_mana}/100\n\n"
                 f"{enemy_info['emoji']} {enemy_info['name']}\n🩶 {new_enemy_health}\n\n"
                 "Что ты будешь делать?"
             )
@@ -1950,7 +1975,7 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
         else:
             base_dmg = int(round(data['player_damage'] * random.uniform(0.8, 1.2)))
             player_hit = base_dmg * 2
-            log += f"💥 КРИТИЧЕСКИЙ УДАР!\n👤 {player['nickname']} атакует!\n💥 Урон: {player_hit}\n\n"
+            log += f"{E_DMG} КРИТИЧЕСКИЙ УДАР!\n👤 {player['nickname']} атакует!\n{E_DMG} Урон: {player_hit}\n\n"
     else:
         # Обычная атака
         if roll_miss():
@@ -1958,7 +1983,7 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
             log += "💨 Промах! Враг уклонился\n\n"
         else:
             player_hit = int(round(data['player_damage'] * random.uniform(0.8, 1.2)))
-            log += f"👤 {player['nickname']} атакует!\n💥 Урон: {player_hit}\n\n"
+            log += f"👤 {player['nickname']} атакует!\n{E_DMG} Урон: {player_hit}\n\n"
 
     new_enemy_health = int(round(new_enemy_health - player_hit))
 
@@ -1975,7 +2000,7 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
             add_clan_exp(player_clan['clan_id'], 10)
 
         log += f"{enemy_info['emoji']} {enemy_info['name']} повержен!\n\n"
-        log += f"✅ **ЭТАЖ {floor_id} ПРОЙДЕН!**\n\n"
+        log += f"✅ <b>ЭТАЖ {floor_id} ПРОЙДЕН!</b>\n\n"
         log += f"💰 Награда: +{reward} очков\n"
         log += f"+5💠 очков рейтинга\n"
         if player_clan:
@@ -1985,7 +2010,7 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
         if floor_id == 10:
             update_player_raid_floor(user_id, 0)
             log += (
-                "\n🎉 **ПОЗДРАВЛЯЕМ!**\n"
+                "\n🎉 <b>ПОЗДРАВЛЯЕМ!</b>\n"
                 "Ты прошёл все 10 этажей рейда!\n"
                 "♦️💀 Зеркальный дух повержён!\n\n"
                 "Рейд начинается заново с первого этажа."
@@ -2021,9 +2046,9 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
                 f"{_get_raid_floor_text(next_floor, next_enemy)}\n\n"
                 f"{'═' * 19}\n\n"
                 f"👤 {player_refreshed['nickname']}\n"
-                f"❤️ {new_p_health}\n"
+                f"{E_HP} {new_p_health}\n"
                 f"⚔️ {new_p_damage}\n"
-                f"🔮 Мана: {next_mana}/100\n\n"
+                f"{E_MANA} Мана: {next_mana}/100\n\n"
                 "Твой ход!"
             )
             await message.answer(next_text, reply_markup=get_battle_action_kb(user_id, next_mana))
@@ -2042,7 +2067,7 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
         else:
             enemy_hit = int(round(data['enemy_damage'] * random.uniform(0.7, 1.3)))
             new_player_health = int(round(new_player_health - enemy_hit))
-            log += f"{enemy_info['emoji']} {enemy_info['name']} контратакует!\n💥 Урон: {enemy_hit}\n\n"
+            log += f"{enemy_info['emoji']} {enemy_info['name']} контратакует!\n{E_DMG} Урон: {enemy_hit}\n\n"
 
     if new_player_health <= 0:
         floors_completed = floor_id - 1
@@ -2050,7 +2075,7 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
         if new_max > player['raid_max_floor']:
             update_player_raid_max_floor(user_id, new_max)
         update_player_raid_floor(user_id, 0)
-        log += (f"👤 {player['nickname']} повержен!\n\n❌ **ВЫ ПРОИГРАЛИ!**\n\n"
+        log += (f"👤 {player['nickname']} повержен!\n\n❌ <b>ВЫ ПРОИГРАЛИ!</b>\n\n"
                 f"Пройдено этажей: {floors_completed}. Рекорд: {new_max}.")
         await message.answer(log, reply_markup=get_end_battle_kb())
         await state.clear()
@@ -2058,7 +2083,7 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
 
     log += (
         f"{'═' * 19}\n\n"
-        f"👤 {player['nickname']}\n❤️ {new_player_health}\n⚔️ {data['player_damage']}\n🔮 Мана: {new_mana}/100\n\n"
+        f"👤 {player['nickname']}\n{E_HP} {new_player_health}\n⚔️ {data['player_damage']}\n{E_MANA} Мана: {new_mana}/100\n\n"
         f"{enemy_info['emoji']} {enemy_info['name']}\n🩶 {new_enemy_health}\n\n"
         "Что ты будешь делать?"
     )
@@ -2082,7 +2107,7 @@ async def show_enemies(message: types.Message, state: FSMContext):
         await message.answer("Сначала зарегистрируйся! /start")
         return
     
-    enemies_text = "⚔️ **ВРАГИ**\n\n"
+    enemies_text = "⚔️ <b>ВРАГИ</b>\n\n"
     
     for enemy_id, enemy_info in ENEMIES.items():
         enemies_text += f"{enemy_info['name']} 🩶 {enemy_info['health']} HP\n"
@@ -2123,9 +2148,9 @@ async def select_enemy(message: types.Message, state: FSMContext):
     enemy_damage = calculate_enemy_damage(selected_enemy)
     
     battle_info = (
-        f"⚔️ **ИНФОРМАЦИЯ О БОЕ** ⚔️\n\n"
+        f"⚔️ <b>ИНФОРМАЦИЯ О БОЕ</b> ⚔️\n\n"
         f"информация об {player['nickname']}:\n"
-        f"❤️ {player_health}\n"
+        f"{E_HP} {player_health}\n"
         f"⚔️ {player_damage}\n\n"
         f"☠️ {enemy_info['name']}\n"
         f"🩶 {enemy_info['health']}\n"
@@ -2161,7 +2186,7 @@ async def start_battle(message: types.Message, state: FSMContext):
     
     if player_goes_first:
         turn_text = "🎲 Победа в первом ходу! Ты атакуешь первым!\n\n"
-        turn_text += f"👤 {player['nickname']}\n❤️ {data['player_health']}\n⚔️ {data['player_damage']}\n🔮 Мана: {mana}/100\n\n"
+        turn_text += f"👤 {player['nickname']}\n{E_HP} {data['player_health']}\n⚔️ {data['player_damage']}\n{E_MANA} Мана: {mana}/100\n\n"
         turn_text += f"☠️ {enemy_info['name']}\n🩶 {data['enemy_health']}\n⚔️ {data['enemy_damage']}\n\n"
         turn_text += "═══════════════════\n"
         turn_text += "Что ты будешь делать?"
@@ -2176,13 +2201,13 @@ async def start_battle(message: types.Message, state: FSMContext):
         enemy_damage = int(round(data['enemy_damage'] * random.uniform(0.7, 1.3)))
         new_player_health = int(round(data['player_health'] - enemy_damage))
         
-        battle_log = f"⚔️ **РАУНД БОЯ** ⚔️\n\n"
+        battle_log = f"⚔️ <b>РАУНД БОЯ</b> ⚔️\n\n"
         battle_log += f"☠️ {enemy_info['name']} атакует!\n"
-        battle_log += f"💥 Урон: {enemy_damage}\n\n"
+        battle_log += f"{E_DMG} Урон: {enemy_damage}\n\n"
         
         if new_player_health <= 0:
             battle_log += f"👤 {player['nickname']} повержен!\n\n"
-            battle_log += f"❌ **ВЫ ПРОИГРАЛИ!**\n\n"
+            battle_log += f"❌ <b>ВЫ ПРОИГРАЛИ!</b>\n\n"
             battle_log += f"Ты был повержен {enemy_info['name']}..."
             
             await message.answer(battle_log, reply_markup=get_end_battle_kb())
@@ -2190,7 +2215,7 @@ async def start_battle(message: types.Message, state: FSMContext):
             return
         
         battle_log += f"═══════════════════\n\n"
-        battle_log += f"👤 {player['nickname']}\n❤️ {new_player_health}\n⚔️ {data['player_damage']}\n🔮 Мана: {mana}/100\n\n"
+        battle_log += f"👤 {player['nickname']}\n{E_HP} {new_player_health}\n⚔️ {data['player_damage']}\n{E_MANA} Мана: {mana}/100\n\n"
         battle_log += f"☠️ {enemy_info['name']}\n🩶 {data['enemy_health']}\n⚔️ {data['enemy_damage']}\n\n"
         battle_log += f"═══════════════════\n"
         battle_log += "Твой ход!"
@@ -2232,7 +2257,7 @@ async def battle_round(message: types.Message, state: FSMContext):
     new_mana = mana
     new_enemy_skip = False
     new_player_blind = max(0, player_blind_turns - 1) if player_blind_turns > 0 else 0
-    battle_log = f"⚔️ **РАУНД БОЯ** ⚔️\n\n"
+    battle_log = f"⚔️ <b>РАУНД БОЯ</b> ⚔️\n\n"
 
     # Обработка действия игрока
     skill_used = None
@@ -2245,7 +2270,7 @@ async def battle_round(message: types.Message, state: FSMContext):
         sk_id, sk = skill_used
         if mana < sk['mana_cost']:
             await message.answer(
-                f"❌ Недостаточно маны! Требуется {sk['mana_cost']}🔮",
+                f"❌ Недостаточно маны! Требуется {sk['mana_cost']}{E_MANA}",
                 reply_markup=get_battle_action_kb(user_id, mana)
             )
             return
@@ -2281,7 +2306,7 @@ async def battle_round(message: types.Message, state: FSMContext):
             if enemy_skip_turn:
                 battle_log += f"😵 {enemy_info['name']} оглушён, пропускает ход!\n\n"
                 battle_log += f"═══════════════════\n\n"
-                battle_log += f"👤 {player['nickname']}\n❤️ {new_player_health}\n⚔️ {data['player_damage']}\n🔮 Мана: {new_mana}/100\n\n"
+                battle_log += f"👤 {player['nickname']}\n{E_HP} {new_player_health}\n⚔️ {data['player_damage']}\n{E_MANA} Мана: {new_mana}/100\n\n"
                 battle_log += f"☠️ {enemy_info['name']}\n🩶 {new_enemy_health}\n\n"
                 battle_log += "Что ты будешь делать?"
                 await message.answer(battle_log, reply_markup=get_battle_action_kb(user_id, new_mana))
@@ -2290,14 +2315,14 @@ async def battle_round(message: types.Message, state: FSMContext):
                 return
             enemy_damage = int(round(data['enemy_damage'] * random.uniform(0.7, 1.3)))
             new_player_health = int(round(new_player_health - enemy_damage))
-            battle_log += f"☠️ {enemy_info['name']} атакует (без ответа)!\n💥 Урон: {enemy_damage}\n\n"
+            battle_log += f"☠️ {enemy_info['name']} атакует (без ответа)!\n{E_DMG} Урон: {enemy_damage}\n\n"
             if new_player_health <= 0:
-                battle_log += f"👤 {player['nickname']} повержен!\n\n❌ **ВЫ ПРОИГРАЛИ!**\n\nТы был повержен {enemy_info['name']}..."
+                battle_log += f"👤 {player['nickname']} повержен!\n\n❌ <b>ВЫ ПРОИГРАЛИ!</b>\n\nТы был повержен {enemy_info['name']}..."
                 await message.answer(battle_log, reply_markup=get_end_battle_kb())
                 await state.clear()
                 return
             battle_log += f"═══════════════════\n\n"
-            battle_log += f"👤 {player['nickname']}\n❤️ {new_player_health}\n⚔️ {data['player_damage']}\n🔮 Мана: {new_mana}/100\n\n"
+            battle_log += f"👤 {player['nickname']}\n{E_HP} {new_player_health}\n⚔️ {data['player_damage']}\n{E_MANA} Мана: {new_mana}/100\n\n"
             battle_log += f"☠️ {enemy_info['name']}\n🩶 {new_enemy_health}\n\n"
             battle_log += "Что ты будешь делать?"
             await message.answer(battle_log, reply_markup=get_battle_action_kb(user_id, new_mana))
@@ -2310,14 +2335,14 @@ async def battle_round(message: types.Message, state: FSMContext):
         else:
             base_damage = int(round(data['player_damage'] * random.uniform(0.8, 1.2)))
             player_hit = base_damage * 2
-            battle_log += f"💥 КРИТИЧЕСКИЙ УДАР!\n👤 {player['nickname']} атакует!\n💥 Урон: {player_hit}\n\n"
+            battle_log += f"{E_DMG} КРИТИЧЕСКИЙ УДАР!\n👤 {player['nickname']} атакует!\n{E_DMG} Урон: {player_hit}\n\n"
     else:
         if roll_miss():
             player_hit = 0
             battle_log += "💨 Промах! Враг уклонился\n\n"
         else:
             player_hit = int(round(data['player_damage'] * random.uniform(0.8, 1.2)))
-            battle_log += f"👤 {player['nickname']} атакует!\n💥 Урон: {player_hit}\n\n"
+            battle_log += f"👤 {player['nickname']} атакует!\n{E_DMG} Урон: {player_hit}\n\n"
 
     new_enemy_health = int(round(new_enemy_health - player_hit))
 
@@ -2331,7 +2356,7 @@ async def battle_round(message: types.Message, state: FSMContext):
             add_clan_exp(player_clan['clan_id'], 10)
         
         battle_log += f"☠️ {enemy_info['name']} повержен!\n\n"
-        battle_log += f"✅ **ВЫ ПОБЕДИЛИ!**\n\n"
+        battle_log += f"✅ <b>ВЫ ПОБЕДИЛИ!</b>\n\n"
         battle_log += f"💰 Награда: +{reward} очков\n"
         battle_log += f"+5💠 очков рейтинга\n"
         battle_log += f"Всего очков: {new_points}"
@@ -2352,16 +2377,16 @@ async def battle_round(message: types.Message, state: FSMContext):
         else:
             enemy_damage_dealt = int(round(data['enemy_damage'] * random.uniform(0.7, 1.3)))
             new_player_health = int(round(new_player_health - enemy_damage_dealt))
-            battle_log += f"☠️ {enemy_info['name']} контратакует!\n💥 Урон: {enemy_damage_dealt}\n\n"
+            battle_log += f"☠️ {enemy_info['name']} контратакует!\n{E_DMG} Урон: {enemy_damage_dealt}\n\n"
     
     if new_player_health <= 0:
-        battle_log += f"👤 {player['nickname']} повержен!\n\n❌ **ВЫ ПРОИГРАЛИ!**\n\nТы был повержен {enemy_info['name']}..."
+        battle_log += f"👤 {player['nickname']} повержен!\n\n❌ <b>ВЫ ПРОИГРАЛИ!</b>\n\nТы был повержен {enemy_info['name']}..."
         await message.answer(battle_log, reply_markup=get_end_battle_kb())
         await state.clear()
         return
     
     battle_log += f"═══════════════════\n\n"
-    battle_log += f"👤 {player['nickname']}\n❤️ {new_player_health}\n⚔️ {data['player_damage']}\n🔮 Мана: {new_mana}/100\n\n"
+    battle_log += f"👤 {player['nickname']}\n{E_HP} {new_player_health}\n⚔️ {data['player_damage']}\n{E_MANA} Мана: {new_mana}/100\n\n"
     battle_log += f"☠️ {enemy_info['name']}\n🩶 {new_enemy_health}\n\n"
     battle_log += "Что ты будешь делать?"
     
@@ -2378,7 +2403,7 @@ async def battle_round(message: types.Message, state: FSMContext):
 async def back_to_enemies(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     
-    enemies_text = "⚔️ **ВРАГИ**\n\n"
+    enemies_text = "⚔️ <b>ВРАГИ</b>\n\n"
     
     for enemy_id, enemy_info in ENEMIES.items():
         enemies_text += f"{enemy_info['name']} 🩶 {enemy_info['health']} HP\n"
@@ -2402,7 +2427,7 @@ async def open_online(message: types.Message, state: FSMContext):
         return
 
     if user_id in pvp_queue:
-        await message.answer("Ты уже в очереди поиска!", reply_markup=get_searching_kb())
+        await message.answer("Ты уже в очереди поиска!f", reply_markup=get_searching_kb())
         await state.set_state(OnlineState.searching)
         return
 
@@ -2415,13 +2440,13 @@ async def open_online(message: types.Message, state: FSMContext):
     damage = calculate_damage(buffed_strength)
 
     search_text = (
-        "🌐 **ОНЛАЙН РЕЖИМ**\n\n"
-        f"Твои характеристики:\n"
-        f"👤 {player['nickname']}\n"
-        f"❤️ {health}\n"
-        f"⚔️ {damage}\n"
-        f"💪 {int(buffed_strength)}🗡️ | {player['wins']}🏆\n\n"
-        "🔍 Ищем соперника..."
+        f'{E_ONLINE} <b>ОНЛАЙН РЕЖИМ</b>\n\n'
+        'Твои характеристики:\n'
+        f'{E_NICK} {player["nickname"]}\n'
+        f'{E_HP} {health}\n'
+        f'{E_DMG} {damage}\n'
+        f'{E_POW} {int(buffed_strength)}🗡️ | {player["wins"]}🏆\n\n'
+        '🔍 Ищем соперника...'
     )
 
     pvp_queue[user_id] = {
@@ -2448,22 +2473,22 @@ async def open_online(message: types.Message, state: FSMContext):
         pvp_pairs[opponent_id] = user_id
 
         match_text_me = (
-            "✅ **СОПЕРНИК НАЙДЕН!**\n\n"
-            f"Ваш соперник:\n"
-            f"👤 {opponent_data['nickname']}\n"
-            f"❤️ {opponent_data['health']}\n"
-            f"⚔️ {opponent_data['damage']}\n"
-            f"💪 {int(opponent_data['strength'])}🗡️ | {opponent_data['wins']}🏆\n\n"
-            "Подтвердите участие!"
+            '✅ <b>СОПЕРНИК НАЙДЕН!</b>\n\n'
+            'Ваш соперник:\n'
+            f'{E_NICK} {opponent_data["nickname"]}\n'
+            f'{E_HP} {opponent_data["health"]}\n'
+            f'{E_DMG} {opponent_data["damage"]}\n'
+            f'{E_POW} {int(opponent_data["strength"])}🗡️ | {opponent_data["wins"]}🏆\n\n'
+            'Подтвердите участие!'
         )
         match_text_opp = (
-            "✅ **СОПЕРНИК НАЙДЕН!**\n\n"
-            f"Ваш соперник:\n"
-            f"👤 {my_data['nickname']}\n"
-            f"❤️ {my_data['health']}\n"
-            f"⚔️ {my_data['damage']}\n"
-            f"💪 {int(my_data['strength'])}🗡️ | {my_data['wins']}🏆\n\n"
-            "Подтвердите участие!"
+            '✅ <b>СОПЕРНИК НАЙДЕН!</b>\n\n'
+            'Ваш соперник:\n'
+            f'{E_NICK} {my_data["nickname"]}\n'
+            f'{E_HP} {my_data["health"]}\n'
+            f'{E_DMG} {my_data["damage"]}\n'
+            f'{E_POW} {int(my_data["strength"])}🗡️ | {my_data["wins"]}🏆\n\n'
+            'Подтвердите участие!'
         )
 
         # Сохраняем данные для подтверждения
@@ -2539,7 +2564,7 @@ async def handle_pvp_accept(message: types.Message, state: FSMContext):
         return
 
     if text != "✅ Принять игру":
-        await message.answer("Нажмите ✅ Принять игру или ❌ Отклонить", reply_markup=get_pvp_accept_kb())
+        await message.answer("Нажмите ✅ Принять игру или ❌ Отклонитьf", reply_markup=get_pvp_accept_kb())
         return
 
     # Игрок принял — помечаем
@@ -2589,11 +2614,11 @@ async def handle_pvp_accept(message: types.Message, state: FSMContext):
             my_player = get_player(user_id)
 
             first_name = my_player['nickname'] if player_goes_first else opp_player['nickname']
-            start_text = f"⚔️ **БОЙ НАЧАЛСЯ!**\n\nПервым ходит: {first_name}\n"
+            start_text = f'{E_SWORD} <b>БОЙ НАЧАЛСЯ!</b>\n\nПервым ходит: {first_name}\n'
 
             if player_goes_first:
                 await message.answer(
-                    start_text + "\n🗡️ Твой ход!\n🔮 Мана: 100/100",
+                    start_text + f'\n{E_CURSOR} Твой ход!\n{E_MANA} Мана: 100/100',
                     reply_markup=get_battle_action_kb(user_id, 100)
                 )
                 await bot.send_message(
@@ -2608,7 +2633,7 @@ async def handle_pvp_accept(message: types.Message, state: FSMContext):
                 )
                 await bot.send_message(
                     chat_id=opponent_id,
-                    text=start_text + "\n🗡️ Твой ход!\n🔮 Мана: 100/100",
+                    text=start_text + f'\n{E_CURSOR} Твой ход!\n{E_MANA} Мана: 100/100',
                     reply_markup=get_battle_action_kb(opponent_id, 100)
                 )
         else:
@@ -2647,7 +2672,7 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
         await message.answer("Выбери действие!", reply_markup=get_battle_action_kb(user_id, my_mana))
         return
 
-    battle_log = f"⚔️ **PvP БОЙ** ⚔️\n\n"
+    battle_log = f"⚔️ <b>PvP БОЙ</b> ⚔️\n\n"
     new_my_mana = my_mana
     new_enemy_health = enemy_health
     opp_should_skip = False  # заставляем соперника пропустить ход
@@ -2664,7 +2689,7 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
         sk_id, sk = skill_used
         if my_mana < sk['mana_cost']:
             await message.answer(
-                f"❌ Недостаточно маны! Требуется {sk['mana_cost']}🔮",
+                f"❌ Недостаточно маны! Требуется {sk['mana_cost']}{E_MANA}",
                 reply_markup=get_battle_action_kb(user_id, my_mana)
             )
             return
@@ -2676,7 +2701,7 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
             battle_log += "💨 Промах! Соперник уклонился\n\n"
         elif sk_id == 1:
             dealt = int(round(my_damage * sk['damage_mult'] * random.uniform(0.8, 1.2)))
-            battle_log += f"Ты наносишь {dealt} урона!\n"
+            battle_log += f'Ты наносишь {dealt} урона!\n'
             if random.random() < sk['stun_chance']:
                 opp_should_skip = True
                 battle_log += "😵 Соперник оглушён и пропустит следующий ход!\n"
@@ -2684,8 +2709,8 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
             dealt = int(round(my_damage * sk['damage_mult'] * random.uniform(0.8, 1.2)))
             hp_loss = max(1, int(round(my_health * sk['hp_loss_pct'])))
             my_health = max(1, my_health - hp_loss)
-            battle_log += f"🩸 Ты теряешь {hp_loss} HP!\n"
-            battle_log += f"Ты наносишь {dealt} урона!\n"
+            battle_log += f'🩸 Ты теряешь {hp_loss} HP!\n'
+            battle_log += f'Ты наносишь {dealt} урона!\n'
         elif sk_id == 3:
             dealt = 0
             opp_blind_add = sk['blind_turns']
@@ -2704,14 +2729,14 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
         else:
             base = int(round(my_damage * random.uniform(0.8, 1.2)))
             dealt = base * 2
-            battle_log += f"💥 КРИТИЧЕСКИЙ УДАР!\nТы наносишь {dealt} урона!\n\n"
+            battle_log += f'{E_DMG} КРИТИЧЕСКИЙ УДАР!\nТы наносишь {dealt} урона!\n\n'
     else:
         if roll_miss():
             dealt = 0
             battle_log += "💨 Промах! Соперник уклонился\n\n"
         else:
             dealt = int(round(my_damage * random.uniform(0.8, 1.2)))
-            battle_log += f"Ты атакуешь!\n💥 Урон: {dealt}\n\n"
+            battle_log += f'Ты атакуешь!\n{E_DMG} Урон: {dealt}\n\n'
 
     new_enemy_health = int(round(enemy_health - dealt))
 
@@ -2721,7 +2746,7 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
         winner_clan = get_player_clan(user_id)
         if winner_clan:
             add_clan_exp(winner_clan['clan_id'], 2)
-        battle_log += "✅ **ВЫ ПОБЕДИЛИ!**\n(+1 победа, +7💠 рейтинга)"
+        battle_log += "✅ <b>ВЫ ПОБЕДИЛИ!</b>\n(+1 победа, +7💠 рейтинга)"
         await message.answer(battle_log, reply_markup=get_end_battle_kb())
         pvp_pairs.pop(user_id, None)
         pvp_pairs.pop(opponent_id, None)
@@ -2733,7 +2758,7 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
             try:
                 await bot.send_message(
                     chat_id=opponent_id,
-                    text=f"⚔️ **PvP БОЙ** ⚔️\n\nСоперник атакует!\n💥 Урон: {dealt}\n\n❌ **ВЫ ПРОИГРАЛИ!**",
+                    text=f'⚔️ <b>PvP БОЙ</b> ⚔️\n\nСоперник атакует!\n{E_DMG} Урон: {dealt}\n\n❌ <b>ВЫ ПРОИГРАЛИ!</b>',
                     reply_markup=get_end_battle_kb()
                 )
             except Exception:
@@ -2742,8 +2767,8 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
 
     # Передаём ход сопернику
     battle_log += (
-        f"👤 Ты: ❤️ {my_health} | 🔮 {new_my_mana}/100\n"
-        f"👤 Соперник: ❤️ {new_enemy_health}\n\n"
+        f'{E_CROWN} Ты: {E_HP} {my_health} | {E_MANA} {new_my_mana}/100\n'
+        f'{E_SKULL} Соперник: {E_ESWORD} {new_enemy_health}\n\n'
         "⏳ Ход соперника..."
     )
     await message.answer(battle_log, reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
@@ -2766,24 +2791,26 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
 
         await opp_state.update_data(
             pvp_player_health=new_opp_player_health,
+            pvp_enemy_health=my_health,  # Bug fix: sync current player's HP to opponent's view
             pvp_my_turn=True,
             pvp_my_skip_turn=opp_skip_now,
             pvp_opp_blind_turns=new_opp_blind,
         )
         try:
             opp_msg = (
-                f"⚔️ **PvP БОЙ** ⚔️\n\n"
-                f"Соперник атакует! 💥 {dealt} урона\n\n"
+                f'⚔️ <b>PvP БОЙ</b> ⚔️\n\n'
+                f'Соперник атакует! {E_DMG} {dealt} урона\n\n'
             )
             if opp_should_skip:
                 opp_msg += "😵 Ты оглушён и пропустишь следующий ход!\n"
             if opp_blind_add > 0:
                 opp_msg += f"🔦 Ты ослеплён на {opp_blind_add} хода!\n"
             opp_msg += (
-                f"\n👤 Ты: ❤️ {new_opp_player_health} | 🔮 {opp_mana}/100\n"
-                f"👤 Соперник: ❤️ {opp_data.get('pvp_enemy_health', 0)}\n\n"
+                f'\n{E_CROWN} Ты: {E_HP} {new_opp_player_health} | {E_MANA} {opp_mana}/100\n'
+                f'{E_SKULL} Соперник: {E_ESWORD} {my_health}\n\n'
             )
-            if opp_skip_now and opp_skip_now != opp_should_skip:
+            # Bug fix: skip opponent turn immediately when opp_skip_now is True (handles both fresh stun and stored stun)
+            if opp_skip_now:
                 opp_msg += "😵 Ты оглушён — ход пропускается автоматически!\n"
                 # Если соперник оглушён — сразу передаём ход обратно
                 await opp_state.update_data(pvp_my_turn=False, pvp_my_skip_turn=False)
@@ -2792,17 +2819,16 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
                 await bot.send_message(chat_id=opponent_id, text=opp_msg,
                                        reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
                 # Уведомляем текущего игрока что его ход вернулся
-                opp_enemy_h = opp_data.get('pvp_enemy_health', 0)
                 await message.answer(
-                    f"😵 Соперник был оглушён — его ход пропущен!\n\n"
-                    f"👤 Ты: ❤️ {my_health} | 🔮 {new_my_mana}/100\n"
-                    f"👤 Соперник: ❤️ {new_enemy_health}\n\n"
-                    "🗡️ Снова твой ход!",
+                    f'😵 Соперник был оглушён — его ход пропущен!\n\n'
+                    f'{E_CROWN} Ты: {E_HP} {my_health} | {E_MANA} {new_my_mana}/100\n'
+                    f'{E_SKULL} Соперник: {E_ESWORD} {new_enemy_health}\n\n'
+                    f'{E_SWORD} Снова твой ход!',
                     reply_markup=get_battle_action_kb(user_id, new_my_mana)
                 )
                 return
             else:
-                opp_msg += "🗡️ Твой ход!"
+                opp_msg += f'{E_SWORD} Твой ход!'
                 await bot.send_message(
                     chat_id=opponent_id,
                     text=opp_msg,
@@ -2849,12 +2875,12 @@ async def open_clans(message: types.Message, state: FSMContext):
     else:
         clans = get_all_clans()
         if clans:
-            clans_text = "🛡️ **СПИСОК КЛАНОВ**\n\n"
+            clans_text = "🛡️ <b>СПИСОК КЛАНОВ</b>\n\n"
             for clan in clans:
                 _, name, lvl, members, min_power, ldr = clan
                 clans_text += f"🛡️ {name} — ур.{lvl} | {members}👥 | порог: {min_power}⚔️\n"
         else:
-            clans_text = "🛡️ **КЛАНОВ ЕЩЁ НЕТ**\n\nСтань первым!"
+            clans_text = "🛡️ <b>КЛАНОВ ЕЩЁ НЕТ</b>\n\nСтань первым!"
         await send_image_with_text(message, "clan.png", clans_text, reply_markup=get_clans_list_kb(clans))
         await state.set_state(ClanMenu.viewing_clans)
 
@@ -3058,7 +3084,7 @@ async def handle_kick_member(message: types.Message, state: FSMContext):
             try:
                 await bot.send_message(
                     chat_id=member_id,
-                    text=f"Вас кикнули из клана \"{clan_name}\" 😡"
+                    text=f'Вас кикнули из клана "{clan_name}" {E_ANGRY}'
                 )
             except Exception:
                 pass
