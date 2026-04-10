@@ -15,20 +15,25 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, FSInputFile
 
 # ============== CUSTOM EMOJI CONSTANTS ==============
-E_DRILL  = '<tg-emoji emoji-id="5195240510515595370">⛏</tg-emoji>'   # качать хуй
-E_COINS  = '<tg-emoji emoji-id="4972482444025398275">👛</tg-emoji>'   # очки
-E_ONLINE = '<tg-emoji emoji-id="5447410659077661506">🌐</tg-emoji>'   # онлайн режим
-E_NICK   = '<tg-emoji emoji-id="5280968723463680459">🆔</tg-emoji>'   # никнейм
-E_HP     = '<tg-emoji emoji-id="5267283746477861842">❤️</tg-emoji>'   # HP
-E_DMG    = '<tg-emoji emoji-id="5429507440091612100">💥</tg-emoji>'   # урон
-E_POW    = '<tg-emoji emoji-id="5242487302550199778">👊</tg-emoji>'   # мощь/сила
-E_SWORD  = '<tg-emoji emoji-id="5393607290228067750">🗡</tg-emoji>'   # боевой меч / начало боя
-E_CURSOR = '<tg-emoji emoji-id="5438335517735267694">🖱</tg-emoji>'   # твой ход (начало)
-E_MANA   = '<tg-emoji emoji-id="6280806319351927135">💜</tg-emoji>'   # мана
-E_CROWN  = '<tg-emoji emoji-id="5217822164362739968">👑</tg-emoji>'   # ты (PvP)
-E_SKULL  = '<tg-emoji emoji-id="5274108672849491069">💀</tg-emoji>'   # враг (PvP)
-E_ESWORD = '<tg-emoji emoji-id="5438255528264348146">🗡</tg-emoji>'   # враг меч (PvP)
-E_ANGRY  = '<tg-emoji emoji-id="5406708155956621268">😡</tg-emoji>'   # кик из клана
+E_DRILL    = '<tg-emoji emoji-id="5195240510515595370">⛏</tg-emoji>'   # качать хуй (legacy)
+E_COINS    = '<tg-emoji emoji-id="5215420556089776398">👛</tg-emoji>'   # монеты
+E_CRYSTALS = '<tg-emoji emoji-id="5429321386403327800">💎</tg-emoji>'   # кристаллы
+E_TICKET   = '<tg-emoji emoji-id="5334675412599480338">📕</tg-emoji>'   # билет рейда
+E_EXP      = '<tg-emoji emoji-id="5336829549151823064">📕</tg-emoji>'   # опыт
+E_STAR     = '<tg-emoji emoji-id="5206476089127372379">⭐️</tg-emoji>'  # уровень/звезда
+E_PROFILE  = '<tg-emoji emoji-id="5275979556308674886">👤</tg-emoji>'   # профиль
+E_ONLINE   = '<tg-emoji emoji-id="5447410659077661506">🌐</tg-emoji>'   # онлайн режим
+E_NICK     = '<tg-emoji emoji-id="5280968723463680459">🆔</tg-emoji>'   # никнейм
+E_HP       = '<tg-emoji emoji-id="5267283746477861842">❤️</tg-emoji>'   # HP
+E_DMG      = '<tg-emoji emoji-id="5429507440091612100">💥</tg-emoji>'   # урон
+E_POW      = '<tg-emoji emoji-id="5242487302550199778">👊</tg-emoji>'   # мощь/сила
+E_SWORD    = '<tg-emoji emoji-id="5393607290228067750">🗡</tg-emoji>'   # боевой меч / начало боя
+E_CURSOR   = '<tg-emoji emoji-id="5438335517735267694">🖱</tg-emoji>'   # твой ход (начало)
+E_MANA     = '<tg-emoji emoji-id="6280806319351927135">💜</tg-emoji>'   # мана
+E_CROWN    = '<tg-emoji emoji-id="5217822164362739968">👑</tg-emoji>'   # ты (PvP)
+E_SKULL    = '<tg-emoji emoji-id="5274108672849491069">💀</tg-emoji>'   # враг (PvP)
+E_ESWORD   = '<tg-emoji emoji-id="5438255528264348146">🗡</tg-emoji>'   # враг меч (PvP)
+E_ANGRY    = '<tg-emoji emoji-id="5406708155956621268">😡</tg-emoji>'   # кик из клана
 
 
 # Ваш токен от BotFather
@@ -83,6 +88,12 @@ def init_database():
         'ALTER TABLE players ADD COLUMN materials INTEGER DEFAULT 0',
         'ALTER TABLE players ADD COLUMN raid_floor INTEGER DEFAULT 1',
         'ALTER TABLE players ADD COLUMN raid_max_floor INTEGER DEFAULT 0',
+        'ALTER TABLE players ADD COLUMN coins INTEGER DEFAULT 0',
+        'ALTER TABLE players ADD COLUMN crystals INTEGER DEFAULT 0',
+        'ALTER TABLE players ADD COLUMN raid_tickets INTEGER DEFAULT 0',
+        'ALTER TABLE players ADD COLUMN experience INTEGER DEFAULT 0',
+        'ALTER TABLE players ADD COLUMN player_level INTEGER DEFAULT 1',
+        "ALTER TABLE players ADD COLUMN status TEXT DEFAULT 'Новичок'",
     ]:
         try:
             cursor.execute(col_sql)
@@ -210,6 +221,37 @@ def init_database():
         )
     ''')
 
+    # Таблица инвентаря (материалы)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS player_inventory (
+            user_id INTEGER PRIMARY KEY,
+            food INTEGER DEFAULT 0,
+            wood INTEGER DEFAULT 0,
+            stone INTEGER DEFAULT 0,
+            iron INTEGER DEFAULT 0,
+            gold INTEGER DEFAULT 0,
+            FOREIGN KEY (user_id) REFERENCES players(user_id)
+        )
+    ''')
+
+    # Таблица активных активностей (локации)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS active_activities (
+            user_id INTEGER PRIMARY KEY,
+            activity_type TEXT,
+            location_id INTEGER,
+            start_time TIMESTAMP,
+            end_time TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES players(user_id)
+        )
+    ''')
+
+    # Создать записи инвентаря для существующих игроков
+    cursor.execute('''
+        INSERT OR IGNORE INTO player_inventory (user_id)
+        SELECT user_id FROM players
+    ''')
+
     conn.commit()
     conn.close()
 
@@ -220,14 +262,19 @@ def add_player(user_id: int, nickname: str):
     
     try:
         cursor.execute('''
-            INSERT INTO players (user_id, nickname, points, click_power, strength, wins, materials, raid_floor, raid_max_floor)
-            VALUES (?, ?, 0.0, 1.0, 20.0, 0, 0, 1, 0)
+            INSERT INTO players (user_id, nickname, points, click_power, strength, wins,
+                                 materials, raid_floor, raid_max_floor,
+                                 coins, crystals, raid_tickets, experience, player_level, status)
+            VALUES (?, ?, 0.0, 1.0, 20.0, 0, 0, 1, 0, 100, 0, 0, 0, 1, 'Новичок')
         ''', (user_id, nickname))
         cursor.execute('''
             INSERT OR IGNORE INTO player_weapons (user_id, weapon_id) VALUES (?, 0)
         ''', (user_id,))
         cursor.execute('''
             INSERT OR IGNORE INTO player_armor (user_id, armor_id) VALUES (?, 0)
+        ''', (user_id,))
+        cursor.execute('''
+            INSERT OR IGNORE INTO player_inventory (user_id) VALUES (?)
         ''', (user_id,))
         conn.commit()
     except sqlite3.IntegrityError:
@@ -242,7 +289,10 @@ def get_player(user_id: int):
     
     cursor.execute('''
         SELECT user_id, nickname, points, click_power, strength, wins, last_click, rating_points,
-               COALESCE(materials, 0), COALESCE(raid_floor, 1), COALESCE(raid_max_floor, 0) FROM players
+               COALESCE(materials, 0), COALESCE(raid_floor, 1), COALESCE(raid_max_floor, 0),
+               COALESCE(coins, 0), COALESCE(crystals, 0), COALESCE(raid_tickets, 0),
+               COALESCE(experience, 0), COALESCE(player_level, 1), COALESCE(status, 'Новичок')
+        FROM players
         WHERE user_id = ?
     ''', (user_id,))
     
@@ -262,6 +312,12 @@ def get_player(user_id: int):
             "materials": result[8],
             "raid_floor": result[9],
             "raid_max_floor": result[10],
+            "coins": result[11],
+            "crystals": result[12],
+            "raid_tickets": result[13],
+            "experience": result[14],
+            "player_level": result[15],
+            "status": result[16],
         }
     return None
 
@@ -413,6 +469,255 @@ def add_click_power_to_player(user_id: int, amount: float):
     ''', (amount, user_id))
     conn.commit()
     conn.close()
+
+def add_coins_to_player(user_id: int, amount: int):
+    """Добавить монеты игроку"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE players SET coins = COALESCE(coins, 0) + ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?
+    ''', (amount, user_id))
+    conn.commit()
+    conn.close()
+
+def remove_coins_from_player(user_id: int, amount: int):
+    """Снять монеты у игрока"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE players SET coins = MAX(0, COALESCE(coins, 0) - ?), updated_at = CURRENT_TIMESTAMP WHERE user_id = ?
+    ''', (amount, user_id))
+    conn.commit()
+    conn.close()
+
+def add_crystals_to_player(user_id: int, amount: int):
+    """Добавить кристаллы игроку"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE players SET crystals = COALESCE(crystals, 0) + ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?
+    ''', (amount, user_id))
+    conn.commit()
+    conn.close()
+
+def add_raid_tickets_to_player(user_id: int, amount: int):
+    """Добавить билеты рейда игроку"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE players SET raid_tickets = COALESCE(raid_tickets, 0) + ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?
+    ''', (amount, user_id))
+    conn.commit()
+    conn.close()
+
+def remove_raid_ticket(user_id: int):
+    """Снять 1 билет рейда у игрока"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE players SET raid_tickets = MAX(0, COALESCE(raid_tickets, 0) - 1), updated_at = CURRENT_TIMESTAMP WHERE user_id = ?
+    ''', (user_id,))
+    conn.commit()
+    conn.close()
+
+# ============== EXPERIENCE SYSTEM ==============
+EXPERIENCE_LEVELS = {
+    1: 0, 2: 100, 3: 250, 4: 500, 5: 950,
+    6: 1250, 7: 1800, 8: 2200, 9: 3000, 10: 4500,
+    11: 7500, 12: 11500, 13: 14000, 14: 19000, 15: 25000,
+    16: 32000, 17: 50000, 18: 80000, 19: 120000, 20: 200000,
+}
+MAX_PLAYER_LEVEL = 20
+
+def _calc_level_from_exp(exp: int) -> int:
+    """Рассчитать уровень по опыту"""
+    level = 1
+    for lvl in range(MAX_PLAYER_LEVEL, 0, -1):
+        if exp >= EXPERIENCE_LEVELS[lvl]:
+            level = lvl
+            break
+    return level
+
+def add_experience_to_player(user_id: int, amount: int) -> dict:
+    """Добавить опыт игроку, вернуть {'leveled_up': bool, 'new_level': int}"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('SELECT COALESCE(experience, 0), COALESCE(player_level, 1) FROM players WHERE user_id = ?', (user_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return {'leveled_up': False, 'new_level': 1}
+    old_exp, old_level = row
+    new_exp = old_exp + amount
+    new_level = _calc_level_from_exp(new_exp)
+    cursor.execute('''
+        UPDATE players SET experience = ?, player_level = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?
+    ''', (new_exp, new_level, user_id))
+    conn.commit()
+    conn.close()
+    return {'leveled_up': new_level > old_level, 'new_level': new_level}
+
+def get_experience_progress(user_id: int) -> dict:
+    """Вернуть {current_exp, needed_exp, level}"""
+    player = get_player(user_id)
+    if not player:
+        return {'current_exp': 0, 'needed_exp': 100, 'level': 1}
+    level = player['player_level']
+    current_exp = player['experience']
+    needed_exp = EXPERIENCE_LEVELS.get(level + 1, EXPERIENCE_LEVELS[MAX_PLAYER_LEVEL]) if level < MAX_PLAYER_LEVEL else current_exp
+    return {'current_exp': current_exp, 'needed_exp': needed_exp, 'level': level}
+
+# ============== STATUS SYSTEM ==============
+STATUSES = {
+    1: {"name": "Новичок",        "emoji": "🔸", "required_level": 1,  "type": "default"},
+    2: {"name": "Продвинутый",    "emoji": "🌱", "required_level": 5,  "type": "unlock_level"},
+    3: {"name": "Охотник",        "emoji": "🔪", "required_level": 1,  "type": "free"},
+    4: {"name": "Любитель PVP",   "emoji": "⚔️", "required_level": 1,  "type": "free"},
+    5: {"name": "Добытчик",       "emoji": "🥇", "required_level": 1,  "type": "free"},
+}
+
+def get_player_status_emoji(player: dict) -> str:
+    """Вернуть эмодзи статуса игрока"""
+    status_name = player.get('status', 'Новичок')
+    for s in STATUSES.values():
+        if s['name'] == status_name:
+            return s['emoji']
+    return '🔸'
+
+def set_player_status(user_id: int, status_name: str):
+    """Установить статус игрока"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('UPDATE players SET status = ? WHERE user_id = ?', (status_name, user_id))
+    conn.commit()
+    conn.close()
+
+# ============== INVENTORY FUNCTIONS ==============
+def get_inventory(user_id: int) -> dict:
+    """Получить инвентарь игрока"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('SELECT food, wood, stone, iron, gold FROM player_inventory WHERE user_id = ?', (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return {'food': row[0], 'wood': row[1], 'stone': row[2], 'iron': row[3], 'gold': row[4]}
+    return {'food': 0, 'wood': 0, 'stone': 0, 'iron': 0, 'gold': 0}
+
+def add_inventory_material(user_id: int, material: str, amount: int):
+    """Добавить материал в инвентарь"""
+    allowed = {'food', 'wood', 'stone', 'iron', 'gold'}
+    if material not in allowed:
+        return
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('INSERT OR IGNORE INTO player_inventory (user_id) VALUES (?)', (user_id,))
+    cursor.execute(f'UPDATE player_inventory SET {material} = COALESCE({material}, 0) + ? WHERE user_id = ?',
+                   (amount, user_id))
+    conn.commit()
+    conn.close()
+
+def add_all_inventory_materials(user_id: int, materials: dict):
+    """Добавить сразу несколько материалов"""
+    for mat, amt in materials.items():
+        if amt > 0:
+            add_inventory_material(user_id, mat, amt)
+
+def add_admin_materials_to_player(user_id: int, amount: int):
+    """Добавить все материалы игроку (для админ-панели)"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('INSERT OR IGNORE INTO player_inventory (user_id) VALUES (?)', (user_id,))
+    cursor.execute('''
+        UPDATE player_inventory SET food = food + ?, wood = wood + ?, stone = stone + ?,
+               iron = iron + ?, gold = gold + ? WHERE user_id = ?
+    ''', (amount, amount, amount, amount, amount, user_id))
+    conn.commit()
+    conn.close()
+
+# ============== ACTIVITY FUNCTIONS ==============
+def start_activity(user_id: int, activity_type: str, location_id: int, duration_seconds: int):
+    """Начать активность в локации"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    now = datetime.utcnow()
+    end = datetime.utcnow().replace(microsecond=0)
+    import datetime as dt
+    end_time = now + dt.timedelta(seconds=duration_seconds)
+    cursor.execute('''
+        INSERT OR REPLACE INTO active_activities (user_id, activity_type, location_id, start_time, end_time)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (user_id, activity_type, location_id, now.isoformat(), end_time.isoformat()))
+    conn.commit()
+    conn.close()
+
+def get_active_activity(user_id: int) -> dict | None:
+    """Получить текущую активность игрока"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('SELECT activity_type, location_id, start_time, end_time FROM active_activities WHERE user_id = ?',
+                   (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return {'activity_type': row[0], 'location_id': row[1], 'start_time': row[2], 'end_time': row[3]}
+    return None
+
+def finish_activity(user_id: int):
+    """Удалить запись активной активности"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM active_activities WHERE user_id = ?', (user_id,))
+    conn.commit()
+    conn.close()
+
+def check_activity_done(user_id: int) -> dict | None:
+    """Проверить, завершилась ли активность. Вернуть данные если да, None если нет или нет активности."""
+    activity = get_active_activity(user_id)
+    if not activity:
+        return None
+    import datetime as dt
+    try:
+        end_time = datetime.fromisoformat(activity['end_time'])
+    except Exception:
+        return None
+    now = datetime.utcnow()
+    if now >= end_time:
+        return activity
+    return None
+
+# ============== LOCATIONS ==============
+LOCATIONS = {
+    1: {
+        "name": "🌾 Ясная Поляна",
+        "emoji": "🌾",
+        "image": "location_meadow.png",
+        "activities": {
+            "gather": {
+                "name": "🌽 Добыча еды",
+                "time": 25,
+                "emoji": "🌽",
+                "rewards": {
+                    "food": (2, 5),
+                    "experience": (3, 8),
+                    "coins": (10, 25)
+                },
+                "monster_chance": 0
+            },
+            "search": {
+                "name": "🗺️ Обыскать локацию",
+                "time": 50,
+                "emoji": "🗺️",
+                "rewards": {
+                    "coins": (20, 50),
+                    "experience": (5, 15),
+                    "food": (1, 3)
+                },
+                "monster_chance": 0.05
+            }
+        }
+    }
+}
 
 def has_purchased_click_upgrade(user_id: int, upgrade_id: int) -> bool:
     """Проверить, купил ли игрок это улучшение клика"""
@@ -954,6 +1259,23 @@ class AdminPanel(StatesGroup):
     adding_strength_amount = State()
     adding_click_power_nickname = State()
     adding_click_power_amount = State()
+    adding_experience_nickname = State()
+    adding_experience_amount = State()
+    adding_crystals_nickname = State()
+    adding_crystals_amount = State()
+    adding_raid_tickets_nickname = State()
+    adding_raid_tickets_amount = State()
+    adding_materials_nickname = State()
+    adding_materials_amount = State()
+
+class LocationMenu(StatesGroup):
+    viewing_map = State()
+    viewing_location = State()
+
+class ProfileMenu(StatesGroup):
+    viewing_profile = State()
+    viewing_statuses = State()
+    viewing_inventory = State()
 
 # Словарь для отслеживания cooldown клика
 click_cooldowns = {}
@@ -973,10 +1295,10 @@ clan_chat_sessions: dict = {}
 def get_main_kb():
     """Главное меню"""
     kb = [
-        [KeyboardButton(text="качать хуй")],
-        [KeyboardButton(text="🏪 Магазин"), KeyboardButton(text="🔨 Кузня")],
-        [KeyboardButton(text="🐉 Рейд"), KeyboardButton(text="🌐 Онлайн")],
-        [KeyboardButton(text="🛡️ Кланы"), KeyboardButton(text="🏆 Рейтинг")],
+        [KeyboardButton(text="🗺️ Карта"),      KeyboardButton(text="📦 Инвентарь")],
+        [KeyboardButton(text="🔨 Кузня"),        KeyboardButton(text="⚔️ Враги")],
+        [KeyboardButton(text="🐉 Рейд"),         KeyboardButton(text="🌐 Онлайн")],
+        [KeyboardButton(text="🛡️ Кланы"),       KeyboardButton(text="🏆 Рейтинг")],
         [KeyboardButton(text="📖 Профиль")]
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
@@ -1011,7 +1333,7 @@ def get_weapons_kb():
     """Меню выбора оружия"""
     kb = []
     for w_id, w_info in WEAPONS.items():
-        btn = f"{w_info['emoji']} {w_info['name']} (сила: {w_info['strength']}) — {w_info['cost']} оч."
+        btn = f"{w_info['emoji']} {w_info['name']} (сила: {w_info['strength']}) — {w_info['cost']} монет"
         kb.append([KeyboardButton(text=btn)])
     kb.append([KeyboardButton(text="⬅️ Назад")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
@@ -1020,7 +1342,7 @@ def get_armor_kb():
     """Меню выбора брони"""
     kb = []
     for a_id, a_info in ARMOR.items():
-        btn = f"{a_info['emoji']} {a_info['name']} (сила: {a_info['strength']}) — {a_info['cost']} оч."
+        btn = f"{a_info['emoji']} {a_info['name']} (сила: {a_info['strength']}) — {a_info['cost']} монет"
         kb.append([KeyboardButton(text=btn)])
     kb.append([KeyboardButton(text="⬅️ Назад")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
@@ -1101,7 +1423,7 @@ def get_next_weapon_kb(current_weapon_id: int) -> ReplyKeyboardMarkup:
         ]
     else:
         w = WEAPONS[next_id]
-        btn = f"{w['emoji']} {w['name']} (сила: {w['strength']}) — {w['cost']} оч."
+        btn = f"{w['emoji']} {w['name']} (сила: {w['strength']}) — {w['cost']} монет"
         kb = [
             [KeyboardButton(text=btn)],
             [KeyboardButton(text="⬅️ Назад")]
@@ -1118,7 +1440,7 @@ def get_next_armor_kb(current_armor_id: int) -> ReplyKeyboardMarkup:
         ]
     else:
         a = ARMOR[next_id]
-        btn = f"{a['emoji']} {a['name']} (сила: {a['strength']}) — {a['cost']} оч."
+        btn = f"{a['emoji']} {a['name']} (сила: {a['strength']}) — {a['cost']} монет"
         kb = [
             [KeyboardButton(text=btn)],
             [KeyboardButton(text="⬅️ Назад")]
@@ -1130,7 +1452,7 @@ def get_skills_kb(user_id: int) -> ReplyKeyboardMarkup:
     kb = []
     for skill_id, skill in SKILLS.items():
         owned = has_purchased_skill(user_id, skill_id)
-        status = "✅" if owned else f"{skill['price']}⚡️"
+        status = "✅" if owned else f"{skill['price']} монет"
         kb.append([KeyboardButton(text=f"{skill['emoji']} {skill['name']} [{status}]")])
     kb.append([KeyboardButton(text="⬅️ Назад")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
@@ -1220,9 +1542,55 @@ def get_admin_kb() -> ReplyKeyboardMarkup:
     kb = [
         [KeyboardButton(text="💰 Накрутить монеты")],
         [KeyboardButton(text="💪 Накрутить силу")],
-        [KeyboardButton(text="⚡️ Накрутить мощь клика")],
+        [KeyboardButton(text="⭐️ Накрутить опыт")],
+        [KeyboardButton(text="💎 Накрутить кристаллы")],
+        [KeyboardButton(text="📕 Накрутить билеты рейда")],
+        [KeyboardButton(text="🥕 Накрутить материалы")],
         [KeyboardButton(text="❌ Выход")],
     ]
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+def get_map_kb() -> ReplyKeyboardMarkup:
+    """Клавиатура карты"""
+    kb = []
+    for loc_id, loc in LOCATIONS.items():
+        kb.append([KeyboardButton(text=loc['name'])])
+    kb.append([KeyboardButton(text="❌ Вернуться")])
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+def get_location_activities_kb(location_id: int) -> ReplyKeyboardMarkup:
+    """Клавиатура активностей локации"""
+    loc = LOCATIONS.get(location_id)
+    if not loc:
+        return ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="❌ Вернуться")]], resize_keyboard=True)
+    kb = []
+    for act_key, act in loc['activities'].items():
+        kb.append([KeyboardButton(text=f"{act['emoji']} {act['name']} ({act['time']}с)")])
+    kb.append([KeyboardButton(text="⬅️ Назад на карту")])
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+def get_profile_kb() -> ReplyKeyboardMarkup:
+    """Клавиатура профиля"""
+    kb = [
+        [KeyboardButton(text="🎭 Статусы"), KeyboardButton(text="📦 Инвентарь")],
+        [KeyboardButton(text="🏠 Назад")]
+    ]
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+def get_statuses_kb(player: dict) -> ReplyKeyboardMarkup:
+    """Клавиатура статусов"""
+    kb = []
+    for s_id, s in STATUSES.items():
+        owned = (player.get('status') == s['name'])
+        can_unlock = (player.get('player_level', 1) >= s.get('required_level', 1))
+        if owned:
+            label = f"{s['emoji']} {s['name']} [✅ Активен]"
+        elif can_unlock:
+            label = f"{s['emoji']} {s['name']} [Выбрать]"
+        else:
+            label = f"{s['emoji']} {s['name']} [🔒 Ур.{s.get('required_level', 1)}]"
+        kb.append([KeyboardButton(text=label)])
+    kb.append([KeyboardButton(text="⬅️ Назад")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 # ============== HELPER FUNCTIONS ==============
@@ -1315,74 +1683,380 @@ async def process_nickname(message: types.Message, state: FSMContext):
     await state.clear()
     await message.answer(f"Приятно познакомиться, {nickname}! Теперь ты можешь приступать.", reply_markup=get_main_kb())
 
-# ============== CLICKING LOGIC ==============
-@dp.message(F.text == "качать хуй")
-async def clicker_logic(message: types.Message):
-    user_id = message.from_user.id
-    player = get_player(user_id)
-    
-    if not player:
-        await message.answer("Сначала напиши /start, чтобы зарегистрироваться.")
-        return
-    
-    if not can_click(user_id):
-        await message.answer("⏳ Подожди 1 секунду перед следующим кликом!")
-        return
-    
-    player_clan = get_player_clan(user_id)
-    clan_level = player_clan['clan_level'] if player_clan else 1
-    effective_click_power = player["click_power"] + get_clan_click_bonus(clan_level)
-
-    new_points = round(player["points"] + effective_click_power, 1)
-    update_player_points(user_id, new_points)
-    update_last_click(user_id)
-    
-    material_found = random.random() < 0.01
-    if material_found:
-        new_materials = player["materials"] + 1
-        update_player_materials(user_id, new_materials)
-        response = (
-            f'Прогресс пошел! {E_DRILL}\n'
-            f'+ {E_COINS} {effective_click_power}\n'
-            f'Текущие очки: {new_points}{E_COINS}\n\n'
-            f'⚙️ Найден материал! Всего: {new_materials}'
-        )
-    else:
-        response = (
-            f'Прогресс пошел! {E_DRILL}\n'
-            f'+ {E_COINS} {effective_click_power}\n'
-            f'Текущие очки: {new_points}{E_COINS}'
-        )
-    
-    await message.answer(response)
-
 # ============== PROFILE ==============
 @dp.message(Command("профиль"))
 @dp.message(F.text == "/профиль")
 @dp.message(F.text == "📖 Профиль")
-async def show_profile(message: types.Message):
+async def show_profile(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     player = get_player(user_id)
     
     if not player:
         await message.answer("Профиль не найден. Напиши /start")
         return
-    
+
+    await state.set_state(ProfileMenu.viewing_profile)
+    await _send_profile(message, player)
+
+async def _send_profile(message, player: dict):
+    """Отправить сообщение профиля"""
     health = calculate_player_health(player['strength'])
     damage = calculate_damage(player['strength'])
-    
+    exp_info = get_experience_progress(player['user_id'])
+    status_emoji = get_player_status_emoji(player)
+
     response = (
-        f'[🗒️] Профиль игрока: {player["nickname"]}\n'
-        f'{E_COINS}- Очки: {player["points"]}\n'
-        f'💠- Рейтинг: {player["rating_points"]}\n'
-        f'{E_POW}- Мощь клика: {player["click_power"]}\n'
-        f'⚙️ Материалов: {player["materials"]}\n'
-        f'🗼 Рекорд рейда: {player["raid_max_floor"]} этаж\n\n'
-        f'(⚔️) Сила: {int(player["strength"])}\n'
-        f'({E_HP}) Здоровье: {health}\n'
-        f'({E_DMG}) Урон: {damage}'
+        f'{E_PROFILE} <b>Профиль игрока:</b>\n'
+        f'🔒 ▪️ {player["nickname"]}\n\n'
+        f'{status_emoji} <b>{player["status"]}</b>\n\n'
+        f'{E_EXP} Очки опыта ▪️ {exp_info["current_exp"]} / {exp_info["needed_exp"]}\n'
+        f'Уровень ▪️ {player["player_level"]}{E_STAR}\n\n'
+        f'│🏆│ {player["wins"]} ▪️ Победы\n'
+        f'│{E_POW}│ {int(player["strength"])} ▪️ Сила\n'
+        f'│{E_HP}│ {health} ▪️ Здоровье\n\n'
+        f'┆{E_COINS}┆ Монеты ▪️ {player["coins"]}\n'
+        f'┆{E_CRYSTALS}┆ Кристаллы ▪️ {player["crystals"]}\n'
+        f'┆{E_TICKET}┆ Билеты рейда ▪️ {player["raid_tickets"]}\n'
     )
-    await send_image_with_text(message, "profile.png", response, reply_markup=get_main_kb())
+    await message.answer(response, reply_markup=get_profile_kb())
+
+@dp.message(ProfileMenu.viewing_profile)
+async def handle_profile_menu(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+
+    if text == "🏠 Назад":
+        await state.clear()
+        await message.answer("Вернулись в главное меню!", reply_markup=get_main_kb())
+        return
+
+    if text == "📦 Инвентарь":
+        await state.set_state(ProfileMenu.viewing_inventory)
+        await _send_inventory(message, user_id)
+        return
+
+    if text == "🎭 Статусы":
+        player = get_player(user_id)
+        await state.set_state(ProfileMenu.viewing_statuses)
+        statuses_text = "🎭 <b>СТАТУСЫ</b>\n\nВыбери статус для своего персонажа:\n\n"
+        for s_id, s in STATUSES.items():
+            req_lvl = s.get('required_level', 1)
+            can = (player.get('player_level', 1) >= req_lvl)
+            owned = (player.get('status') == s['name'])
+            lock = "" if can else f" 🔒(ур.{req_lvl})"
+            check = " ✅" if owned else ""
+            statuses_text += f"{s['emoji']} <b>{s['name']}</b>{lock}{check}\n"
+        await message.answer(statuses_text, reply_markup=get_statuses_kb(player))
+        return
+
+    # Refresh profile
+    player = get_player(user_id)
+    if player:
+        await _send_profile(message, player)
+
+@dp.message(ProfileMenu.viewing_inventory)
+async def handle_profile_inventory(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+
+    if text == "⬅️ Назад":
+        player = get_player(user_id)
+        await state.set_state(ProfileMenu.viewing_profile)
+        if player:
+            await _send_profile(message, player)
+        return
+
+    await _send_inventory(message, user_id)
+
+@dp.message(ProfileMenu.viewing_statuses)
+async def handle_profile_statuses(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    player = get_player(user_id)
+    text = message.text
+
+    if text == "⬅️ Назад":
+        await state.set_state(ProfileMenu.viewing_profile)
+        await _send_profile(message, player)
+        return
+
+    # Check if player selected a status
+    for s_id, s in STATUSES.items():
+        req_lvl = s.get('required_level', 1)
+        can = (player.get('player_level', 1) >= req_lvl)
+        owned = (player.get('status') == s['name'])
+        label_base = f"{s['emoji']} {s['name']}"
+        if text.startswith(label_base):
+            if owned:
+                await message.answer(f"✅ Статус «{s['name']}» уже активен!", reply_markup=get_statuses_kb(player))
+                return
+            if not can:
+                await message.answer(f"🔒 Нужен уровень {req_lvl} для этого статуса!", reply_markup=get_statuses_kb(player))
+                return
+            set_player_status(user_id, s['name'])
+            updated = get_player(user_id)
+            await message.answer(f"✅ Статус изменён на «{s['name']}» {s['emoji']}!", reply_markup=get_statuses_kb(updated))
+            return
+
+    await message.answer("Выбери статус из списка!", reply_markup=get_statuses_kb(player))
+
+# ============== INVENTORY TAB ==============
+async def _send_inventory(message, user_id: int):
+    """Показать инвентарь игрока"""
+    player = get_player(user_id)
+    inv = get_inventory(user_id)
+    nickname = player['nickname'] if player else "Игрок"
+    text = (
+        f'📦 <b>Инвентарь {nickname}:</b>\n'
+        f'┃{inv["wood"]}🌳 | ▪️ Древесина\n'
+        f'┃{inv["stone"]}🪨 | ▪️ Камень\n'
+        f'┃{inv["food"]}🥕 | ▪️ Еда\n'
+        f'┃{inv["iron"]}⛰ | ▪️ Железо\n'
+        f'┃{inv["gold"]}🥇 | ▪️ Золото\n'
+    )
+    inv_kb = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="⬅️ Назад")]], resize_keyboard=True)
+    await message.answer(text, reply_markup=inv_kb)
+
+@dp.message(F.text == "📦 Инвентарь")
+async def open_inventory_main(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    player = get_player(user_id)
+    if not player:
+        await message.answer("Сначала зарегистрируйся! /start")
+        return
+    await _send_inventory(message, user_id)
+
+# ============== MAP / LOCATIONS ==============
+@dp.message(F.text == "🗺️ Карта")
+async def open_map(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    player = get_player(user_id)
+    if not player:
+        await message.answer("Сначала зарегистрируйся! /start")
+        return
+
+    # Check if any activity just completed
+    completed = check_activity_done(user_id)
+    if completed:
+        await _give_activity_rewards(message, user_id, completed)
+        await state.set_state(LocationMenu.viewing_map)
+        map_text = "🗺️ <b>КАРТА</b>\n\nВыбери локацию для исследования:"
+        await send_image_with_text(message, "map.png", map_text, reply_markup=get_map_kb())
+        return
+
+    activity = get_active_activity(user_id)
+    if activity:
+        import datetime as dt
+        try:
+            end_time = datetime.fromisoformat(activity['end_time'])
+        except Exception:
+            end_time = None
+        if end_time:
+            remaining = max(0, int((end_time - datetime.utcnow()).total_seconds()))
+            loc = LOCATIONS.get(activity['location_id'], {})
+            act_cfg = loc.get('activities', {}).get(activity['activity_type'], {})
+            await message.answer(
+                f"⏳ <b>Активность в процессе</b>\n\n"
+                f"Локация: {loc.get('name', '?')}\n"
+                f"Действие: {act_cfg.get('name', activity['activity_type'])}\n"
+                f"Осталось: {remaining} сек.",
+                reply_markup=ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="❌ Вернуться")]], resize_keyboard=True)
+            )
+            await state.set_state(LocationMenu.viewing_map)
+            return
+
+    map_text = "🗺️ <b>КАРТА</b>\n\nВыбери локацию для исследования:"
+    await send_image_with_text(message, "map.png", map_text, reply_markup=get_map_kb())
+    await state.set_state(LocationMenu.viewing_map)
+
+@dp.message(LocationMenu.viewing_map)
+async def handle_map(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+
+    if text == "❌ Вернуться":
+        await state.clear()
+        await message.answer("Вернулись в главное меню!", reply_markup=get_main_kb())
+        return
+
+    # Check if activity completed while waiting
+    completed = check_activity_done(user_id)
+    if completed:
+        await _give_activity_rewards(message, user_id, completed)
+        map_text = "🗺️ <b>КАРТА</b>\n\nВыбери локацию для исследования:"
+        await send_image_with_text(message, "map.png", map_text, reply_markup=get_map_kb())
+        return
+
+    for loc_id, loc in LOCATIONS.items():
+        if text == loc['name']:
+            await state.update_data(selected_location=loc_id)
+            loc_text = f"{loc['emoji']} <b>{loc['name']}</b>\n\nВыбери действие:\n"
+            for act_key, act in loc['activities'].items():
+                rew = act['rewards']
+                rew_str = ", ".join(f"{v[0]}-{v[1]} {k}" for k, v in rew.items())
+                monster_note = f"(⚠️ {int(act['monster_chance']*100)}% шанс монстра)" if act['monster_chance'] > 0 else ""
+                loc_text += f"\n{act['emoji']} {act['name']} ({act['time']}с)\n  Награды: {rew_str} {monster_note}\n"
+            await send_image_with_text(message, loc['image'], loc_text,
+                                       reply_markup=get_location_activities_kb(loc_id))
+            await state.set_state(LocationMenu.viewing_location)
+            return
+
+    await message.answer("Выбери локацию из списка!", reply_markup=get_map_kb())
+
+@dp.message(LocationMenu.viewing_location)
+async def handle_location(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+    data = await state.get_data()
+    loc_id = data.get('selected_location', 1)
+    loc = LOCATIONS.get(loc_id)
+
+    if text == "⬅️ Назад на карту":
+        map_text = "🗺️ <b>КАРТА</b>\n\nВыбери локацию для исследования:"
+        await send_image_with_text(message, "map.png", map_text, reply_markup=get_map_kb())
+        await state.set_state(LocationMenu.viewing_map)
+        return
+
+    if not loc:
+        await state.set_state(LocationMenu.viewing_map)
+        await message.answer("Локация не найдена.", reply_markup=get_map_kb())
+        return
+
+    # Check if already has active activity
+    existing = get_active_activity(user_id)
+    if existing:
+        import datetime as dt
+        try:
+            end_time = datetime.fromisoformat(existing['end_time'])
+        except Exception:
+            end_time = None
+        if end_time:
+            remaining = max(0, int((end_time - datetime.utcnow()).total_seconds()))
+            await message.answer(
+                f"⏳ У тебя уже идёт активность! Осталось: {remaining} сек.",
+                reply_markup=get_location_activities_kb(loc_id)
+            )
+            return
+
+    for act_key, act in loc['activities'].items():
+        btn_text = f"{act['emoji']} {act['name']} ({act['time']}с)"
+        if text == btn_text:
+            start_activity(user_id, act_key, loc_id, act['time'])
+            await message.answer(
+                f"✅ Начато: {act['name']}\n"
+                f"⏱ Время: {act['time']} секунд\n"
+                f"Возвращайся на карту когда время выйдет!",
+                reply_markup=ReplyKeyboardMarkup(
+                    keyboard=[[KeyboardButton(text="⬅️ Назад на карту")]],
+                    resize_keyboard=True
+                )
+            )
+            return
+
+    await message.answer("Выбери действие!", reply_markup=get_location_activities_kb(loc_id))
+
+async def _give_activity_rewards(message, user_id: int, activity: dict):
+    """Выдать награды за завершённую активность"""
+    loc_id = activity['location_id']
+    act_type = activity['activity_type']
+    loc = LOCATIONS.get(loc_id, {})
+    act_cfg = loc.get('activities', {}).get(act_type, {})
+    rewards = act_cfg.get('rewards', {})
+    monster_chance = act_cfg.get('monster_chance', 0)
+
+    finish_activity(user_id)
+
+    # Calculate rewards
+    earned = {}
+    for rew_key, (min_v, max_v) in rewards.items():
+        earned[rew_key] = random.randint(min_v, max_v)
+
+    # Apply rewards
+    if 'coins' in earned:
+        add_coins_to_player(user_id, earned['coins'])
+    exp_result = {'leveled_up': False, 'new_level': 1}
+    if 'experience' in earned:
+        exp_result = add_experience_to_player(user_id, earned['experience'])
+    for mat in ('food', 'wood', 'stone', 'iron', 'gold'):
+        if mat in earned:
+            add_inventory_material(user_id, mat, earned[mat])
+
+    # Build reward text
+    reward_lines = []
+    mat_names = {'food': '🥕 Еда', 'wood': '🌳 Древесина', 'stone': '🪨 Камень',
+                 'iron': '⛰ Железо', 'gold': '🥇 Золото', 'coins': '💰 Монеты',
+                 'experience': '⭐️ Опыт'}
+    for k, v in earned.items():
+        reward_lines.append(f"+{v} {mat_names.get(k, k)}")
+
+    text = (
+        f"✅ <b>Активность завершена!</b>\n\n"
+        f"Локация: {loc.get('name', '?')}\n"
+        f"Действие: {act_cfg.get('name', act_type)}\n\n"
+        f"🎁 Награды:\n" + "\n".join(reward_lines)
+    )
+    if exp_result.get('leveled_up'):
+        text += f"\n\n🎉 Уровень повышен до {exp_result['new_level']}!"
+
+    # Check monster encounter
+    if monster_chance > 0 and random.random() < monster_chance:
+        text += "\n\n⚠️ Внимание! Ты встретил монстра!"
+        monster_kb = ReplyKeyboardMarkup(
+            keyboard=[
+                [KeyboardButton(text="⚔️ Сразиться с монстром")],
+                [KeyboardButton(text="🏃 Убежать")]
+            ],
+            resize_keyboard=True
+        )
+        await message.answer(text, reply_markup=monster_kb)
+    else:
+        await message.answer(text)
+
+# Handle monster from activity
+@dp.message(LocationMenu.viewing_map, F.text == "⚔️ Сразиться с монстром")
+@dp.message(LocationMenu.viewing_location, F.text == "⚔️ Сразиться с монстром")
+async def fight_location_monster(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    player = get_player(user_id)
+    if not player:
+        await message.answer("Сначала зарегистрируйся! /start")
+        return
+    selected_enemy = 1
+    enemy_info = ENEMIES[selected_enemy]
+    player_clan = get_player_clan(user_id)
+    clan_level = player_clan['clan_level'] if player_clan else 1
+    buffed_strength = apply_clan_strength_buff(player['strength'], clan_level)
+    player_health = calculate_player_health(buffed_strength)
+    player_damage = calculate_damage(buffed_strength)
+    enemy_damage = calculate_enemy_damage(selected_enemy)
+    reset_battle_cooldown(user_id)
+    await state.set_state(BattleState.in_battle)
+    await state.update_data(
+        selected_enemy=selected_enemy,
+        player_health=player_health,
+        player_damage=player_damage,
+        enemy_health=enemy_info['health'],
+        enemy_damage=enemy_damage,
+        player_mana=100,
+        enemy_skip_turn=False,
+        player_blind_turns=0,
+    )
+    mana = 100
+    battle_info = (
+        f"⚔️ <b>МОНСТР!</b>\n\n"
+        f"☠️ {enemy_info['name']}\n"
+        f"🩶 {enemy_info['health']}\n"
+        f"⚔️ {enemy_damage}\n\n"
+        f"👤 {player['nickname']}\n"
+        f"{E_HP} {player_health}\n"
+        f"⚔️ {player_damage}\n"
+    )
+    await message.answer(battle_info, reply_markup=get_battle_kb())
+
+@dp.message(LocationMenu.viewing_map, F.text == "🏃 Убежать")
+@dp.message(LocationMenu.viewing_location, F.text == "🏃 Убежать")
+async def flee_location_monster(message: types.Message, state: FSMContext):
+    await message.answer("🏃 Ты убежал от монстра!", reply_markup=get_map_kb())
+    await state.set_state(LocationMenu.viewing_map)
 
 # ============== CLICK UPGRADES SHOP ==============
 @dp.message(F.text == "🏪 Магазин")
@@ -1520,7 +2194,7 @@ async def handle_forge_menu(message: types.Message, state: FSMContext):
             weapons_text = (
                 "⚔️ <b>ОРУЖИЕ</b>\n\n"
                 f"Текущее оружие: {weapon['emoji']} {weapon['name']} (сила: {weapon['strength']})\n"
-                f"Очки: {player['points']}\n\n"
+                f"Монеты: {player['coins']}\n\n"
                 "✅ Вы достигли максимума"
             )
         else:
@@ -1528,9 +2202,9 @@ async def handle_forge_menu(message: types.Message, state: FSMContext):
             weapons_text = (
                 "⚔️ <b>ОРУЖИЕ</b>\n\n"
                 f"Текущее оружие: {weapon['emoji']} {weapon['name']} (сила: {weapon['strength']})\n"
-                f"Очки: {player['points']}\n\n"
+                f"Монеты: {player['coins']}\n\n"
                 f"Следующее улучшение:\n"
-                f"{next_w['emoji']} {next_w['name']} (сила: {next_w['strength']}) — {next_w['cost']} оч."
+                f"{next_w['emoji']} {next_w['name']} (сила: {next_w['strength']}) — {next_w['cost']} монет"
             )
         await message.answer(weapons_text, reply_markup=get_next_weapon_kb(weapon_id))
         await state.set_state(ForgeMenu.viewing_weapons)
@@ -1544,7 +2218,7 @@ async def handle_forge_menu(message: types.Message, state: FSMContext):
             armor_text = (
                 "🛡️ <b>БРОНЯ</b>\n\n"
                 f"Текущая броня: {armor['emoji']} {armor['name']} (сила: {armor['strength']})\n"
-                f"Очки: {player['points']}\n\n"
+                f"Монеты: {player['coins']}\n\n"
                 "✅ Вы достигли максимума"
             )
         else:
@@ -1552,19 +2226,19 @@ async def handle_forge_menu(message: types.Message, state: FSMContext):
             armor_text = (
                 "🛡️ <b>БРОНЯ</b>\n\n"
                 f"Текущая броня: {armor['emoji']} {armor['name']} (сила: {armor['strength']})\n"
-                f"Очки: {player['points']}\n\n"
+                f"Монеты: {player['coins']}\n\n"
                 f"Следующее улучшение:\n"
-                f"{next_a['emoji']} {next_a['name']} (сила: {next_a['strength']}) — {next_a['cost']} оч."
+                f"{next_a['emoji']} {next_a['name']} (сила: {next_a['strength']}) — {next_a['cost']} монет"
             )
         await message.answer(armor_text, reply_markup=get_next_armor_kb(armor_id))
         await state.set_state(ForgeMenu.viewing_armor)
         return
 
     if text == "✨ Скиллы":
-        skills_text = '✨ <b>СКИЛЛЫ</b>\n\nОчки: {}\n\n'.format(player['points'])
+        skills_text = '✨ <b>СКИЛЛЫ</b>\n\nМонеты: {}\n\n'.format(player['coins'])
         for skill_id, skill in SKILLS.items():
             owned = has_purchased_skill(user_id, skill_id)
-            status = "✅ Куплено" if owned else f'Цена: {skill["price"]}{E_COINS}'
+            status = "✅ Куплено" if owned else f'Цена: {skill["price"]} монет'
             skills_text += (
                 f'{skill["emoji"]} {skill["name"]}\n'
                 f'  {skill["desc"]}\n'
@@ -1607,7 +2281,7 @@ async def handle_weapons_menu(message: types.Message, state: FSMContext):
 
     chosen_weapon_id = None
     for w_id, w_info in WEAPONS.items():
-        btn = f"{w_info['emoji']} {w_info['name']} (сила: {w_info['strength']}) — {w_info['cost']} оч."
+        btn = f"{w_info['emoji']} {w_info['name']} (сила: {w_info['strength']}) — {w_info['cost']} монет"
         if text == btn:
             chosen_weapon_id = w_id
             break
@@ -1629,9 +2303,9 @@ async def handle_weapons_menu(message: types.Message, state: FSMContext):
         )
         return
 
-    if player['points'] < new_weapon['cost']:
+    if player['coins'] < new_weapon['cost']:
         await message.answer(
-            f"❌ Недостаточно очков!\nТребуется: {new_weapon['cost']}\nУ вас есть: {player['points']}",
+            f"❌ Недостаточно монет!\nТребуется: {new_weapon['cost']}\nУ вас есть: {player['coins']}",
             reply_markup=get_next_weapon_kb(current_weapon_id)
         )
         return
@@ -1641,11 +2315,11 @@ async def handle_weapons_menu(message: types.Message, state: FSMContext):
     armor = _get_armor_info(armor_id)
     new_weapon_strength = new_weapon['strength']
     new_total_strength = new_weapon_strength + armor['strength']
-    new_points = round(player['points'] - new_weapon['cost'], 1)
+    new_coins = player['coins'] - new_weapon['cost']
 
     set_player_weapon(user_id, chosen_weapon_id)
     update_player_strength(user_id, new_total_strength)
-    update_player_points(user_id, new_points)
+    remove_coins_from_player(user_id, new_weapon['cost'])
 
     await message.answer(
         f"✅ Оружие улучшено!\n\n"
@@ -1653,7 +2327,7 @@ async def handle_weapons_menu(message: types.Message, state: FSMContext):
         f"(⚔️) Сила оружия: {new_weapon_strength}\n"
         f"🛡️ Сила брони: {armor['strength']}\n"
         f"(⚔️) Общая сила: {int(new_total_strength)}\n\n"
-        f"- {new_weapon['cost']} очков\nОсталось: {new_points}",
+        f"- {new_weapon['cost']} монет\nОсталось: {new_coins}",
         reply_markup=get_next_weapon_kb(chosen_weapon_id)
     )
 
@@ -1687,7 +2361,7 @@ async def handle_armor_menu(message: types.Message, state: FSMContext):
 
     chosen_armor_id = None
     for a_id, a_info in ARMOR.items():
-        btn = f"{a_info['emoji']} {a_info['name']} (сила: {a_info['strength']}) — {a_info['cost']} оч."
+        btn = f"{a_info['emoji']} {a_info['name']} (сила: {a_info['strength']}) — {a_info['cost']} монет"
         if text == btn:
             chosen_armor_id = a_id
             break
@@ -1709,9 +2383,9 @@ async def handle_armor_menu(message: types.Message, state: FSMContext):
         )
         return
 
-    if player['points'] < new_armor['cost']:
+    if player['coins'] < new_armor['cost']:
         await message.answer(
-            f"❌ Недостаточно очков!\nТребуется: {new_armor['cost']}\nУ вас есть: {player['points']}",
+            f"❌ Недостаточно монет!\nТребуется: {new_armor['cost']}\nУ вас есть: {player['coins']}",
             reply_markup=get_next_armor_kb(current_armor_id)
         )
         return
@@ -1721,11 +2395,11 @@ async def handle_armor_menu(message: types.Message, state: FSMContext):
     weapon = _get_weapon_info(weapon_id)
     new_armor_strength = new_armor['strength']
     new_total_strength = weapon['strength'] + new_armor_strength
-    new_points = round(player['points'] - new_armor['cost'], 1)
+    new_coins = player['coins'] - new_armor['cost']
 
     set_player_armor(user_id, chosen_armor_id)
     update_player_strength(user_id, new_total_strength)
-    update_player_points(user_id, new_points)
+    remove_coins_from_player(user_id, new_armor['cost'])
 
     await message.answer(
         f"✅ Броня улучшена!\n\n"
@@ -1733,7 +2407,7 @@ async def handle_armor_menu(message: types.Message, state: FSMContext):
         f"(⚔️) Сила оружия: {weapon['strength']}\n"
         f"🛡️ Сила брони: {new_armor_strength}\n"
         f"(⚔️) Общая сила: {int(new_total_strength)}\n\n"
-        f"- {new_armor['cost']} очков\nОсталось: {new_points}",
+        f"- {new_armor['cost']} монет\nОсталось: {new_coins}",
         reply_markup=get_next_armor_kb(chosen_armor_id)
     )
 
@@ -1762,7 +2436,7 @@ async def handle_skills_menu(message: types.Message, state: FSMContext):
     # Проверяем, нажал ли кнопку скилла
     for skill_id, skill in SKILLS.items():
         owned = has_purchased_skill(user_id, skill_id)
-        status = "✅" if owned else f"{skill['price']}⚡️"
+        status = "✅" if owned else f"{skill['price']} монет"
         expected = f"{skill['emoji']} {skill['name']} [{status}]"
         if text == expected:
             if owned:
@@ -1771,18 +2445,18 @@ async def handle_skills_menu(message: types.Message, state: FSMContext):
                     reply_markup=get_skills_kb(user_id)
                 )
                 return
-            if player['points'] < skill['price']:
+            if player['coins'] < skill['price']:
                 await message.answer(
-                    f'❌ Недостаточно очков!\nТребуется: {skill["price"]}{E_COINS}\nУ вас: {player["points"]}',
+                    f'❌ Недостаточно монет!\nТребуется: {skill["price"]} монет\nУ вас: {player["coins"]}',
                     reply_markup=get_skills_kb(user_id)
                 )
                 return
-            new_points = round(player['points'] - skill['price'], 1)
-            update_player_points(user_id, new_points)
+            remove_coins_from_player(user_id, skill['price'])
             add_skill_purchase(user_id, skill_id)
+            updated = get_player(user_id)
             await message.answer(
                 f'✅ Скилл «{skill["name"]}» куплен!\n'
-                f'- {skill["price"]}{E_COINS}\nОсталось: {new_points}{E_COINS}\n\n'
+                f'- {skill["price"]} монет\nОсталось: {updated["coins"]} монет\n\n'
                 f'{skill["desc"]}\nТребует маны: {skill["mana_cost"]}{E_MANA}',
                 reply_markup=get_skills_kb(user_id)
             )
@@ -1885,7 +2559,7 @@ def _get_raid_floor_text(floor_id: int, enemy_info: dict) -> str:
         f"{enemy_info['emoji']} {enemy_info['name']}\n"
         f"🩶 {enemy_info['health']} HP\n"
         f"⚔️ {enemy_info['base_damage']} атака\n"
-        f"💰 Награда: {enemy_info['reward']} очков"
+        f"💰 Награда: {enemy_info['reward']} монет"
     )
 
 @dp.message(F.text == "🐉 Рейд")
@@ -1896,6 +2570,19 @@ async def open_raid(message: types.Message, state: FSMContext):
     if not player:
         await message.answer("Сначала зарегистрируйся! /start")
         return
+
+    # Проверить наличие билета рейда
+    if player['raid_tickets'] <= 0:
+        await message.answer(
+            f"🎫 Для входа в рейд нужен билет рейда!\n\n"
+            f"У тебя: {player['raid_tickets']} {E_TICKET}\n\n"
+            "Билеты можно получить за победы или через события.",
+            reply_markup=get_main_kb()
+        )
+        return
+
+    # Снять билет
+    remove_raid_ticket(user_id)
 
     # Применяем бафф клана
     player_clan = get_player_clan(user_id)
@@ -1920,7 +2607,7 @@ async def open_raid(message: types.Message, state: FSMContext):
         f"{E_HP} {player_health}\n"
         f"⚔️ {player_damage}\n"
         f"{E_MANA} Мана: {mana}/100\n\n"
-        f"Бой начинается!"
+        f"Бой начинается! (Билет потрачен)"
     )
 
     await state.set_state(RaidState.in_raid)
