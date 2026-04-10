@@ -34,6 +34,21 @@ E_SKULL    = '<tg-emoji emoji-id="5274108672849491069">💀</tg-emoji>'   # вр
 E_ESWORD   = '<tg-emoji emoji-id="5438255528264348146">🗡</tg-emoji>'   # враг меч (PvP)
 E_ANGRY    = '<tg-emoji emoji-id="5406708155956621268">😡</tg-emoji>'   # кик из клана
 
+# Additional custom emoji
+E_GIFT     = '<tg-emoji emoji-id="5429203678529613915">🎁</tg-emoji>'   # подарок/сила
+E_TROPHY   = '<tg-emoji emoji-id="5312315739842026755">🏆</tg-emoji>'   # трофей/победы
+E_BULLET   = '<tg-emoji emoji-id="5394892863081406649">▪️</tg-emoji>'   # маркер-пуля
+E_INV_BOX  = '<tg-emoji emoji-id="5206702193385700709">📦</tg-emoji>'   # инвентарь
+E_WOOD     = '<tg-emoji emoji-id="5449918202718985124">🌳</tg-emoji>'   # древесина
+E_STONE    = '<tg-emoji emoji-id="5433955200849159326">🪨</tg-emoji>'   # камень
+E_FOOD     = '<tg-emoji emoji-id="6284888960644682300">🥕</tg-emoji>'   # еда
+E_IRON     = '<tg-emoji emoji-id="6280718212392816659">⛰</tg-emoji>'   # железо
+E_GOLD_M   = '<tg-emoji emoji-id="6278282858561803026">🥇</tg-emoji>'   # золото (материал)
+E_PLUS     = '<tg-emoji emoji-id="5397916757333654639">➕</tg-emoji>'   # плюс (награда)
+E_CHECK    = '<tg-emoji emoji-id="5274559149922844956">✅</tg-emoji>'   # галочка
+E_BELL     = '<tg-emoji emoji-id="5206222720416643915">🔔</tg-emoji>'   # колокол
+E_TIMER    = '<tg-emoji emoji-id="5471952986970267163">🕑</tg-emoji>'   # таймер
+
 
 # Ваш токен от BotFather
 TOKEN = "Ваш токен"
@@ -172,6 +187,13 @@ def init_database():
     # Миграция: добавить столбец role если отсутствует
     try:
         cursor.execute("ALTER TABLE clan_members ADD COLUMN role TEXT DEFAULT 'member'")
+    except Exception:
+        pass
+
+    # Миграция: добавить столбец clan_image если отсутствует
+    try:
+        cursor.execute("ALTER TABLE clans ADD COLUMN clan_image TEXT DEFAULT NULL")
+        conn.commit()
     except Exception:
         pass
 
@@ -532,20 +554,20 @@ def get_experience_progress(user_id: int) -> dict:
 
 # ============== STATUS SYSTEM ==============
 STATUSES = {
-    1: {"name": "Новичок",        "emoji": "🔸", "required_level": 1,  "type": "default"},
-    2: {"name": "Продвинутый",    "emoji": "🌱", "required_level": 5,  "type": "unlock_level"},
-    3: {"name": "Охотник",        "emoji": "🔪", "required_level": 1,  "type": "free"},
-    4: {"name": "Любитель PVP",   "emoji": "⚔️", "required_level": 1,  "type": "free"},
-    5: {"name": "Добытчик",       "emoji": "🥇", "required_level": 1,  "type": "free"},
+    1: {"name": "Новичок",      "emoji": "🔸", "custom_emoji": '<tg-emoji emoji-id="5323718538710491847">🔸</tg-emoji>', "required_level": 1,  "type": "default"},
+    2: {"name": "Продвинутый",  "emoji": "🌱", "custom_emoji": '<tg-emoji emoji-id="5343920308229256142">🌱</tg-emoji>', "required_level": 5,  "type": "unlock_level"},
+    3: {"name": "Охотник",      "emoji": "🔪", "custom_emoji": '<tg-emoji emoji-id="5224460534534916102">🔪</tg-emoji>', "required_level": 1,  "type": "free"},
+    4: {"name": "Любитель PVP", "emoji": "⚔️", "custom_emoji": '<tg-emoji emoji-id="5454014806950429357">⚔️</tg-emoji>', "required_level": 1,  "type": "free"},
+    5: {"name": "Добытчик",     "emoji": "🥇", "custom_emoji": '<tg-emoji emoji-id="6278187557532472415">🥇</tg-emoji>', "required_level": 1,  "type": "free"},
 }
 
 def get_player_status_emoji(player: dict) -> str:
-    """Вернуть эмодзи статуса игрока"""
+    """Вернуть кастомный HTML эмодзи статуса игрока"""
     status_name = player.get('status', 'Новичок')
     for s in STATUSES.values():
         if s['name'] == status_name:
-            return s['emoji']
-    return '🔸'
+            return s.get('custom_emoji', s['emoji'])
+    return '<tg-emoji emoji-id="5323718538710491847">🔸</tg-emoji>'
 
 def set_player_status(user_id: int, status_name: str):
     """Установить статус игрока"""
@@ -678,7 +700,7 @@ LOCATIONS = {
         "image": "location_meadow.png",
         "activities": {
             "gather": {
-                "name": "🌽 Добыча еды",
+                "name": "Добыча еды",
                 "time": 25,
                 "emoji": "🌽",
                 "rewards": {
@@ -689,7 +711,7 @@ LOCATIONS = {
                 "monster_chance": 0
             },
             "search": {
-                "name": "🗺️ Обыскать локацию",
+                "name": "Обыскать локацию",
                 "time": 50,
                 "emoji": "🗺️",
                 "rewards": {
@@ -702,6 +724,32 @@ LOCATIONS = {
         }
     }
 }
+
+# Враги в локациях: порог определяется силой игрока
+LOCATION_ENEMIES = {
+    "wolf": {
+        "name": "Волк",
+        "emoji": "🐺",
+        "strength": 35,
+        "min_player_strength": 0,
+        "max_player_strength": 99,
+    },
+    "angry_hawk": {
+        "name": "Яростный ястреб",
+        "emoji": "🦅",
+        "strength": 125,
+        "min_player_strength": 100,
+        "max_player_strength": 9999,
+    },
+}
+
+def get_location_enemy_for_player(player_strength: float) -> dict:
+    """Вернуть врага локации по силе игрока"""
+    for enemy in LOCATION_ENEMIES.values():
+        if enemy['min_player_strength'] <= player_strength <= enemy['max_player_strength']:
+            return enemy
+    # fallback
+    return LOCATION_ENEMIES["wolf"]
 
 def has_purchased_equipment(user_id: int, equipment_id: int) -> bool:
     """Проверить, купил ли игрок это снаряжение"""
@@ -852,7 +900,7 @@ def get_player_clan(user_id: int):
     cursor = conn.cursor()
     cursor.execute('''
         SELECT c.clan_id, c.clan_name, c.leader_id, c.description, c.min_power,
-               c.clan_level, c.clan_exp, c.members_count
+               c.clan_level, c.clan_exp, c.members_count, COALESCE(c.clan_image, NULL)
         FROM clans c
         JOIN clan_members cm ON c.clan_id = cm.clan_id
         WHERE cm.user_id = ?
@@ -868,7 +916,8 @@ def get_player_clan(user_id: int):
             "min_power": result[4],
             "clan_level": result[5],
             "clan_exp": result[6],
-            "members_count": result[7]
+            "members_count": result[7],
+            "clan_image": result[8],
         }
     return None
 
@@ -878,7 +927,7 @@ def get_clan(clan_id: int):
     cursor = conn.cursor()
     cursor.execute('''
         SELECT clan_id, clan_name, leader_id, description, min_power,
-               clan_level, clan_exp, members_count
+               clan_level, clan_exp, members_count, COALESCE(clan_image, NULL)
         FROM clans WHERE clan_id = ?
     ''', (clan_id,))
     result = cursor.fetchone()
@@ -892,7 +941,8 @@ def get_clan(clan_id: int):
             "min_power": result[4],
             "clan_level": result[5],
             "clan_exp": result[6],
-            "members_count": result[7]
+            "members_count": result[7],
+            "clan_image": result[8],
         }
     return None
 
@@ -1031,6 +1081,35 @@ def get_clan_co_leaders(clan_id: int) -> list:
     results = cursor.fetchall()
     conn.close()
     return results
+
+def update_clan_name(clan_id: int, new_name: str) -> bool:
+    """Обновить название клана. Возвращает False если имя уже занято."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    try:
+        cursor.execute('UPDATE clans SET clan_name = ? WHERE clan_id = ?', (new_name, clan_id))
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False
+    finally:
+        conn.close()
+
+def update_clan_description(clan_id: int, description: str):
+    """Обновить описание клана"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('UPDATE clans SET description = ? WHERE clan_id = ?', (description, clan_id))
+    conn.commit()
+    conn.close()
+
+def update_clan_image(clan_id: int, image_file_id: str):
+    """Обновить картину клана (Telegram file_id)"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('UPDATE clans SET clan_image = ? WHERE clan_id = ?', (image_file_id, clan_id))
+    conn.commit()
+    conn.close()
 
 def save_clan_message(clan_id: int, user_id: int, nickname: str, message: str):
     """Сохранить сообщение в чат клана"""
@@ -1186,6 +1265,10 @@ class ClanMenu(StatesGroup):
     promoting_member = State()
     demoting_member = State()
     in_clan_chat = State()
+    selecting_clan_customization = State()
+    changing_clan_name = State()
+    changing_clan_description = State()
+    changing_clan_image = State()
 
 class AdminPanel(StatesGroup):
     main_menu = State()
@@ -1205,6 +1288,7 @@ class AdminPanel(StatesGroup):
 class LocationMenu(StatesGroup):
     viewing_map = State()
     viewing_location = State()
+    searching_enemy = State()
 
 class ProfileMenu(StatesGroup):
     viewing_profile = State()
@@ -1398,6 +1482,7 @@ def get_my_clan_kb(is_leader: bool, is_co_leader: bool = False) -> ReplyKeyboard
         kb.append([KeyboardButton(text="⭐ Назначить соруководителя")])
         kb.append([KeyboardButton(text="⬇️ Снять соруководителя")])
         kb.append([KeyboardButton(text="⚙️ Изменить порог")])
+        kb.append([KeyboardButton(text="🎨 Изменить оформление")])
         kb.append([KeyboardButton(text="🗑️ Удалить клан")])
     elif is_co_leader:
         kb.append([KeyboardButton(text="👢 Кикнуть игрока")])
@@ -1480,6 +1565,8 @@ def get_location_activities_kb(location_id: int) -> ReplyKeyboardMarkup:
     kb = []
     for act_key, act in loc['activities'].items():
         kb.append([KeyboardButton(text=f"{act['emoji']} {act['name']} ({act['time']}с)")])
+    if location_id == 1:
+        kb.append([KeyboardButton(text="🔍 Поиск врага (10с)")])
     kb.append([KeyboardButton(text="⬅️ Назад на карту")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
@@ -1606,16 +1693,16 @@ async def _send_profile(message, player: dict):
 
     response = (
         f'{E_PROFILE} <b>Профиль игрока:</b>\n'
-        f'🔒 ▪️ {player["nickname"]}\n\n'
+        f'🔒 {E_BULLET} {player["nickname"]}\n\n'
         f'{status_emoji} <b>{player["status"]}</b>\n\n'
-        f'{E_EXP} Очки опыта ▪️ {exp_info["current_exp"]} / {exp_info["needed_exp"]}\n'
-        f'Уровень ▪️ {player["player_level"]}{E_STAR}\n\n'
-        f'│🏆│ {player["wins"]} ▪️ Победы\n'
-        f'│{E_POW}│ {int(player["strength"])} ▪️ Сила\n'
-        f'│{E_HP}│ {health} ▪️ Здоровье\n\n'
-        f'┆{E_COINS}┆ Монеты ▪️ {player["coins"]}\n'
-        f'┆{E_CRYSTALS}┆ Кристаллы ▪️ {player["crystals"]}\n'
-        f'┆{E_TICKET}┆ Билеты рейда ▪️ {player["raid_tickets"]}\n'
+        f'{E_EXP} Очки опыта {E_BULLET} {exp_info["current_exp"]} / {exp_info["needed_exp"]}\n'
+        f'Уровень {E_BULLET} {player["player_level"]}{E_STAR}\n\n'
+        f'│{E_TROPHY}│ {player["wins"]} {E_BULLET} Победы\n'
+        f'│{E_GIFT}│ {int(player["strength"])} {E_BULLET} Сила\n'
+        f'│{E_HP}│ {health} {E_BULLET} Здоровье\n\n'
+        f'┆{E_COINS}┆ Монеты {E_BULLET} {player["coins"]}\n'
+        f'┆{E_CRYSTALS}┆ Кристаллы {E_BULLET} {player["crystals"]}\n'
+        f'┆{E_TICKET}┆ Билеты рейда {E_BULLET} {player["raid_tickets"]}\n'
     )
     await message.answer(response, reply_markup=get_profile_kb())
 
@@ -1705,12 +1792,12 @@ async def _send_inventory(message, user_id: int):
     inv = get_inventory(user_id)
     nickname = player['nickname'] if player else "Игрок"
     text = (
-        f'📦 <b>Инвентарь {nickname}:</b>\n'
-        f'┃{inv["wood"]}🌳 | ▪️ Древесина\n'
-        f'┃{inv["stone"]}🪨 | ▪️ Камень\n'
-        f'┃{inv["food"]}🥕 | ▪️ Еда\n'
-        f'┃{inv["iron"]}⛰ | ▪️ Железо\n'
-        f'┃{inv["gold"]}🥇 | ▪️ Золото\n'
+        f'{E_INV_BOX} <b>Инвентарь {nickname}:</b>\n\n'
+        f'┃{inv["wood"]}{E_WOOD} {E_BULLET} Древесина\n'
+        f'┃{inv["stone"]}{E_STONE} {E_BULLET} Камень\n'
+        f'┃{inv["food"]}{E_FOOD} {E_BULLET} Еда\n'
+        f'┃{inv["iron"]}{E_IRON} {E_BULLET} Железо\n'
+        f'┃{inv["gold"]}{E_GOLD_M} {E_BULLET} Золото\n'
     )
     inv_kb = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="⬅️ Назад")]], resize_keyboard=True)
     await message.answer(text, reply_markup=inv_kb)
@@ -1736,7 +1823,7 @@ async def open_map(message: types.Message, state: FSMContext):
     # Check if any activity just completed
     completed = check_activity_done(user_id)
     if completed:
-        await _give_activity_rewards(message, user_id, completed)
+        await _give_activity_rewards(user_id, completed)
         await state.set_state(LocationMenu.viewing_map)
         map_text = "🗺️ <b>КАРТА</b>\n\nВыбери локацию для исследования:"
         await send_image_with_text(message, "map.png", map_text, reply_markup=get_map_kb())
@@ -1780,7 +1867,7 @@ async def handle_map(message: types.Message, state: FSMContext):
     # Check if activity completed while waiting
     completed = check_activity_done(user_id)
     if completed:
-        await _give_activity_rewards(message, user_id, completed)
+        await _give_activity_rewards(user_id, completed)
         map_text = "🗺️ <b>КАРТА</b>\n\nВыбери локацию для исследования:"
         await send_image_with_text(message, "map.png", map_text, reply_markup=get_map_kb())
         return
@@ -1790,10 +1877,8 @@ async def handle_map(message: types.Message, state: FSMContext):
             await state.update_data(selected_location=loc_id)
             loc_text = f"{loc['emoji']} <b>{loc['name']}</b>\n\nВыбери действие:\n"
             for act_key, act in loc['activities'].items():
-                rew = act['rewards']
-                rew_str = ", ".join(f"{v[0]}-{v[1]} {k}" for k, v in rew.items())
                 monster_note = f"(⚠️ {int(act['monster_chance']*100)}% шанс монстра)" if act['monster_chance'] > 0 else ""
-                loc_text += f"\n{act['emoji']} {act['name']} ({act['time']}с)\n  Награды: {rew_str} {monster_note}\n"
+                loc_text += f"\n{act['time']}s{E_TIMER}│{act['emoji']}│{E_BULLET} {act['name']} {monster_note}\n"
             await send_image_with_text(message, loc['image'], loc_text,
                                        reply_markup=get_location_activities_kb(loc_id))
             await state.set_state(LocationMenu.viewing_location)
@@ -1851,10 +1936,86 @@ async def handle_location(message: types.Message, state: FSMContext):
             )
             return
 
+    if text == "🔍 Поиск врага (10с)":
+        await state.set_state(LocationMenu.searching_enemy)
+        await message.answer(
+            "🔍 <b>Поиск врага...</b>\n\n⏳ Осталось 10 секунд. Подожди — кнопки заблокированы.",
+            reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True)
+        )
+        asyncio.create_task(_run_enemy_search(user_id, message.chat.id))
+        return
+
     await message.answer("Выбери действие!", reply_markup=get_location_activities_kb(loc_id))
 
-async def _give_activity_rewards(message, user_id: int, activity: dict):
-    """Выдать награды за завершённую активность"""
+async def _run_enemy_search(user_id: int, chat_id: int):
+    """Фоновая задача: ждёт 10 секунд, затем спаунит врага и начинает бой"""
+    await asyncio.sleep(10)
+
+    player = get_player(user_id)
+    if not player:
+        return
+
+    fsm_ctx = dp.fsm.resolve_context(bot, chat_id, user_id)
+
+    # Check still in searching_enemy state (player may have somehow left)
+    current_state = await fsm_ctx.get_state()
+    if current_state != LocationMenu.searching_enemy.state:
+        return
+
+    enemy_cfg = get_location_enemy_for_player(player['strength'])
+    enemy_strength = enemy_cfg['strength']
+    enemy_health = calculate_player_health(enemy_strength)
+    enemy_damage = calculate_damage(enemy_strength)
+
+    player_clan = get_player_clan(user_id)
+    clan_level = player_clan['clan_level'] if player_clan else 1
+    buffed_strength = apply_clan_strength_buff(player['strength'], clan_level)
+    player_health = calculate_player_health(buffed_strength)
+    player_damage = calculate_damage(buffed_strength)
+
+    reset_battle_cooldown(user_id)
+
+    await fsm_ctx.set_state(BattleState.in_battle)
+    await fsm_ctx.update_data(
+        selected_enemy=None,
+        location_enemy_cfg=enemy_cfg,
+        player_health=player_health,
+        player_damage=player_damage,
+        enemy_health=enemy_health,
+        enemy_damage=enemy_damage,
+        player_mana=100,
+        enemy_skip_turn=False,
+        player_blind_turns=0,
+        is_location_battle=True,
+    )
+
+    battle_info = (
+        f"⚔️ <b>ВРАГ НАЙДЕН!</b>\n\n"
+        f"{enemy_cfg['emoji']} {enemy_cfg['name']}\n"
+        f"🩶 {enemy_health}\n"
+        f"⚔️ {enemy_damage}\n\n"
+        f"👤 {player['nickname']}\n"
+        f"{E_HP} {player_health}\n"
+        f"⚔️ {player_damage}\n"
+    )
+    try:
+        await bot.send_message(
+            chat_id=chat_id,
+            text=battle_info,
+            reply_markup=get_battle_kb(),
+            parse_mode="HTML"
+        )
+    except Exception:
+        pass
+
+@dp.message(LocationMenu.searching_enemy)
+async def handle_searching_enemy(message: types.Message, state: FSMContext):
+    """Блокирует все команды во время поиска врага"""
+    await message.answer("⏳ Идёт поиск врага... Подожди!")
+
+
+async def _give_activity_rewards(user_id: int, activity: dict):
+    """Выдать награды за завершённую активность и отправить сообщение напрямую игроку"""
     loc_id = activity['location_id']
     act_type = activity['activity_type']
     loc = LOCATIONS.get(loc_id, {})
@@ -1879,19 +2040,31 @@ async def _give_activity_rewards(message, user_id: int, activity: dict):
         if mat in earned:
             add_inventory_material(user_id, mat, earned[mat])
 
-    # Build reward text
+    # Build reward lines with custom emojis
+    mat_names = {
+        'food':       (E_FOOD,   'Еда'),
+        'wood':       (E_WOOD,   'Древесина'),
+        'stone':      (E_STONE,  'Камень'),
+        'iron':       (E_IRON,   'Железо'),
+        'gold':       (E_GOLD_M, 'Золото'),
+        'coins':      (E_COINS,  'Монеты'),
+        'experience': (E_STAR,   'Опыт'),
+    }
     reward_lines = []
-    mat_names = {'food': '🥕 Еда', 'wood': '🌳 Древесина', 'stone': '🪨 Камень',
-                 'iron': '⛰ Железо', 'gold': '🥇 Золото', 'coins': '💰 Монеты',
-                 'experience': '⭐️ Опыт'}
     for k, v in earned.items():
-        reward_lines.append(f"+{v} {mat_names.get(k, k)}")
+        emoji, name = mat_names.get(k, ('', k))
+        reward_lines.append(f"{E_PLUS} {v} {emoji} {name}")
+
+    loc_name = loc.get('name', '?')
+    act_name = act_cfg.get('name', act_type)
+    act_emoji = act_cfg.get('emoji', '')
 
     text = (
-        f"✅ <b>Активность завершена!</b>\n\n"
-        f"Локация: {loc.get('name', '?')}\n"
-        f"Действие: {act_cfg.get('name', act_type)}\n\n"
-        f"🎁 Награды:\n" + "\n".join(reward_lines)
+        f"{E_CHECK} <b>Активность завершена!</b>\n\n"
+        f"Локация: {loc_name}\n"
+        f"Действие: {act_emoji} {act_name}\n\n"
+        f"{E_GIFT} <b>Награды:</b>\n"
+        + "\n".join(reward_lines)
     )
     if exp_result.get('leveled_up'):
         text += f"\n\n🎉 Уровень повышен до {exp_result['new_level']}!"
@@ -1899,16 +2072,11 @@ async def _give_activity_rewards(message, user_id: int, activity: dict):
     # Check monster encounter
     if monster_chance > 0 and random.random() < monster_chance:
         text += "\n\n⚠️ Внимание! Ты встретил монстра!"
-        monster_kb = ReplyKeyboardMarkup(
-            keyboard=[
-                [KeyboardButton(text="⚔️ Сразиться с монстром")],
-                [KeyboardButton(text="🏃 Убежать")]
-            ],
-            resize_keyboard=True
-        )
-        await message.answer(text, reply_markup=monster_kb)
-    else:
-        await message.answer(text)
+
+    try:
+        await bot.send_message(chat_id=user_id, text=text, parse_mode="HTML")
+    except Exception:
+        pass
 
 # Handle monster from activity
 @dp.message(LocationMenu.viewing_map, F.text == "⚔️ Сразиться с монстром")
@@ -2808,10 +2976,20 @@ async def start_battle(message: types.Message, state: FSMContext):
     player = get_player(user_id)
     
     data = await state.get_data()
-    selected_enemy = data['selected_enemy']
-    enemy_info = ENEMIES[selected_enemy]
     mana = data.get('player_mana', 100)
     reset_battle_cooldown(user_id)
+
+    if data.get('is_location_battle'):
+        loc_cfg = data['location_enemy_cfg']
+        enemy_info = {
+            'name': loc_cfg['name'],
+            'emoji': loc_cfg.get('emoji', '☠️'),
+            'health': data['enemy_health'],
+            'reward': 0,
+        }
+    else:
+        selected_enemy = data['selected_enemy']
+        enemy_info = ENEMIES[selected_enemy]
     
     player_goes_first = random.random() < 0.5
     
@@ -2861,8 +3039,19 @@ async def battle_round(message: types.Message, state: FSMContext):
     player = get_player(user_id)
     
     data = await state.get_data()
-    selected_enemy = data['selected_enemy']
-    enemy_info = ENEMIES[selected_enemy]
+
+    if data.get('is_location_battle'):
+        loc_cfg = data['location_enemy_cfg']
+        enemy_info = {
+            'name': loc_cfg['name'],
+            'emoji': loc_cfg.get('emoji', '☠️'),
+            'health': data['enemy_health'],
+            'reward': 0,
+        }
+    else:
+        selected_enemy = data['selected_enemy']
+        enemy_info = ENEMIES[selected_enemy]
+
     mana = data.get('player_mana', 100)
     enemy_skip_turn = data.get('enemy_skip_turn', False)
     player_blind_turns = data.get('player_blind_turns', 0)
@@ -3716,6 +3905,20 @@ async def handle_my_clan(message: types.Message, state: FSMContext):
         await state.set_state(ClanMenu.deleting_clan_confirm)
         return
 
+    if text == "🎨 Изменить оформление" and is_leader:
+        kb = [
+            [KeyboardButton(text="📝 Изменить название (500 монет)")],
+            [KeyboardButton(text="📄 Изменить описание (500 монет)")],
+            [KeyboardButton(text="🖼️ Изменить картину клана")],
+            [KeyboardButton(text="❌ Отмена")],
+        ]
+        await message.answer(
+            "🎨 <b>ИЗМЕНЕНИЕ ОФОРМЛЕНИЯ КЛАНА</b>\n\nВыберите что изменить:",
+            reply_markup=ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+        )
+        await state.set_state(ClanMenu.selecting_clan_customization)
+        return
+
     if text == "💬 Чат клана":
         import html as _html
         messages = get_clan_messages(clan_id, 30)
@@ -4031,6 +4234,173 @@ async def handle_delete_clan_confirm(message: types.Message, state: FSMContext):
 
     await message.answer("Нажмите ✅ Да, удалить или ❌ Нет", reply_markup=get_delete_clan_confirm_kb())
 
+# ============== CLAN CUSTOMIZATION ==============
+async def _show_clan_info(message, clan: dict, is_leader: bool, is_co_leader: bool = False):
+    """Отправить информацию о клане с картиной если есть"""
+    leader = get_player(clan['leader_id'])
+    leader_name = leader['nickname'] if leader else "—"
+    clan_text = _format_clan_menu(clan, leader_name)
+    kb = get_my_clan_kb(is_leader, is_co_leader)
+    if clan.get('clan_image'):
+        try:
+            await message.answer_photo(clan['clan_image'], caption=clan_text, reply_markup=kb)
+            return
+        except Exception:
+            pass
+    await send_image_with_text(message, "myclan.png", clan_text, reply_markup=kb)
+
+@dp.message(ClanMenu.selecting_clan_customization)
+async def handle_select_clan_customization(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+    data = await state.get_data()
+    clan_id = data.get('clan_id')
+    clan = get_clan(clan_id) if clan_id else None
+
+    if not clan or clan['leader_id'] != user_id:
+        await state.set_state(ClanMenu.viewing_my_clan)
+        await message.answer("❌ Ошибка доступа.", reply_markup=get_my_clan_kb(False))
+        return
+
+    if text == "❌ Отмена":
+        await _show_clan_info(message, clan, True)
+        await state.set_state(ClanMenu.viewing_my_clan)
+        return
+
+    player = get_player(user_id)
+
+    if text == "📝 Изменить название (500 монет)":
+        if player['coins'] < 500:
+            await message.answer(f"❌ Недостаточно монет! Нужно 500, у вас {player['coins']}.")
+            return
+        await message.answer(
+            "Введите новое название клана (1-32 символа):",
+            reply_markup=ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="❌ Отмена")]], resize_keyboard=True)
+        )
+        await state.set_state(ClanMenu.changing_clan_name)
+        return
+
+    if text == "📄 Изменить описание (500 монет)":
+        if player['coins'] < 500:
+            await message.answer(f"❌ Недостаточно монет! Нужно 500, у вас {player['coins']}.")
+            return
+        await message.answer(
+            "Введите новое описание клана:",
+            reply_markup=ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="❌ Отмена")]], resize_keyboard=True)
+        )
+        await state.set_state(ClanMenu.changing_clan_description)
+        return
+
+    if text == "🖼️ Изменить картину клана":
+        await message.answer(
+            "Отправьте фото (JPEG или PNG) для клана:",
+            reply_markup=ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="❌ Отмена")]], resize_keyboard=True)
+        )
+        await state.set_state(ClanMenu.changing_clan_image)
+        return
+
+    kb = [
+        [KeyboardButton(text="📝 Изменить название (500 монет)")],
+        [KeyboardButton(text="📄 Изменить описание (500 монет)")],
+        [KeyboardButton(text="🖼️ Изменить картину клана")],
+        [KeyboardButton(text="❌ Отмена")],
+    ]
+    await message.answer("Выберите действие:", reply_markup=ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True))
+
+@dp.message(ClanMenu.changing_clan_name)
+async def handle_clan_name_change(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+    data = await state.get_data()
+    clan_id = data.get('clan_id')
+
+    if text == "❌ Отмена":
+        clan = get_clan(clan_id)
+        if clan:
+            await _show_clan_info(message, clan, True)
+        await state.set_state(ClanMenu.viewing_my_clan)
+        return
+
+    new_name = text.strip()
+    if not new_name or len(new_name) > 32:
+        await message.answer("❌ Название должно быть от 1 до 32 символов. Введите ещё раз:")
+        return
+
+    player = get_player(user_id)
+    if player['coins'] < 500:
+        clan = get_clan(clan_id)
+        await message.answer("❌ Недостаточно монет!")
+        if clan:
+            await _show_clan_info(message, clan, True)
+        await state.set_state(ClanMenu.viewing_my_clan)
+        return
+
+    success = update_clan_name(clan_id, new_name)
+    if not success:
+        await message.answer("❌ Клан с таким названием уже существует! Введите другое:")
+        return
+
+    remove_coins_from_player(user_id, 500)
+    updated_clan = get_clan(clan_id)
+    await message.answer(f"✅ Название клана изменено на «{new_name}»!\n- 500 монет")
+    await _show_clan_info(message, updated_clan, True)
+    await state.set_state(ClanMenu.viewing_my_clan)
+
+@dp.message(ClanMenu.changing_clan_description)
+async def handle_clan_description_change(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+    data = await state.get_data()
+    clan_id = data.get('clan_id')
+
+    if text == "❌ Отмена":
+        clan = get_clan(clan_id)
+        if clan:
+            await _show_clan_info(message, clan, True)
+        await state.set_state(ClanMenu.viewing_my_clan)
+        return
+
+    player = get_player(user_id)
+    if player['coins'] < 500:
+        clan = get_clan(clan_id)
+        await message.answer("❌ Недостаточно монет!")
+        if clan:
+            await _show_clan_info(message, clan, True)
+        await state.set_state(ClanMenu.viewing_my_clan)
+        return
+
+    description = text.strip()
+    update_clan_description(clan_id, description)
+    remove_coins_from_player(user_id, 500)
+    updated_clan = get_clan(clan_id)
+    await message.answer("✅ Описание клана обновлено!\n- 500 монет")
+    await _show_clan_info(message, updated_clan, True)
+    await state.set_state(ClanMenu.viewing_my_clan)
+
+@dp.message(ClanMenu.changing_clan_image)
+async def handle_clan_image_change(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    data = await state.get_data()
+    clan_id = data.get('clan_id')
+
+    if message.text == "❌ Отмена":
+        clan = get_clan(clan_id)
+        if clan:
+            await _show_clan_info(message, clan, True)
+        await state.set_state(ClanMenu.viewing_my_clan)
+        return
+
+    if not message.photo:
+        await message.answer("❌ Отправьте фото! Или нажмите ❌ Отмена.")
+        return
+
+    photo_file_id = message.photo[-1].file_id
+    update_clan_image(clan_id, photo_file_id)
+    updated_clan = get_clan(clan_id)
+    await message.answer("✅ Картина клана обновлена!")
+    await _show_clan_info(message, updated_clan, True)
+    await state.set_state(ClanMenu.viewing_my_clan)
+
 # ============== ADMIN PANEL ==============
 @dp.message(Command("67"))
 async def open_admin_panel(message: types.Message, state: FSMContext):
@@ -4223,9 +4593,36 @@ async def admin_materials_amount(message: types.Message, state: FSMContext):
     await state.set_state(AdminPanel.main_menu)
     await message.answer("🔐 Админ панель", reply_markup=get_admin_kb())
 
+async def activity_monitor_loop():
+    """Фоновая задача: проверяет завершение активностей и отправляет награды"""
+    while True:
+        await asyncio.sleep(10)
+        try:
+            conn = sqlite3.connect(DB_NAME)
+            cursor = conn.cursor()
+            cursor.execute('SELECT user_id FROM active_activities')
+            user_ids = [row[0] for row in cursor.fetchall()]
+            conn.close()
+
+            now = datetime.utcnow()
+            for uid in user_ids:
+                activity = get_active_activity(uid)
+                if not activity:
+                    continue
+                try:
+                    end_time = datetime.fromisoformat(activity['end_time'])
+                except Exception:
+                    continue
+                if now >= end_time:
+                    await _give_activity_rewards(uid, activity)
+        except Exception as e:
+            import logging
+            logging.error(f"Activity monitor error: {e}")
+
 # ============== MAIN ==============
 async def main():
     init_database()
+    asyncio.create_task(activity_monitor_loop())
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
