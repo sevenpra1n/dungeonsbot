@@ -725,6 +725,32 @@ LOCATIONS = {
     }
 }
 
+# Враги в локациях: порог определяется силой игрока
+LOCATION_ENEMIES = {
+    "wolf": {
+        "name": "Волк",
+        "emoji": "🐺",
+        "strength": 35,
+        "min_player_strength": 0,
+        "max_player_strength": 99,
+    },
+    "angry_hawk": {
+        "name": "Яростный ястреб",
+        "emoji": "🦅",
+        "strength": 125,
+        "min_player_strength": 100,
+        "max_player_strength": 9999,
+    },
+}
+
+def get_location_enemy_for_player(player_strength: float) -> dict:
+    """Вернуть врага локации по силе игрока"""
+    for enemy in LOCATION_ENEMIES.values():
+        if enemy['min_player_strength'] <= player_strength <= enemy['max_player_strength']:
+            return enemy
+    # fallback
+    return LOCATION_ENEMIES["wolf"]
+
 def has_purchased_equipment(user_id: int, equipment_id: int) -> bool:
     """Проверить, купил ли игрок это снаряжение"""
     conn = sqlite3.connect(DB_NAME)
@@ -1262,6 +1288,7 @@ class AdminPanel(StatesGroup):
 class LocationMenu(StatesGroup):
     viewing_map = State()
     viewing_location = State()
+    searching_enemy = State()
 
 class ProfileMenu(StatesGroup):
     viewing_profile = State()
@@ -1538,6 +1565,8 @@ def get_location_activities_kb(location_id: int) -> ReplyKeyboardMarkup:
     kb = []
     for act_key, act in loc['activities'].items():
         kb.append([KeyboardButton(text=f"{act['emoji']} {act['name']} ({act['time']}с)")])
+    if location_id == 1:
+        kb.append([KeyboardButton(text="🔍 Поиск врага (10с)")])
     kb.append([KeyboardButton(text="⬅️ Назад на карту")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
@@ -1907,7 +1936,83 @@ async def handle_location(message: types.Message, state: FSMContext):
             )
             return
 
+    if text == "🔍 Поиск врага (10с)":
+        await state.set_state(LocationMenu.searching_enemy)
+        await message.answer(
+            "🔍 <b>Поиск врага...</b>\n\n⏳ Осталось 10 секунд. Подожди — кнопки заблокированы.",
+            reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True)
+        )
+        asyncio.create_task(_run_enemy_search(user_id, message.chat.id))
+        return
+
     await message.answer("Выбери действие!", reply_markup=get_location_activities_kb(loc_id))
+
+async def _run_enemy_search(user_id: int, chat_id: int):
+    """Фоновая задача: ждёт 10 секунд, затем спаунит врага и начинает бой"""
+    await asyncio.sleep(10)
+
+    player = get_player(user_id)
+    if not player:
+        return
+
+    fsm_ctx = dp.fsm.resolve_context(bot, chat_id, user_id)
+
+    # Check still in searching_enemy state (player may have somehow left)
+    current_state = await fsm_ctx.get_state()
+    if current_state != LocationMenu.searching_enemy.state:
+        return
+
+    enemy_cfg = get_location_enemy_for_player(player['strength'])
+    enemy_strength = enemy_cfg['strength']
+    enemy_health = calculate_player_health(enemy_strength)
+    enemy_damage = calculate_damage(enemy_strength)
+
+    player_clan = get_player_clan(user_id)
+    clan_level = player_clan['clan_level'] if player_clan else 1
+    buffed_strength = apply_clan_strength_buff(player['strength'], clan_level)
+    player_health = calculate_player_health(buffed_strength)
+    player_damage = calculate_damage(buffed_strength)
+
+    reset_battle_cooldown(user_id)
+
+    await fsm_ctx.set_state(BattleState.in_battle)
+    await fsm_ctx.update_data(
+        selected_enemy=None,
+        location_enemy_cfg=enemy_cfg,
+        player_health=player_health,
+        player_damage=player_damage,
+        enemy_health=enemy_health,
+        enemy_damage=enemy_damage,
+        player_mana=100,
+        enemy_skip_turn=False,
+        player_blind_turns=0,
+        is_location_battle=True,
+    )
+
+    battle_info = (
+        f"⚔️ <b>ВРАГ НАЙДЕН!</b>\n\n"
+        f"{enemy_cfg['emoji']} {enemy_cfg['name']}\n"
+        f"🩶 {enemy_health}\n"
+        f"⚔️ {enemy_damage}\n\n"
+        f"👤 {player['nickname']}\n"
+        f"{E_HP} {player_health}\n"
+        f"⚔️ {player_damage}\n"
+    )
+    try:
+        await bot.send_message(
+            chat_id=chat_id,
+            text=battle_info,
+            reply_markup=get_battle_kb(),
+            parse_mode="HTML"
+        )
+    except Exception:
+        pass
+
+@dp.message(LocationMenu.searching_enemy)
+async def handle_searching_enemy(message: types.Message, state: FSMContext):
+    """Блокирует все команды во время поиска врага"""
+    await message.answer("⏳ Идёт поиск врага... Подожди!")
+
 
 async def _give_activity_rewards(user_id: int, activity: dict):
     """Выдать награды за завершённую активность и отправить сообщение напрямую игроку"""
@@ -1950,9 +2055,6 @@ async def _give_activity_rewards(user_id: int, activity: dict):
         emoji, name = mat_names.get(k, ('', k))
         reward_lines.append(f"{E_PLUS} {v} {emoji} {name}")
 
-    from datetime import datetime as _dt
-    time_str = _dt.now().strftime("%H:%M")
-
     loc_name = loc.get('name', '?')
     act_name = act_cfg.get('name', act_type)
     act_emoji = act_cfg.get('emoji', '')
@@ -1970,8 +2072,6 @@ async def _give_activity_rewards(user_id: int, activity: dict):
     # Check monster encounter
     if monster_chance > 0 and random.random() < monster_chance:
         text += "\n\n⚠️ Внимание! Ты встретил монстра!"
-
-    text += f"\n\n{time_str}"
 
     try:
         await bot.send_message(chat_id=user_id, text=text, parse_mode="HTML")
@@ -2876,10 +2976,20 @@ async def start_battle(message: types.Message, state: FSMContext):
     player = get_player(user_id)
     
     data = await state.get_data()
-    selected_enemy = data['selected_enemy']
-    enemy_info = ENEMIES[selected_enemy]
     mana = data.get('player_mana', 100)
     reset_battle_cooldown(user_id)
+
+    if data.get('is_location_battle'):
+        loc_cfg = data['location_enemy_cfg']
+        enemy_info = {
+            'name': loc_cfg['name'],
+            'emoji': loc_cfg.get('emoji', '☠️'),
+            'health': data['enemy_health'],
+            'reward': 0,
+        }
+    else:
+        selected_enemy = data['selected_enemy']
+        enemy_info = ENEMIES[selected_enemy]
     
     player_goes_first = random.random() < 0.5
     
@@ -2929,8 +3039,19 @@ async def battle_round(message: types.Message, state: FSMContext):
     player = get_player(user_id)
     
     data = await state.get_data()
-    selected_enemy = data['selected_enemy']
-    enemy_info = ENEMIES[selected_enemy]
+
+    if data.get('is_location_battle'):
+        loc_cfg = data['location_enemy_cfg']
+        enemy_info = {
+            'name': loc_cfg['name'],
+            'emoji': loc_cfg.get('emoji', '☠️'),
+            'health': data['enemy_health'],
+            'reward': 0,
+        }
+    else:
+        selected_enemy = data['selected_enemy']
+        enemy_info = ENEMIES[selected_enemy]
+
     mana = data.get('player_mana', 100)
     enemy_skip_turn = data.get('enemy_skip_turn', False)
     player_blind_turns = data.get('player_blind_turns', 0)
