@@ -1641,7 +1641,7 @@ async def send_image_with_text(message, image_name: str, text: str, reply_markup
     if os.path.exists(image_path):
         try:
             photo = FSInputFile(image_path)
-            await message.answer_photo(photo, caption=text, reply_markup=reply_markup)
+            await message.answer_photo(photo, caption=text, reply_markup=reply_markup, parse_mode="HTML")
             return
         except Exception:
             pass
@@ -1786,7 +1786,7 @@ async def handle_profile_statuses(message: types.Message, state: FSMContext):
     await message.answer("Выбери статус из списка!", reply_markup=get_statuses_kb(player))
 
 # ============== INVENTORY TAB ==============
-async def _send_inventory(message, user_id: int):
+async def _send_inventory(message, user_id: int, back_button: str = "⬅️ Назад"):
     """Показать инвентарь игрока"""
     player = get_player(user_id)
     inv = get_inventory(user_id)
@@ -1799,7 +1799,7 @@ async def _send_inventory(message, user_id: int):
         f'┃{inv["iron"]}{E_IRON} {E_BULLET} Железо\n'
         f'┃{inv["gold"]}{E_GOLD_M} {E_BULLET} Золото\n'
     )
-    inv_kb = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="⬅️ Назад")]], resize_keyboard=True)
+    inv_kb = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text=back_button)]], resize_keyboard=True)
     await message.answer(text, reply_markup=inv_kb)
 
 @dp.message(F.text == "📦 Инвентарь")
@@ -1809,7 +1809,7 @@ async def open_inventory_main(message: types.Message, state: FSMContext):
     if not player:
         await message.answer("Сначала зарегистрируйся! /start")
         return
-    await _send_inventory(message, user_id)
+    await _send_inventory(message, user_id, back_button="🏠 В главное меню")
 
 # ============== MAP / LOCATIONS ==============
 @dp.message(F.text == "🗺️ Карта")
@@ -3325,7 +3325,8 @@ async def open_online(message: types.Message, state: FSMContext):
         await bot.send_message(
             chat_id=opponent_data['chat_id'],
             text=match_text_opp,
-            reply_markup=get_pvp_accept_kb()
+            reply_markup=get_pvp_accept_kb(),
+            parse_mode="HTML"
         )
         # Обновляем состояние оппонента через диспетчер
         opp_state = dp.fsm.resolve_context(bot, opponent_data['chat_id'], opponent_id)
@@ -3442,7 +3443,8 @@ async def handle_pvp_accept(message: types.Message, state: FSMContext):
                 await bot.send_message(
                     chat_id=opponent_id,
                     text=start_text + "\n⏳ Ход соперника...",
-                    reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True)
+                    reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True),
+                    parse_mode="HTML"
                 )
             else:
                 await message.answer(
@@ -3452,7 +3454,8 @@ async def handle_pvp_accept(message: types.Message, state: FSMContext):
                 await bot.send_message(
                     chat_id=opponent_id,
                     text=start_text + f'\n{E_CURSOR} Твой ход!\n{E_MANA} Мана: 100/100',
-                    reply_markup=get_battle_action_kb(opponent_id, 100)
+                    reply_markup=get_battle_action_kb(opponent_id, 100),
+                    parse_mode="HTML"
                 )
         else:
             await message.answer("✅ Вы приняли. Ожидаем соперника...", reply_markup=get_pvp_accept_kb())
@@ -3580,7 +3583,8 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
                 await bot.send_message(
                     chat_id=opponent_id,
                     text=f'⚔️ <b>PvP БОЙ</b> ⚔️\n\nСоперник атакует!\n{E_DMG} Урон: {dealt}\n\n❌ <b>ВЫ ПРОИГРАЛИ!</b>',
-                    reply_markup=get_end_battle_kb()
+                    reply_markup=get_end_battle_kb(),
+                    parse_mode="HTML"
                 )
             except Exception:
                 pass
@@ -3638,7 +3642,8 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
                 await state.update_data(pvp_my_turn=True)
                 opp_msg += "\n⏳ Ход пропущен! Ход вашего соперника..."
                 await bot.send_message(chat_id=opponent_id, text=opp_msg,
-                                       reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
+                                       reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True),
+                                       parse_mode="HTML")
                 # Уведомляем текущего игрока что его ход вернулся
                 await message.answer(
                     f'😵 Соперник был оглушён — его ход пропущен!\n\n'
@@ -3653,7 +3658,8 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
                 await bot.send_message(
                     chat_id=opponent_id,
                     text=opp_msg,
-                    reply_markup=get_battle_action_kb(opponent_id, opp_mana)
+                    reply_markup=get_battle_action_kb(opponent_id, opp_mana),
+                    parse_mode="HTML"
                 )
         except Exception:
             pass
@@ -3986,7 +3992,8 @@ async def handle_kick_member(message: types.Message, state: FSMContext):
             try:
                 await bot.send_message(
                     chat_id=member_id,
-                    text=f'Вас кикнули из клана "{clan_name}" {E_ANGRY}'
+                    text=f'Вас кикнули из клана "{clan_name}" {E_ANGRY}',
+                    parse_mode="HTML"
                 )
             except Exception:
                 pass
@@ -4166,7 +4173,7 @@ async def handle_clan_chat(message: types.Message, state: FSMContext):
         if member_id == user_id:
             continue
         try:
-            await bot.send_message(chat_id=member_id, text=broadcast_text)
+            await bot.send_message(chat_id=member_id, text=broadcast_text, parse_mode="HTML")
         except Exception:
             # If sending fails, remove from active sessions
             clan_chat_sessions[clan_id].discard(member_id)
