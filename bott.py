@@ -4172,7 +4172,7 @@ async def handle_select_clan_customization(message: types.Message, state: FSMCon
 
     if text == "🖼️ Изменить картину клана":
         await message.answer(
-            "Отправьте фото для клана:",
+            "Отправьте фото (JPEG или PNG) для клана:",
             reply_markup=ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="❌ Отмена")]], resize_keyboard=True)
         )
         await state.set_state(ClanMenu.changing_clan_image)
@@ -4475,7 +4475,7 @@ async def admin_materials_amount(message: types.Message, state: FSMContext):
 async def activity_monitor_loop():
     """Фоновая задача: проверяет завершение активностей и отправляет награды"""
     while True:
-        await asyncio.sleep(5)
+        await asyncio.sleep(10)
         try:
             conn = sqlite3.connect(DB_NAME)
             cursor = conn.cursor()
