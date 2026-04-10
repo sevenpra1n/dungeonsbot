@@ -12,7 +12,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, FSInputFile
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
 # ============== CUSTOM EMOJI CONSTANTS ==============
 E_COINS    = '<tg-emoji emoji-id="5215420556089776398">👛</tg-emoji>'   # монеты
@@ -60,9 +60,6 @@ PROXY_URL = None
 
 # ID администраторов (Telegram user_id). Добавьте нужные ID в список для доступа к /67
 ADMIN_IDS = [0]
-
-# Директория с картинками меню
-IMAGES_DIR = "images"
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -1636,16 +1633,8 @@ def roll_miss(extra_miss_chance: float = 0.0) -> bool:
     return random.random() < (0.10 + extra_miss_chance)
 
 async def send_image_with_text(message, image_name: str, text: str, reply_markup=None):
-    """Отправить картинку с текстом. Если картинка не найдена — только текст."""
-    image_path = os.path.join(IMAGES_DIR, image_name)
-    if os.path.exists(image_path):
-        try:
-            photo = FSInputFile(image_path)
-            await message.answer_photo(photo, caption=text, reply_markup=reply_markup, parse_mode="HTML")
-            return
-        except Exception:
-            pass
-    await message.answer(text, reply_markup=reply_markup)
+    """Отправить текст (без фото, чтобы избежать DOCUMENT_INVALID)."""
+    await message.answer(text, reply_markup=reply_markup, parse_mode="HTML")
 
 # ============== COMMANDS ==============
 @dp.message(Command("start"))
