@@ -1393,6 +1393,14 @@ def get_end_battle_kb():
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
+def get_monster_encounter_kb() -> ReplyKeyboardMarkup:
+    """Клавиатура встречи с монстром после активности"""
+    kb = [
+        [KeyboardButton(text="⚔️ Сразиться с монстром")],
+        [KeyboardButton(text="🏃 Убежать")]
+    ]
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
 def get_searching_kb():
     """Меню поиска соперника"""
     kb = [
@@ -1812,10 +1820,11 @@ async def open_map(message: types.Message, state: FSMContext):
     # Check if any activity just completed
     completed = check_activity_done(user_id)
     if completed:
-        await _give_activity_rewards(user_id, completed)
-        await state.set_state(LocationMenu.viewing_map)
-        map_text = "🗺️ <b>КАРТА</b>\n\nВыбери локацию для исследования:"
-        await send_image_with_text(message, "map.png", map_text, reply_markup=get_map_kb())
+        monster = await _give_activity_rewards(user_id, completed)
+        if not monster:
+            await state.set_state(LocationMenu.viewing_map)
+            map_text = "🗺️ <b>КАРТА</b>\n\nВыбери локацию для исследования:"
+            await send_image_with_text(message, "map.png", map_text, reply_markup=get_map_kb())
         return
 
     activity = get_active_activity(user_id)
@@ -1856,9 +1865,10 @@ async def handle_map(message: types.Message, state: FSMContext):
     # Check if activity completed while waiting
     completed = check_activity_done(user_id)
     if completed:
-        await _give_activity_rewards(user_id, completed)
-        map_text = "🗺️ <b>КАРТА</b>\n\nВыбери локацию для исследования:"
-        await send_image_with_text(message, "map.png", map_text, reply_markup=get_map_kb())
+        monster = await _give_activity_rewards(user_id, completed)
+        if not monster:
+            map_text = "🗺️ <b>КАРТА</b>\n\nВыбери локацию для исследования:"
+            await send_image_with_text(message, "map.png", map_text, reply_markup=get_map_kb())
         return
 
     for loc_id, loc in LOCATIONS.items():
@@ -2003,8 +2013,9 @@ async def handle_searching_enemy(message: types.Message, state: FSMContext):
     await message.answer("⏳ Идёт поиск врага... Подожди!")
 
 
-async def _give_activity_rewards(user_id: int, activity: dict):
-    """Выдать награды за завершённую активность и отправить сообщение напрямую игроку"""
+async def _give_activity_rewards(user_id: int, activity: dict) -> bool:
+    """Выдать награды за завершённую активность и отправить сообщение напрямую игроку.
+    Возвращает True, если встретился монстр."""
     loc_id = activity['location_id']
     act_type = activity['activity_type']
     loc = LOCATIONS.get(loc_id, {})
@@ -2059,13 +2070,30 @@ async def _give_activity_rewards(user_id: int, activity: dict):
         text += f"\n\n🎉 Уровень повышен до {exp_result['new_level']}!"
 
     # Check monster encounter
-    if monster_chance > 0 and random.random() < monster_chance:
+    monster_encountered = monster_chance > 0 and random.random() < monster_chance
+    if monster_encountered:
         text += "\n\n⚠️ Внимание! Ты встретил монстра!"
 
     try:
         await bot.send_message(chat_id=user_id, text=text, parse_mode="HTML")
     except Exception:
         pass
+
+    if monster_encountered:
+        try:
+            fsm_ctx = dp.fsm.resolve_context(bot, user_id, user_id)
+            await fsm_ctx.set_state(LocationMenu.viewing_location)
+            await bot.send_message(
+                chat_id=user_id,
+                text="Что будешь делать?",
+                reply_markup=get_monster_encounter_kb(),
+                parse_mode="HTML"
+            )
+        except Exception:
+            pass
+        return True
+
+    return False
 
 # Handle monster from activity
 @dp.message(LocationMenu.viewing_map, F.text == "⚔️ Сразиться с монстром")
