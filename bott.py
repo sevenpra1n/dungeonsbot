@@ -15,7 +15,6 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, FSInputFile
 
 # ============== CUSTOM EMOJI CONSTANTS ==============
-E_DRILL    = '<tg-emoji emoji-id="5195240510515595370">⛏</tg-emoji>'   # качать хуй (legacy)
 E_COINS    = '<tg-emoji emoji-id="5215420556089776398">👛</tg-emoji>'   # монеты
 E_CRYSTALS = '<tg-emoji emoji-id="5429321386403327800">💎</tg-emoji>'   # кристаллы
 E_TICKET   = '<tg-emoji emoji-id="5334675412599480338">📕</tg-emoji>'   # билет рейда
@@ -94,6 +93,7 @@ def init_database():
         'ALTER TABLE players ADD COLUMN experience INTEGER DEFAULT 0',
         'ALTER TABLE players ADD COLUMN player_level INTEGER DEFAULT 1',
         "ALTER TABLE players ADD COLUMN status TEXT DEFAULT 'Новичок'",
+        'ALTER TABLE players ADD COLUMN online_matches INTEGER DEFAULT 0',
     ]:
         try:
             cursor.execute(col_sql)
@@ -101,17 +101,6 @@ def init_database():
         except sqlite3.OperationalError as e:
             if "duplicate column name" not in str(e).lower():
                 logging.warning(f"Migration warning: {e}")
-    
-    # Таблица покупок улучшений клика
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS click_upgrades (
-            user_id INTEGER NOT NULL,
-            upgrade_id INTEGER NOT NULL,
-            purchased_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (user_id, upgrade_id),
-            FOREIGN KEY (user_id) REFERENCES players(user_id)
-        )
-    ''')
     
     # Таблица покупок снаряжения
     cursor.execute('''
@@ -291,7 +280,8 @@ def get_player(user_id: int):
         SELECT user_id, nickname, points, click_power, strength, wins, last_click, rating_points,
                COALESCE(materials, 0), COALESCE(raid_floor, 1), COALESCE(raid_max_floor, 0),
                COALESCE(coins, 0), COALESCE(crystals, 0), COALESCE(raid_tickets, 0),
-               COALESCE(experience, 0), COALESCE(player_level, 1), COALESCE(status, 'Новичок')
+               COALESCE(experience, 0), COALESCE(player_level, 1), COALESCE(status, 'Новичок'),
+               COALESCE(online_matches, 0)
         FROM players
         WHERE user_id = ?
     ''', (user_id,))
@@ -318,6 +308,7 @@ def get_player(user_id: int):
             "experience": result[14],
             "player_level": result[15],
             "status": result[16],
+            "online_matches": result[17],
         }
     return None
 
@@ -357,34 +348,6 @@ def update_player_wins(user_id: int):
     cursor.execute('''
         UPDATE players 
         SET wins = COALESCE(wins, 0) + 1, updated_at = CURRENT_TIMESTAMP
-        WHERE user_id = ?
-    ''', (user_id,))
-    
-    conn.commit()
-    conn.close()
-
-def update_click_power(user_id: int, new_power: float):
-    """Обновить мощь клика"""
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        UPDATE players 
-        SET click_power = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE user_id = ?
-    ''', (new_power, user_id))
-    
-    conn.commit()
-    conn.close()
-
-def update_last_click(user_id: int):
-    """Обновить время последнего клика"""
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        UPDATE players 
-        SET last_click = CURRENT_TIMESTAMP
         WHERE user_id = ?
     ''', (user_id,))
     
@@ -460,16 +423,6 @@ def add_strength_to_player(user_id: int, amount: float):
     conn.commit()
     conn.close()
 
-def add_click_power_to_player(user_id: int, amount: float):
-    """Добавить мощь клика игроку"""
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    cursor.execute('''
-        UPDATE players SET click_power = click_power + ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?
-    ''', (amount, user_id))
-    conn.commit()
-    conn.close()
-
 def add_coins_to_player(user_id: int, amount: int):
     """Добавить монеты игроку"""
     conn = sqlite3.connect(DB_NAME)
@@ -516,6 +469,16 @@ def remove_raid_ticket(user_id: int):
     cursor = conn.cursor()
     cursor.execute('''
         UPDATE players SET raid_tickets = MAX(0, COALESCE(raid_tickets, 0) - 1), updated_at = CURRENT_TIMESTAMP WHERE user_id = ?
+    ''', (user_id,))
+    conn.commit()
+    conn.close()
+
+def add_online_match(user_id: int):
+    """Добавить один онлайн-матч игроку"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE players SET online_matches = COALESCE(online_matches, 0) + 1, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?
     ''', (user_id,))
     conn.commit()
     conn.close()
@@ -591,6 +554,27 @@ def set_player_status(user_id: int, status_name: str):
     cursor.execute('UPDATE players SET status = ? WHERE user_id = ?', (status_name, user_id))
     conn.commit()
     conn.close()
+
+def get_available_statuses(user_id: int) -> dict:
+    """Получить доступные статусы для игрока"""
+    player = get_player(user_id)
+    if not player:
+        return {}
+    available = {}
+    for status_id, status_info in STATUSES.items():
+        is_available = False
+        if status_info["type"] in ("default", "free"):
+            is_available = True
+        elif status_info["type"] == "unlock_level":
+            if player['player_level'] >= status_info.get('required_level', 1):
+                is_available = True
+        elif status_info["type"] == "unlock_matches":
+            required = status_info.get('required_matches', 0) or 0
+            if player.get('online_matches', 0) >= required:
+                is_available = True
+        if is_available:
+            available[status_id] = status_info
+    return available
 
 # ============== INVENTORY FUNCTIONS ==============
 def get_inventory(user_id: int) -> dict:
@@ -719,21 +703,6 @@ LOCATIONS = {
     }
 }
 
-def has_purchased_click_upgrade(user_id: int, upgrade_id: int) -> bool:
-    """Проверить, купил ли игрок это улучшение клика"""
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        SELECT 1 FROM click_upgrades
-        WHERE user_id = ? AND upgrade_id = ?
-    ''', (user_id, upgrade_id))
-    
-    result = cursor.fetchone()
-    conn.close()
-    
-    return result is not None
-
 def has_purchased_equipment(user_id: int, equipment_id: int) -> bool:
     """Проверить, купил ли игрок это снаряжение"""
     conn = sqlite3.connect(DB_NAME)
@@ -748,19 +717,6 @@ def has_purchased_equipment(user_id: int, equipment_id: int) -> bool:
     conn.close()
     
     return result is not None
-
-def add_click_upgrade_purchase(user_id: int, upgrade_id: int):
-    """Добавить запись о покупке улучшения клика"""
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        INSERT INTO click_upgrades (user_id, upgrade_id)
-        VALUES (?, ?)
-    ''', (user_id, upgrade_id))
-    
-    conn.commit()
-    conn.close()
 
 def add_equipment_purchase(user_id: int, equipment_id: int):
     """Добавить запись о покупке снаряжения"""
@@ -1129,23 +1085,6 @@ def add_skill_purchase(user_id: int, skill_id: int):
     conn.commit()
     conn.close()
 
-# ============== UPGRADES ==============
-UPGRADES = {
-    1:  {"power": 2.0,   "cost": 20,    "display": "💳 2 клика"},
-    2:  {"power": 4.0,   "cost": 100,   "display": "💳 4 клика"},
-    3:  {"power": 8.0,   "cost": 250,   "display": "💳 8 клика"},
-    4:  {"power": 12.0,  "cost": 550,   "display": "💳 12 клика"},
-    5:  {"power": 25.0,  "cost": 1150,  "display": "💳 25 клика"},
-    6:  {"power": 30.0,  "cost": 2100,  "display": "💳 30 клика"},
-    7:  {"power": 40.0,  "cost": 3850,  "display": "💳 40 клика"},
-    8:  {"power": 60.0,  "cost": 5200,  "display": "💳 60 клика"},
-    9:  {"power": 80.0,  "cost": 9000,  "display": "💳 80 клика"},
-    10: {"power": 120.0, "cost": 17000, "display": "💳 120 клика"},
-}
-
-UPGRADES_PAGE1 = {k: v for k, v in UPGRADES.items() if k <= 5}
-UPGRADES_PAGE2 = {k: v for k, v in UPGRADES.items() if k > 5}
-
 # ============== EQUIPMENT ==============
 EQUIPMENT = {
     1: {"name": "деревянный меч", "strength": 15, "cost": 50, "emoji": "🗡️"},
@@ -1212,9 +1151,6 @@ RAID_FLOORS = {
 class Registration(StatesGroup):
     waiting_for_nickname = State()
 
-class ShopMenu(StatesGroup):
-    viewing_shop = State()
-
 class EquipmentMenu(StatesGroup):
     viewing_equipment = State()
 
@@ -1257,8 +1193,6 @@ class AdminPanel(StatesGroup):
     adding_coins_amount = State()
     adding_strength_nickname = State()
     adding_strength_amount = State()
-    adding_click_power_nickname = State()
-    adding_click_power_amount = State()
     adding_experience_nickname = State()
     adding_experience_amount = State()
     adding_crystals_nickname = State()
@@ -1276,9 +1210,6 @@ class ProfileMenu(StatesGroup):
     viewing_profile = State()
     viewing_statuses = State()
     viewing_inventory = State()
-
-# Словарь для отслеживания cooldown клика
-click_cooldowns = {}
 
 # Словарь для отслеживания cooldown боевых действий (2 сек)
 battle_cooldowns: dict = {}
@@ -1301,23 +1232,6 @@ def get_main_kb():
         [KeyboardButton(text="🛡️ Кланы"),       KeyboardButton(text="🏆 Рейтинг")],
         [KeyboardButton(text="📖 Профиль")]
     ]
-    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
-
-def get_shop_kb(page: int = 1):
-    """Меню магазина (постраничное)"""
-    kb = []
-    items = UPGRADES_PAGE1 if page == 1 else UPGRADES_PAGE2
-    for upgrade_id, upgrade_info in items.items():
-        button_text = f"💲 {upgrade_info['display']} ({upgrade_info['cost']} очков)"
-        kb.append([KeyboardButton(text=button_text)])
-    nav = []
-    if page == 2:
-        nav.append(KeyboardButton(text="◀️ Предыдущая"))
-    if page == 1:
-        nav.append(KeyboardButton(text="Следующая ▶️"))
-    if nav:
-        kb.append(nav)
-    kb.append([KeyboardButton(text="❌ Выход")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 def get_forge_kb():
@@ -1606,21 +1520,6 @@ def calculate_enemy_damage(enemy_id: int) -> int:
     """Рассчитать урон врага (здоровье врага * 0.4)"""
     enemy_health = ENEMIES[enemy_id]['health']
     return int(round(enemy_health * 0.4))
-
-def can_click(user_id: int) -> bool:
-    """Проверить, может ли пользователь нажать кнопку клика"""
-    now = datetime.now()
-    
-    if user_id not in click_cooldowns:
-        click_cooldowns[user_id] = now
-        return True
-    
-    last_click = click_cooldowns[user_id]
-    if (now - last_click).total_seconds() >= 1.0:
-        click_cooldowns[user_id] = now
-        return True
-    
-    return False
 
 def can_battle_action(user_id: int) -> bool:
     """Проверить cooldown боевого действия (2 секунды)"""
@@ -2057,86 +1956,6 @@ async def fight_location_monster(message: types.Message, state: FSMContext):
 async def flee_location_monster(message: types.Message, state: FSMContext):
     await message.answer("🏃 Ты убежал от монстра!", reply_markup=get_map_kb())
     await state.set_state(LocationMenu.viewing_map)
-
-# ============== CLICK UPGRADES SHOP ==============
-@dp.message(F.text == "🏪 Магазин")
-async def open_shop(message: types.Message, state: FSMContext):
-    user_id = message.from_user.id
-    player = get_player(user_id)
-    
-    if not player:
-        await message.answer("Сначала зарегистрируйся! /start")
-        return
-    
-    await state.set_state(ShopMenu.viewing_shop)
-    await state.update_data(shop_page=1)
-    await _send_shop_page(message, user_id, player, 1)
-
-async def _send_shop_page(message, user_id: int, player, page: int):
-    items = UPGRADES_PAGE1 if page == 1 else UPGRADES_PAGE2
-    page_label = "Страница 1" if page == 1 else "Страница 2"
-    shop_text = f'🏪 <b>МАГАЗИН УЛУЧШЕНИЙ КЛИКА</b> ({page_label})\n\n'
-    shop_text += f'Твои очки: {player["points"]} {E_COINS} | Мощь клика: {player["click_power"]} {E_POW}\n\n'
-    shop_text += "Доступные улучшения:\n"
-    for upgrade_id, upgrade_info in items.items():
-        status = "✅" if has_purchased_click_upgrade(user_id, upgrade_id) else ""
-        shop_text += f"\n{upgrade_info['display']} → {upgrade_info['cost']} очков {status}"
-    await send_image_with_text(message, "shop.png", shop_text, reply_markup=get_shop_kb(page))
-
-@dp.message(ShopMenu.viewing_shop)
-async def handle_shop_purchase(message: types.Message, state: FSMContext):
-    user_id = message.from_user.id
-    player = get_player(user_id)
-    text = message.text
-    data = await state.get_data()
-    page = data.get('shop_page', 1)
-    
-    if text == "❌ Выход":
-        await state.clear()
-        await message.answer("Вернулись в главное меню!", reply_markup=get_main_kb())
-        return
-
-    if text == "Следующая ▶️":
-        await state.update_data(shop_page=2)
-        await _send_shop_page(message, user_id, player, 2)
-        return
-
-    if text == "◀️ Предыдущая":
-        await state.update_data(shop_page=1)
-        await _send_shop_page(message, user_id, player, 1)
-        return
-    
-    upgrade_purchased = False
-    
-    for upgrade_id, upgrade_info in UPGRADES.items():
-        if upgrade_info['display'] in text:
-            if has_purchased_click_upgrade(user_id, upgrade_id):
-                await message.answer("❌ Вы уже купили данное улучшение!", reply_markup=get_shop_kb(page))
-                return
-            
-            if player['points'] < upgrade_info['cost']:
-                await message.answer(
-                    f"❌ Недостаточно очков!\nТребуется: {upgrade_info['cost']}\nУ вас есть: {player['points']}",
-                    reply_markup=get_shop_kb(page)
-                )
-                return
-            
-            new_points = round(player['points'] - upgrade_info['cost'], 1)
-            new_click_power = round(player['click_power'] + upgrade_info['power'], 1)
-            
-            update_player_points(user_id, new_points)
-            update_click_power(user_id, new_click_power)
-            add_click_upgrade_purchase(user_id, upgrade_id)
-            
-            await message.answer(
-                f"✅ Улучшение куплено!\n\n+ {upgrade_info['power']} мощи клика\n- {upgrade_info['cost']} очков\n\nНовая мощь клика: {new_click_power}\nОсталось очков: {new_points}",
-                reply_markup=ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="❌ Выход")]], resize_keyboard=True)
-            )
-            upgrade_purchased = True
-            break
-    
-    if not upgrade_purchased:
-        await message.answer("❌ Выберите корректное улучшение!", reply_markup=get_shop_kb(page))
 
 # ============== FORGE (КУЗНЯ) ==============
 def _get_weapon_info(weapon_id: int) -> dict:
@@ -2804,8 +2623,7 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
     if new_enemy_health <= 0:
         # Победа на этаже
         reward = enemy_info['reward']
-        new_points = round(player['points'] + reward, 1)
-        update_player_points(user_id, new_points)
+        add_coins_to_player(user_id, reward)
         update_rating_points(user_id, 5)
         if floor_id > player['raid_max_floor']:
             update_player_raid_max_floor(user_id, floor_id)
@@ -2815,11 +2633,10 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
 
         log += f"{enemy_info['emoji']} {enemy_info['name']} повержен!\n\n"
         log += f"✅ <b>ЭТАЖ {floor_id} ПРОЙДЕН!</b>\n\n"
-        log += f"💰 Награда: +{reward} очков\n"
+        log += f"💰 Награда: +{reward} монет\n"
         log += f"+5💠 очков рейтинга\n"
         if player_clan:
             log += f"+10 опыта клану\n"
-        log += f"Всего очков: {new_points}\n"
 
         if floor_id == 10:
             update_player_raid_floor(user_id, 0)
@@ -3162,8 +2979,7 @@ async def battle_round(message: types.Message, state: FSMContext):
 
     if new_enemy_health <= 0:
         reward = enemy_info['reward']
-        new_points = round(player['points'] + reward, 1)
-        update_player_points(user_id, new_points)
+        add_coins_to_player(user_id, reward)
         update_rating_points(user_id, 5)
         player_clan = get_player_clan(user_id)
         if player_clan:
@@ -3171,9 +2987,8 @@ async def battle_round(message: types.Message, state: FSMContext):
         
         battle_log += f"☠️ {enemy_info['name']} повержен!\n\n"
         battle_log += f"✅ <b>ВЫ ПОБЕДИЛИ!</b>\n\n"
-        battle_log += f"💰 Награда: +{reward} очков\n"
+        battle_log += f"💰 Награда: +{reward} монет\n"
         battle_log += f"+5💠 очков рейтинга\n"
-        battle_log += f"Всего очков: {new_points}"
         
         await message.answer(battle_log, reply_markup=get_end_battle_kb())
         await state.clear()
@@ -3557,6 +3372,9 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
     if new_enemy_health <= 0:
         update_player_wins(user_id)
         update_rating_points(user_id, 7)
+        add_online_match(user_id)
+        if opponent_id:
+            add_online_match(opponent_id)
         winner_clan = get_player_clan(user_id)
         if winner_clan:
             add_clan_exp(winner_clan['clan_id'], 2)
@@ -3717,14 +3535,14 @@ async def handle_clans_list(message: types.Message, state: FSMContext):
         if get_player_clan(user_id):
             await message.answer("❌ Вы уже состоите в клане!", reply_markup=get_clans_list_kb(get_all_clans()))
             return
-        if player['points'] < 2000:
+        if player['coins'] < 2000:
             await message.answer(
-                f"❌ Недостаточно очков!\nТребуется: 2000🔸\nУ вас: {player['points']}🔸",
+                f"❌ Недостаточно монет!\nТребуется: 2000💰\nУ вас: {player['coins']}💰",
                 reply_markup=get_clans_list_kb(get_all_clans())
             )
             return
         await message.answer(
-            "Вы хотите потратить 2000🔸 очков на создание клана?",
+            "Вы хотите потратить 2000💰 монет на создание клана?",
             reply_markup=get_create_clan_confirm_kb()
         )
         await state.set_state(ClanMenu.creating_clan_confirm)
@@ -3771,11 +3589,11 @@ async def handle_create_clan_confirm(message: types.Message, state: FSMContext):
         return
 
     if text == "✅ Да, создать":
-        if player['points'] < 2000:
-            await message.answer("❌ Недостаточно очков для создания клана!", reply_markup=get_main_kb())
+        if player['coins'] < 2000:
+            await message.answer("❌ Недостаточно монет для создания клана!", reply_markup=get_main_kb())
             await state.clear()
             return
-        update_player_points(user_id, round(player['points'] - 2000, 1))
+        remove_coins_from_player(user_id, 2000)
         await message.answer("Введите название клана:", reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
         await state.set_state(ClanMenu.creating_clan_name)
         return
@@ -4238,10 +4056,25 @@ async def admin_menu_handler(message: types.Message, state: FSMContext):
                              reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
         await state.set_state(AdminPanel.adding_strength_nickname)
         return
-    if text == "⚡️ Накрутить мощь клика":
+    if text == "⭐️ Накрутить опыт":
         await message.answer("Введите никнейм игрока:",
                              reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
-        await state.set_state(AdminPanel.adding_click_power_nickname)
+        await state.set_state(AdminPanel.adding_experience_nickname)
+        return
+    if text == "💎 Накрутить кристаллы":
+        await message.answer("Введите никнейм игрока:",
+                             reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
+        await state.set_state(AdminPanel.adding_crystals_nickname)
+        return
+    if text == "📕 Накрутить билеты рейда":
+        await message.answer("Введите никнейм игрока:",
+                             reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
+        await state.set_state(AdminPanel.adding_raid_tickets_nickname)
+        return
+    if text == "🥕 Накрутить материалы":
+        await message.answer("Введите никнейм игрока:",
+                             reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
+        await state.set_state(AdminPanel.adding_materials_nickname)
         return
     await message.answer("Выберите действие!", reply_markup=get_admin_kb())
 
@@ -4253,19 +4086,19 @@ async def admin_coins_nickname(message: types.Message, state: FSMContext):
         await message.answer(f"❌ Игрок «{nickname}» не найден. Введите никнейм ещё раз:")
         return
     await state.update_data(target_user_id=target['user_id'], target_nickname=target['nickname'])
-    await message.answer("Введите сумму очков для добавления:")
+    await message.answer("Введите сумму монет для добавления:")
     await state.set_state(AdminPanel.adding_coins_amount)
 
 @dp.message(AdminPanel.adding_coins_amount)
 async def admin_coins_amount(message: types.Message, state: FSMContext):
     try:
-        amount = float(message.text.strip())
+        amount = int(message.text.strip())
     except ValueError:
         await message.answer("❌ Введите корректное число:")
         return
     data = await state.get_data()
-    add_points_to_player(data['target_user_id'], amount)
-    await message.answer(f"✅ {amount}🔸 добавлено игроку {data['target_nickname']}")
+    add_coins_to_player(data['target_user_id'], amount)
+    await message.answer(f"✅ {amount} монет добавлено игроку {data['target_nickname']}")
     await state.set_state(AdminPanel.main_menu)
     await message.answer("🔐 Админ панель", reply_markup=get_admin_kb())
 
@@ -4293,27 +4126,100 @@ async def admin_strength_amount(message: types.Message, state: FSMContext):
     await state.set_state(AdminPanel.main_menu)
     await message.answer("🔐 Админ панель", reply_markup=get_admin_kb())
 
-@dp.message(AdminPanel.adding_click_power_nickname)
-async def admin_click_power_nickname(message: types.Message, state: FSMContext):
+@dp.message(AdminPanel.adding_experience_nickname)
+async def admin_experience_nickname(message: types.Message, state: FSMContext):
     nickname = message.text.strip()
     target = get_player_by_nickname(nickname)
     if not target:
         await message.answer(f"❌ Игрок «{nickname}» не найден. Введите никнейм ещё раз:")
         return
     await state.update_data(target_user_id=target['user_id'], target_nickname=target['nickname'])
-    await message.answer("Введите сумму мощи клика для добавления:")
-    await state.set_state(AdminPanel.adding_click_power_amount)
+    await message.answer("Введите количество опыта для добавления:")
+    await state.set_state(AdminPanel.adding_experience_amount)
 
-@dp.message(AdminPanel.adding_click_power_amount)
-async def admin_click_power_amount(message: types.Message, state: FSMContext):
+@dp.message(AdminPanel.adding_experience_amount)
+async def admin_experience_amount(message: types.Message, state: FSMContext):
     try:
-        amount = float(message.text.strip())
+        amount = int(message.text.strip())
     except ValueError:
         await message.answer("❌ Введите корректное число:")
         return
     data = await state.get_data()
-    add_click_power_to_player(data['target_user_id'], amount)
-    await message.answer(f"✅ {amount} мощи клика добавлено игроку {data['target_nickname']}")
+    result = add_experience_to_player(data['target_user_id'], amount)
+    lvl_msg = f" (уровень повышен до {result['new_level']}!)" if result.get('leveled_up') else ""
+    await message.answer(f"✅ {amount} опыта добавлено игроку {data['target_nickname']}{lvl_msg}")
+    await state.set_state(AdminPanel.main_menu)
+    await message.answer("🔐 Админ панель", reply_markup=get_admin_kb())
+
+@dp.message(AdminPanel.adding_crystals_nickname)
+async def admin_crystals_nickname(message: types.Message, state: FSMContext):
+    nickname = message.text.strip()
+    target = get_player_by_nickname(nickname)
+    if not target:
+        await message.answer(f"❌ Игрок «{nickname}» не найден. Введите никнейм ещё раз:")
+        return
+    await state.update_data(target_user_id=target['user_id'], target_nickname=target['nickname'])
+    await message.answer("Введите количество кристаллов для добавления:")
+    await state.set_state(AdminPanel.adding_crystals_amount)
+
+@dp.message(AdminPanel.adding_crystals_amount)
+async def admin_crystals_amount(message: types.Message, state: FSMContext):
+    try:
+        amount = int(message.text.strip())
+    except ValueError:
+        await message.answer("❌ Введите корректное число:")
+        return
+    data = await state.get_data()
+    add_crystals_to_player(data['target_user_id'], amount)
+    await message.answer(f"✅ {amount} кристаллов добавлено игроку {data['target_nickname']}")
+    await state.set_state(AdminPanel.main_menu)
+    await message.answer("🔐 Админ панель", reply_markup=get_admin_kb())
+
+@dp.message(AdminPanel.adding_raid_tickets_nickname)
+async def admin_raid_tickets_nickname(message: types.Message, state: FSMContext):
+    nickname = message.text.strip()
+    target = get_player_by_nickname(nickname)
+    if not target:
+        await message.answer(f"❌ Игрок «{nickname}» не найден. Введите никнейм ещё раз:")
+        return
+    await state.update_data(target_user_id=target['user_id'], target_nickname=target['nickname'])
+    await message.answer("Введите количество билетов рейда для добавления:")
+    await state.set_state(AdminPanel.adding_raid_tickets_amount)
+
+@dp.message(AdminPanel.adding_raid_tickets_amount)
+async def admin_raid_tickets_amount(message: types.Message, state: FSMContext):
+    try:
+        amount = int(message.text.strip())
+    except ValueError:
+        await message.answer("❌ Введите корректное число:")
+        return
+    data = await state.get_data()
+    add_raid_tickets_to_player(data['target_user_id'], amount)
+    await message.answer(f"✅ {amount} билетов рейда добавлено игроку {data['target_nickname']}")
+    await state.set_state(AdminPanel.main_menu)
+    await message.answer("🔐 Админ панель", reply_markup=get_admin_kb())
+
+@dp.message(AdminPanel.adding_materials_nickname)
+async def admin_materials_nickname(message: types.Message, state: FSMContext):
+    nickname = message.text.strip()
+    target = get_player_by_nickname(nickname)
+    if not target:
+        await message.answer(f"❌ Игрок «{nickname}» не найден. Введите никнейм ещё раз:")
+        return
+    await state.update_data(target_user_id=target['user_id'], target_nickname=target['nickname'])
+    await message.answer("Введите количество материалов для добавления (каждого вида):")
+    await state.set_state(AdminPanel.adding_materials_amount)
+
+@dp.message(AdminPanel.adding_materials_amount)
+async def admin_materials_amount(message: types.Message, state: FSMContext):
+    try:
+        amount = int(message.text.strip())
+    except ValueError:
+        await message.answer("❌ Введите корректное число:")
+        return
+    data = await state.get_data()
+    add_admin_materials_to_player(data['target_user_id'], amount)
+    await message.answer(f"✅ {amount} каждого материала добавлено игроку {data['target_nickname']}")
     await state.set_state(AdminPanel.main_menu)
     await message.answer("🔐 Админ панель", reply_markup=get_admin_kb())
 
