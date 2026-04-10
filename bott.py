@@ -12,7 +12,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, FSInputFile
 
 # ============== CUSTOM EMOJI CONSTANTS ==============
 E_COINS    = '<tg-emoji emoji-id="5215420556089776398">👛</tg-emoji>'   # монеты
@@ -694,7 +694,7 @@ LOCATIONS = {
     1: {
         "name": "🌾 Ясная Поляна",
         "emoji": "🌾",
-        "image": "location_meadow.png",
+        "image": "images/locations/meadow.png",
         "activities": {
             "gather": {
                 "name": "Добыча еды",
@@ -1641,6 +1641,25 @@ def roll_miss(extra_miss_chance: float = 0.0) -> bool:
     return random.random() < (0.10 + extra_miss_chance)
 
 
+async def send_image_with_text(message, image_path: str, text: str, reply_markup=None):
+    """Отправить изображение с текстом. Если файл не найден — отправить только текст."""
+    try:
+        if not os.path.exists(image_path):
+            print(f"⚠️ ФАЙЛ НЕ НАЙДЕН: {image_path}")
+            await message.answer(text, reply_markup=reply_markup, parse_mode="HTML")
+            return
+        photo = FSInputFile(image_path)
+        await message.answer_photo(
+            photo=photo,
+            caption=text,
+            reply_markup=reply_markup,
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        print(f"❌ Ошибка при отправке фото: {e}")
+        await message.answer(text, reply_markup=reply_markup, parse_mode="HTML")
+
+
 # ============== COMMANDS ==============
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
@@ -1698,7 +1717,7 @@ async def _send_profile(message, player: dict):
         f'┆{E_CRYSTALS}┆ Кристаллы {E_BULLET} {player["crystals"]}\n'
         f'┆{E_TICKET}┆ Билеты рейда {E_BULLET} {player["raid_tickets"]}\n'
     )
-    await message.answer(response, reply_markup=get_profile_kb())
+    await send_image_with_text(message, "images/profiles/profile_default.png", response, reply_markup=get_profile_kb())
 
 @dp.message(ProfileMenu.viewing_profile)
 async def handle_profile_menu(message: types.Message, state: FSMContext):
@@ -1794,7 +1813,7 @@ async def _send_inventory(message, user_id: int, back_button: str = "⬅️ На
         f'┃{inv["gold"]}{E_GOLD_M} {E_BULLET} Золото\n'
     )
     inv_kb = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text=back_button)]], resize_keyboard=True)
-    await message.answer(text, reply_markup=inv_kb)
+    await send_image_with_text(message, "images/inventory/inventory.png", text, reply_markup=inv_kb)
 
 @dp.message(F.text == "📦 Инвентарь")
 async def open_inventory_main(message: types.Message, state: FSMContext):
