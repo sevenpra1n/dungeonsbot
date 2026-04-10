@@ -1640,9 +1640,6 @@ def roll_miss(extra_miss_chance: float = 0.0) -> bool:
     """Вернуть True если атака промахивается (10% база + доп. шанс от ослепления)"""
     return random.random() < (0.10 + extra_miss_chance)
 
-async def send_image_with_text(message, image_name: str, text: str, reply_markup=None):
-    """Отправить текст (без фото, чтобы избежать DOCUMENT_INVALID)."""
-    await message.answer(text, reply_markup=reply_markup, parse_mode="HTML")
 
 # ============== COMMANDS ==============
 @dp.message(Command("start"))
@@ -1824,7 +1821,7 @@ async def open_map(message: types.Message, state: FSMContext):
         if not monster:
             await state.set_state(LocationMenu.viewing_map)
             map_text = "🗺️ <b>КАРТА</b>\n\nВыбери локацию для исследования:"
-            await send_image_with_text(message, "map.png", map_text, reply_markup=get_map_kb())
+            await message.answer(map_text, reply_markup=get_map_kb())
         return
 
     activity = get_active_activity(user_id)
@@ -1849,7 +1846,7 @@ async def open_map(message: types.Message, state: FSMContext):
             return
 
     map_text = "🗺️ <b>КАРТА</b>\n\nВыбери локацию для исследования:"
-    await send_image_with_text(message, "map.png", map_text, reply_markup=get_map_kb())
+    await message.answer(map_text, reply_markup=get_map_kb())
     await state.set_state(LocationMenu.viewing_map)
 
 @dp.message(LocationMenu.viewing_map)
@@ -1868,7 +1865,7 @@ async def handle_map(message: types.Message, state: FSMContext):
         monster = await _give_activity_rewards(user_id, completed)
         if not monster:
             map_text = "🗺️ <b>КАРТА</b>\n\nВыбери локацию для исследования:"
-            await send_image_with_text(message, "map.png", map_text, reply_markup=get_map_kb())
+            await message.answer(map_text, reply_markup=get_map_kb())
         return
 
     for loc_id, loc in LOCATIONS.items():
@@ -1878,8 +1875,7 @@ async def handle_map(message: types.Message, state: FSMContext):
             for act_key, act in loc['activities'].items():
                 monster_note = f"(⚠️ {int(act['monster_chance']*100)}% шанс монстра)" if act['monster_chance'] > 0 else ""
                 loc_text += f"\n{act['time']}s{E_TIMER}│{act['emoji']}│{E_BULLET} {act['name']} {monster_note}\n"
-            await send_image_with_text(message, loc['image'], loc_text,
-                                       reply_markup=get_location_activities_kb(loc_id))
+            await message.answer(loc_text, reply_markup=get_location_activities_kb(loc_id))
             await state.set_state(LocationMenu.viewing_location)
             return
 
@@ -1895,7 +1891,7 @@ async def handle_location(message: types.Message, state: FSMContext):
 
     if text == "⬅️ Назад на карту":
         map_text = "🗺️ <b>КАРТА</b>\n\nВыбери локацию для исследования:"
-        await send_image_with_text(message, "map.png", map_text, reply_markup=get_map_kb())
+        await message.answer(map_text, reply_markup=get_map_kb())
         await state.set_state(LocationMenu.viewing_map)
         return
 
@@ -2176,7 +2172,7 @@ async def open_forge(message: types.Message, state: FSMContext):
         f"🛡️ Броня:  {armor['emoji']} {armor['name']} (сила: {armor['strength']})\n\n"
         "Выбери раздел для улучшения:"
     )
-    await send_image_with_text(message, "kusnya.png", forge_text, reply_markup=get_forge_kb())
+    await message.answer(forge_text, reply_markup=get_forge_kb())
     await state.set_state(ForgeMenu.viewing_forge)
 
 @dp.message(ForgeMenu.viewing_forge)
@@ -2630,11 +2626,10 @@ async def open_raid(message: types.Message, state: FSMContext):
     player_goes_first = random.random() < 0.5
     if player_goes_first:
         raid_text += "\n\n🎲 Ты атакуешь первым!\nЧто ты будешь делать?"
-        await send_image_with_text(message, "raid.png", raid_text,
-                                   reply_markup=get_battle_action_kb(user_id, mana))
+        await message.answer(raid_text, reply_markup=get_battle_action_kb(user_id, mana))
     else:
-        await send_image_with_text(message, "raid.png", raid_text + "\n\n🎲 Враг атакует первым...",
-                                   reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
+        await message.answer(raid_text + "\n\n🎲 Враг атакует первым...",
+                               reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
         await asyncio.sleep(2)
 
         enemy_hit = int(round(enemy_damage * random.uniform(0.7, 1.3)))
@@ -3293,7 +3288,7 @@ async def open_online(message: types.Message, state: FSMContext):
         "chat_id": message.chat.id
     }
 
-    await send_image_with_text(message, "online.png", search_text, reply_markup=get_searching_kb())
+    await message.answer(search_text, reply_markup=get_searching_kb())
     await state.set_state(OnlineState.searching)
 
     # Проверяем, есть ли ещё кто-то в очереди
@@ -3717,7 +3712,7 @@ async def open_clans(message: types.Message, state: FSMContext):
         clan_text = _format_clan_menu(my_clan, leader_name)
         is_leader = (my_clan['leader_id'] == user_id)
         is_co_leader = not is_leader and get_clan_member_role(user_id, my_clan['clan_id']) == 'co_leader'
-        await send_image_with_text(message, "myclan.png", clan_text, reply_markup=get_my_clan_kb(is_leader, is_co_leader))
+        await message.answer(clan_text, reply_markup=get_my_clan_kb(is_leader, is_co_leader))
         await state.set_state(ClanMenu.viewing_my_clan)
         await state.update_data(clan_id=my_clan['clan_id'])
     else:
@@ -3729,7 +3724,7 @@ async def open_clans(message: types.Message, state: FSMContext):
                 clans_text += f"🛡️ {name} — ур.{lvl} | {members}👥 | порог: {min_power}⚔️\n"
         else:
             clans_text = "🛡️ <b>КЛАНОВ ЕЩЁ НЕТ</b>\n\nСтань первым!"
-        await send_image_with_text(message, "clan.png", clans_text, reply_markup=get_clans_list_kb(clans))
+        await message.answer(clans_text, reply_markup=get_clans_list_kb(clans))
         await state.set_state(ClanMenu.viewing_clans)
 
 @dp.message(ClanMenu.viewing_clans)
@@ -4271,7 +4266,7 @@ async def _show_clan_info(message, clan: dict, is_leader: bool, is_co_leader: bo
             return
         except Exception:
             pass
-    await send_image_with_text(message, "myclan.png", clan_text, reply_markup=kb)
+    await message.answer(clan_text, reply_markup=kb)
 
 @dp.message(ClanMenu.selecting_clan_customization)
 async def handle_select_clan_customization(message: types.Message, state: FSMContext):
