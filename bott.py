@@ -41,7 +41,15 @@ E_GIFT     = '<tg-emoji emoji-id="5429203678529613915">🎁</tg-emoji>'   # по
 E_TROPHY   = '<tg-emoji emoji-id="5312315739842026755">🏆</tg-emoji>'   # трофей/победы
 E_ATK      = '<tg-emoji emoji-id="5408935401442267103">⚔️</tg-emoji>'   # сила (профиль)
 E_BULLET   = '▪️'   # маркер-пуля
-E_INV_BOX  = '📦'   # инвентарь
+E_INV_BOX  = '<tg-emoji emoji-id="5854908544712707500">📦</tg-emoji>'   # инвентарь
+E_BOOK     = '<tg-emoji emoji-id="6284954269917384589">📚</tg-emoji>'   # описание (ресурс)
+E_FORGE    = '<tg-emoji emoji-id="5462995330163289902">⏫</tg-emoji>'   # кузня
+E_WEAPON   = '<tg-emoji emoji-id="5442864569338838830">🗡</tg-emoji>'   # оружие
+E_ARMOR_E  = '<tg-emoji emoji-id="5307620077867129678">🤩</tg-emoji>'   # броня (эмодзи)
+E_CLAN     = '<tg-emoji emoji-id="5453957997418004470">👥</tg-emoji>'   # клан
+E_CLAN_LVL = '<tg-emoji emoji-id="5442871127753895753">💎</tg-emoji>'   # уровень клана
+E_CLAN_EXP = '<tg-emoji emoji-id="5258513401784573443">👥</tg-emoji>'   # опыт клана
+E_CLAN_STAR= '<tg-emoji emoji-id="6284992018384950997">🌟</tg-emoji>'   # соруководители
 E_WOOD     = '<tg-emoji emoji-id="5449918202718985124">🌳</tg-emoji>'   # древесина
 E_STONE    = '<tg-emoji emoji-id="5433955200849159326">🪨</tg-emoji>'   # камень
 E_FOOD     = '<tg-emoji emoji-id="6284888960644682300">🥕</tg-emoji>'   # еда
@@ -640,6 +648,24 @@ def add_admin_materials_to_player(user_id: int, amount: int):
     ''', (amount, amount, amount, amount, amount, user_id))
     conn.commit()
     conn.close()
+
+def remove_inventory_material(user_id: int, material: str, amount: int) -> bool:
+    """Снять материал из инвентаря. Возвращает True если успешно."""
+    allowed = {'food', 'wood', 'stone', 'iron', 'gold'}
+    if material not in allowed:
+        return False
+    inv = get_inventory(user_id)
+    if inv.get(material, 0) < amount:
+        return False
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(
+        f'UPDATE player_inventory SET {material} = MAX(0, COALESCE({material}, 0) - ?) WHERE user_id = ?',
+        (amount, user_id)
+    )
+    conn.commit()
+    conn.close()
+    return True
 
 # ============== ACTIVITY FUNCTIONS ==============
 def start_activity(user_id: int, activity_type: str, location_id: int, duration_seconds: int):
@@ -1295,6 +1321,11 @@ class ProfileMenu(StatesGroup):
     viewing_statuses = State()
     viewing_inventory = State()
 
+class MarketMenu(StatesGroup):
+    viewing_market = State()
+    selling_resource = State()
+    buying_ticket = State()
+
 # Словарь для отслеживания cooldown боевых действий (2 сек)
 battle_cooldowns: dict = {}
 
@@ -1313,8 +1344,48 @@ def get_main_kb():
         [KeyboardButton(text="🗺️ Карта"),      KeyboardButton(text="📦 Инвентарь")],
         [KeyboardButton(text="🔨 Кузня"),        KeyboardButton(text="🐉 Рейд")],
         [KeyboardButton(text="🌐 Онлайн"),       KeyboardButton(text="🛡️ Кланы")],
-        [KeyboardButton(text="🏆 Рейтинг"),     KeyboardButton(text="📖 Профиль")]
+        [KeyboardButton(text="🏆 Рейтинг"),     KeyboardButton(text="📖 Профиль")],
+        [KeyboardButton(text="🛒 Рынок")]
     ]
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+# ============== MARKET CONFIG ==============
+MARKET_PRICES = {
+    'food':  0.7,
+    'wood':  2.0,
+    'stone': 8.0,
+    'iron':  40.0,
+    'gold':  160.0,
+}
+MARKET_RAID_TICKET_PRICE = 57  # монет за 1 билет рейда
+
+def get_market_kb() -> ReplyKeyboardMarkup:
+    """Клавиатура рынка (продажа ресурсов + покупка билета)"""
+    kb = [
+        [KeyboardButton(text=f"Продать {E_FOOD} Еду"),        KeyboardButton(text=f"Продать {E_WOOD} Древесину")],
+        [KeyboardButton(text=f"Продать {E_STONE} Камень"),    KeyboardButton(text=f"Продать {E_IRON} Железо")],
+        [KeyboardButton(text=f"Продать {E_GOLD_M} Золото")],
+        [KeyboardButton(text=f"Купить {E_TICKET} Билет рейда ({MARKET_RAID_TICKET_PRICE}{E_COINS})")],
+        [KeyboardButton(text="❌ Выйти с рынка")],
+    ]
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+def get_sell_qty_kb(material: str, inv_amount: int) -> ReplyKeyboardMarkup:
+    """Клавиатура выбора количества для продажи"""
+    kb = []
+    # Offer quantities: 1, 5, 10, 25, 50, all
+    row = []
+    for qty in [1, 5, 10, 25, 50]:
+        if inv_amount >= qty:
+            row.append(KeyboardButton(text=f"Продать {qty}"))
+            if len(row) == 3:
+                kb.append(row)
+                row = []
+    if row:
+        kb.append(row)
+    if inv_amount > 0:
+        kb.append([KeyboardButton(text=f"Продать всё ({inv_amount})")])
+    kb.append([KeyboardButton(text="⬅️ Назад на рынок")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 def get_forge_kb():
@@ -1748,7 +1819,7 @@ async def handle_profile_menu(message: types.Message, state: FSMContext):
             owned = (player.get('status') == s['name'])
             lock = "" if can else f" 🔒(ур.{req_lvl})"
             check = " ✅" if owned else ""
-            statuses_text += f"{s['emoji']} <b>{s['name']}</b>{lock}{check}\n"
+            statuses_text += f"{s.get('custom_emoji', s['emoji'])} | {s['name']}{lock}{check}\n"
         await message.answer(statuses_text, reply_markup=get_statuses_kb(player))
         return
 
@@ -1809,15 +1880,15 @@ async def _send_inventory(message, user_id: int, back_button: str = "⬅️ На
     inv = get_inventory(user_id)
     nickname = html.escape(player['nickname']) if player else "Игрок"
     text = (
-        f'{E_INV_BOX} <b>Инвентарь {nickname}:</b>\n\n'
-        f'┃{inv["wood"]}{E_WOOD} {E_BULLET} Древесина\n'
-        f'┃{inv["stone"]}{E_STONE} {E_BULLET} Камень\n'
-        f'┃{inv["food"]}{E_FOOD} {E_BULLET} Еда\n'
-        f'┃{inv["iron"]}{E_IRON} {E_BULLET} Железо\n'
-        f'┃{inv["gold"]}{E_GOLD_M} {E_BULLET} Золото\n'
+        f'{E_INV_BOX} | Инвентарь {nickname}:\n\n'
+        f'| {inv["wood"]} {E_WOOD} | ({E_BOOK} Древесина)\n'
+        f'| {inv["stone"]} {E_STONE} | ({E_BOOK} Камень)\n'
+        f'| {inv["food"]} {E_FOOD} | ({E_BOOK} Еда)\n'
+        f'| {inv["iron"]} {E_IRON} | ({E_BOOK} Железо)\n'
+        f'| {inv["gold"]} {E_GOLD_M} | ({E_BOOK} Золото)\n'
     )
     inv_kb = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text=back_button)]], resize_keyboard=True)
-    await message.answer(text, reply_markup=inv_kb, parse_mode="HTML")
+    await send_image_with_text(message, "images/inventory.png", text, reply_markup=inv_kb)
 
 @dp.message(F.text == "📦 Инвентарь")
 async def open_inventory_main(message: types.Message, state: FSMContext):
@@ -1898,7 +1969,7 @@ async def handle_map(message: types.Message, state: FSMContext):
             for act_key, act in loc['activities'].items():
                 monster_note = f"(⚠️ {int(act['monster_chance']*100)}% шанс монстра)" if act['monster_chance'] > 0 else ""
                 loc_text += f"\n{act['time']}s{E_TIMER}│{act['emoji']}│{E_BULLET} {act['name']} {monster_note}\n"
-            await message.answer(loc_text, reply_markup=get_location_activities_kb(loc_id))
+            await send_image_with_text(message, loc.get('image', 'images/meadow.png'), loc_text, reply_markup=get_location_activities_kb(loc_id))
             await state.set_state(LocationMenu.viewing_location)
             return
 
@@ -2189,13 +2260,13 @@ async def open_forge(message: types.Message, state: FSMContext):
     armor = _get_armor_info(armor_id)
 
     forge_text = (
-        "🔨 <b>КУЗНЯ</b>\n\n"
-        f"{E_POW} Общая сила: {int(player['strength'])}\n\n"
-        f"⚔️ Оружие: {weapon['emoji']} {weapon['name']} (сила: {weapon['strength']})\n"
-        f"🛡️ Броня:  {armor['emoji']} {armor['name']} (сила: {armor['strength']})\n\n"
-        "Выбери раздел для улучшения:"
+        f"{E_FORGE} <b>КУЗНЯ</b>\n\n"
+        f"{E_ATK} Общая сила: {int(player['strength'])}\n\n"
+        f"{E_WEAPON} | Оружие: {weapon['emoji']} {weapon['name']} (сила: {weapon['strength']})\n"
+        f"{E_ARMOR_E} | Броня: {armor['emoji']} {armor['name']} (сила: {armor['strength']})\n\n"
+        "⚙️🔧 | Выбери раздел для улучшения:"
     )
-    await message.answer(forge_text, reply_markup=get_forge_kb())
+    await send_image_with_text(message, "images/kusnya.png", forge_text, reply_markup=get_forge_kb())
     await state.set_state(ForgeMenu.viewing_forge)
 
 @dp.message(ForgeMenu.viewing_forge)
@@ -2286,13 +2357,13 @@ async def handle_weapons_menu(message: types.Message, state: FSMContext):
         weapon = _get_weapon_info(weapon_id)
         armor = _get_armor_info(armor_id)
         forge_text = (
-            "🔨 <b>КУЗНЯ</b>\n\n"
-            f"{E_POW} Общая сила: {int(player['strength'])}\n\n"
-            f"⚔️ Оружие: {weapon['emoji']} {weapon['name']} (сила: {weapon['strength']})\n"
-            f"🛡️ Броня:  {armor['emoji']} {armor['name']} (сила: {armor['strength']})\n\n"
-            "Выбери раздел для улучшения:"
+            f"{E_FORGE} <b>КУЗНЯ</b>\n\n"
+            f"{E_ATK} Общая сила: {int(player['strength'])}\n\n"
+            f"{E_WEAPON} | Оружие: {weapon['emoji']} {weapon['name']} (сила: {weapon['strength']})\n"
+            f"{E_ARMOR_E} | Броня: {armor['emoji']} {armor['name']} (сила: {armor['strength']})\n\n"
+            "⚙️🔧 | Выбери раздел для улучшения:"
         )
-        await message.answer(forge_text, reply_markup=get_forge_kb())
+        await send_image_with_text(message, "images/kusnya.png", forge_text, reply_markup=get_forge_kb())
         await state.set_state(ForgeMenu.viewing_forge)
         return
 
@@ -2366,13 +2437,13 @@ async def handle_armor_menu(message: types.Message, state: FSMContext):
         weapon = _get_weapon_info(weapon_id)
         armor = _get_armor_info(armor_id)
         forge_text = (
-            "🔨 <b>КУЗНЯ</b>\n\n"
-            f"{E_POW} Общая сила: {int(player['strength'])}\n\n"
-            f"⚔️ Оружие: {weapon['emoji']} {weapon['name']} (сила: {weapon['strength']})\n"
-            f"🛡️ Броня:  {armor['emoji']} {armor['name']} (сила: {armor['strength']})\n\n"
-            "Выбери раздел для улучшения:"
+            f"{E_FORGE} <b>КУЗНЯ</b>\n\n"
+            f"{E_ATK} Общая сила: {int(player['strength'])}\n\n"
+            f"{E_WEAPON} | Оружие: {weapon['emoji']} {weapon['name']} (сила: {weapon['strength']})\n"
+            f"{E_ARMOR_E} | Броня: {armor['emoji']} {armor['name']} (сила: {armor['strength']})\n\n"
+            "⚙️🔧 | Выбери раздел для улучшения:"
         )
-        await message.answer(forge_text, reply_markup=get_forge_kb())
+        await send_image_with_text(message, "images/kusnya.png", forge_text, reply_markup=get_forge_kb())
         await state.set_state(ForgeMenu.viewing_forge)
         return
 
@@ -2446,13 +2517,13 @@ async def handle_skills_menu(message: types.Message, state: FSMContext):
         weapon = _get_weapon_info(weapon_id)
         armor = _get_armor_info(armor_id)
         forge_text = (
-            "🔨 <b>КУЗНЯ</b>\n\n"
-            f"{E_POW} Общая сила: {int(player['strength'])}\n\n"
-            f"⚔️ Оружие: {weapon['emoji']} {weapon['name']} (сила: {weapon['strength']})\n"
-            f"🛡️ Броня:  {armor['emoji']} {armor['name']} (сила: {armor['strength']})\n\n"
-            "Выбери раздел для улучшения:"
+            f"{E_FORGE} <b>КУЗНЯ</b>\n\n"
+            f"{E_ATK} Общая сила: {int(player['strength'])}\n\n"
+            f"{E_WEAPON} | Оружие: {weapon['emoji']} {weapon['name']} (сила: {weapon['strength']})\n"
+            f"{E_ARMOR_E} | Броня: {armor['emoji']} {armor['name']} (сила: {armor['strength']})\n\n"
+            "⚙️🔧 | Выбери раздел для улучшения:"
         )
-        await message.answer(forge_text, reply_markup=get_forge_kb())
+        await send_image_with_text(message, "images/kusnya.png", forge_text, reply_markup=get_forge_kb())
         await state.set_state(ForgeMenu.viewing_forge)
         return
 
@@ -2566,13 +2637,13 @@ async def show_leaderboard(message: types.Message):
         await message.answer("📊 Рейтинг пуст. Прокачайся!", reply_markup=get_main_kb())
         return
     
-    response = "(🏆) РЕЙТИНГ ИГРОКОВ\n\n"
+    response = "🥇 <b>РЕЙТИНГ ИГРОКОВ</b>\n\n"
     
     for index, (nickname, strength, wins, rating_pts) in enumerate(leaderboard, 1):
         medal = "🥇" if index == 1 else "🥈" if index == 2 else "🥉" if index == 3 else f"{index}."
-        response += f"{medal} {html.escape(nickname)} — | {int(strength)}🗡️ | | {wins}🏆 | | {rating_pts}💠 |\n"
+        response += f"{medal} {html.escape(nickname)} — | {int(strength)}{E_ATK} | | {wins}{E_TROPHY} | | {rating_pts}💠 |\n"
     
-    await message.answer(response, reply_markup=get_main_kb())
+    await send_image_with_text(message, "images/league.png", response, reply_markup=get_main_kb())
 
 # ============== RAID ==============
 def _get_raid_floor_text(floor_id: int, enemy_info: dict) -> str:
@@ -3217,7 +3288,7 @@ async def open_online(message: types.Message, state: FSMContext):
         f'{E_NICK} {html.escape(player["nickname"])}\n'
         f'{E_HP} {health}\n'
         f'{E_DMG} {damage}\n'
-        f'{E_POW} {int(buffed_strength)}🗡️ | {player["wins"]}🏆\n\n'
+        f'{int(buffed_strength)}{E_ATK} | {player["wins"]}{E_TROPHY}\n\n'
         '🔍 Ищем соперника...'
     )
 
@@ -3230,7 +3301,7 @@ async def open_online(message: types.Message, state: FSMContext):
         "chat_id": message.chat.id
     }
 
-    await message.answer(search_text, reply_markup=get_searching_kb())
+    await send_image_with_text(message, "images/online.png", search_text, reply_markup=get_searching_kb())
     await state.set_state(OnlineState.searching)
 
     # Проверяем, есть ли ещё кто-то в очереди
@@ -3250,7 +3321,7 @@ async def open_online(message: types.Message, state: FSMContext):
             f'{E_NICK} {html.escape(opponent_data["nickname"])}\n'
             f'{E_HP} {opponent_data["health"]}\n'
             f'{E_DMG} {opponent_data["damage"]}\n'
-            f'{E_POW} {int(opponent_data["strength"])}🗡️ | {opponent_data["wins"]}🏆\n\n'
+            f'{int(opponent_data["strength"])}{E_ATK} | {opponent_data["wins"]}{E_TROPHY}\n\n'
             'Подтвердите участие!'
         )
         match_text_opp = (
@@ -3259,7 +3330,7 @@ async def open_online(message: types.Message, state: FSMContext):
             f'{E_NICK} {html.escape(my_data["nickname"])}\n'
             f'{E_HP} {my_data["health"]}\n'
             f'{E_DMG} {my_data["damage"]}\n'
-            f'{E_POW} {int(my_data["strength"])}🗡️ | {my_data["wins"]}🏆\n\n'
+            f'{int(my_data["strength"])}{E_ATK} | {my_data["wins"]}{E_TROPHY}\n\n'
             'Подтвердите участие!'
         )
 
@@ -3625,18 +3696,18 @@ def _format_clan_menu(clan: dict, leader_nickname: str) -> str:
         exp_display = f"{clan['clan_exp']}📈 (МАКС 🧬)"
     else:
         max_exp = CLAN_LEVEL_EXP[clan['clan_level']]
-        exp_display = f"{clan['clan_exp']} / {max_exp}📈"
+        exp_display = f"{clan['clan_exp']} / {max_exp} {E_CLAN_EXP}"
     co_leaders = get_clan_co_leaders(clan['clan_id'])
     co_str = ", ".join(nick for _, nick in co_leaders) if co_leaders else "—"
     return (
-        f"[🛡️] Клан: {html.escape(clan['clan_name'])}\n"
-        f"[👑] Глава: {html.escape(leader_nickname)}\n"
-        f"[⭐] Соруководители: {html.escape(co_str)}\n"
-        f"👥 - {clan['members_count']} соклановцев\n"
-        f"(Минимальный порог входа) - {clan['min_power']}⚔️\n"
-        f"Уровень клана - {clan['clan_level']}🧬\n"
+        f"| {E_CLAN} | Клан: {html.escape(clan['clan_name'])}\n"
+        f"| {E_CROWN} | Глава: {html.escape(leader_nickname)}\n"
+        f"| {E_CLAN_STAR} | Соруководители: {html.escape(co_str)}\n"
+        f"{E_CLAN_EXP} - {clan['members_count']} соклановцев\n"
+        f"(Минимальный порог входа) - {clan['min_power']} {E_ATK}\n"
+        f"Уровень клана - {clan['clan_level']} {E_CLAN_LVL}\n"
         f"{exp_display}\n\n"
-        f"(🗒️) Описание клана:\n{html.escape(clan['description'] or '—')}"
+        f"| {E_BOOK} | Описание клана:\n{html.escape(clan['description'] or '—')}"
     )
 
 @dp.message(F.text == "🛡️ Кланы")
@@ -3649,12 +3720,9 @@ async def open_clans(message: types.Message, state: FSMContext):
 
     my_clan = get_player_clan(user_id)
     if my_clan:
-        leader = get_player(my_clan['leader_id'])
-        leader_name = leader['nickname'] if leader else "—"
-        clan_text = _format_clan_menu(my_clan, leader_name)
         is_leader = (my_clan['leader_id'] == user_id)
         is_co_leader = not is_leader and get_clan_member_role(user_id, my_clan['clan_id']) == 'co_leader'
-        await message.answer(clan_text, reply_markup=get_my_clan_kb(is_leader, is_co_leader))
+        await _show_clan_info(message, my_clan, is_leader, is_co_leader)
         await state.set_state(ClanMenu.viewing_my_clan)
         await state.update_data(clan_id=my_clan['clan_id'])
     else:
@@ -3899,10 +3967,7 @@ async def handle_my_clan(message: types.Message, state: FSMContext):
         return
 
     # Обновить и показать информацию о клане
-    leader = get_player(clan['leader_id'])
-    leader_name = leader['nickname'] if leader else "—"
-    clan_text = _format_clan_menu(clan, leader_name)
-    await message.answer(clan_text, reply_markup=get_my_clan_kb(is_leader, is_co_leader))
+    await _show_clan_info(message, clan, is_leader, is_co_leader)
 
 @dp.message(ClanMenu.kicking_member)
 async def handle_kick_member(message: types.Message, state: FSMContext):
@@ -4088,10 +4153,7 @@ async def handle_clan_chat(message: types.Message, state: FSMContext):
         if clan:
             is_leader = clan['leader_id'] == user_id
             is_co_leader = not is_leader and get_clan_member_role(user_id, clan_id) == 'co_leader'
-            leader = get_player(clan['leader_id'])
-            leader_name = leader['nickname'] if leader else "—"
-            clan_text = _format_clan_menu(clan, leader_name)
-            await message.answer(clan_text, reply_markup=get_my_clan_kb(is_leader, is_co_leader))
+            await _show_clan_info(message, clan, is_leader, is_co_leader)
         else:
             await message.answer("Вернулись в главное меню.", reply_markup=get_main_kb())
         await state.set_state(ClanMenu.viewing_my_clan)
@@ -4197,13 +4259,13 @@ async def handle_delete_clan_confirm(message: types.Message, state: FSMContext):
 
 # ============== CLAN CUSTOMIZATION ==============
 async def _show_clan_info(message, clan: dict, is_leader: bool, is_co_leader: bool = False):
-    """Отправить информацию о клане с картиной если есть"""
+    """Отправить информацию о клане с картиной"""
     leader = get_player(clan['leader_id'])
     leader_name = leader['nickname'] if leader else "—"
     clan_text = _format_clan_menu(clan, leader_name)
     kb = get_my_clan_kb(is_leader, is_co_leader)
 
-    # Если картинка загружена - показать её
+    # Сначала проверяем загруженную картинку
     if clan.get('clan_image'):
         try:
             await message.answer_photo(clan['clan_image'], caption=clan_text, reply_markup=kb)
@@ -4211,15 +4273,15 @@ async def _show_clan_info(message, clan: dict, is_leader: bool, is_co_leader: bo
         except Exception:
             pass
 
-    # Если нет загруженной - показать дефолтную
+    # Если нет - показываем дефолтную myclan.png
     try:
-        photo = FSInputFile("images/clan.png")
+        photo = FSInputFile("images/myclan.png")
         await message.answer_photo(photo, caption=clan_text, reply_markup=kb)
         return
     except Exception:
         pass
 
-    # Если и дефолтной нет - просто текст
+    # Если ничего - просто текст
     await message.answer(clan_text, reply_markup=kb)
 
 @dp.message(ClanMenu.selecting_clan_customization)
@@ -4591,6 +4653,180 @@ async def activity_monitor_loop():
         except Exception as e:
             import logging
             logging.error(f"Activity monitor error: {e}")
+
+# ============== MARKET ==============
+# Material key -> display emoji and name (for sell buttons)
+_MARKET_MAT_INFO = {
+    'food':  (E_FOOD,   'Еду',       "Продать"),
+    'wood':  (E_WOOD,   'Древесину',  "Продать"),
+    'stone': (E_STONE,  'Камень',    "Продать"),
+    'iron':  (E_IRON,   'Железо',    "Продать"),
+    'gold':  (E_GOLD_M, 'Золото',    "Продать"),
+}
+
+def _get_market_text(player: dict) -> str:
+    """Сформировать текст главной страницы рынка"""
+    nickname = html.escape(player['nickname'])
+    lines = [
+        f"🛒 <b>РЫНОК</b> | Продажа ресурсов.\n",
+        f"{nickname}, курс ресурсов:\n",
+        f"{E_FOOD} Еда | {MARKET_PRICES['food']}{E_COINS}",
+        f"{E_WOOD} Древесина | {MARKET_PRICES['wood']}{E_COINS}",
+        f"{E_STONE} Камень | {MARKET_PRICES['stone']}{E_COINS}",
+        f"{E_IRON} Железо | {MARKET_PRICES['iron']}{E_COINS}",
+        f"{E_GOLD_M} Золото | {MARKET_PRICES['gold']}{E_COINS}",
+        f"{E_TICKET} Билет рейда | {MARKET_RAID_TICKET_PRICE}{E_COINS}",
+    ]
+    return "\n".join(lines)
+
+@dp.message(F.text == "🛒 Рынок")
+async def open_market(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    player = get_player(user_id)
+    if not player:
+        await message.answer("Сначала зарегистрируйся! /start")
+        return
+    await state.set_state(MarketMenu.viewing_market)
+    await send_image_with_text(message, "images/rynok.png", _get_market_text(player), reply_markup=get_market_kb())
+
+@dp.message(MarketMenu.viewing_market)
+async def handle_market(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+    player = get_player(user_id)
+    if not player:
+        await message.answer("Сначала зарегистрируйся! /start")
+        return
+
+    if text == "❌ Выйти с рынка":
+        await state.clear()
+        await message.answer("Вернулись в главное меню!", reply_markup=get_main_kb())
+        return
+
+    # Check each sell button
+    for mat_key, (emoji, mat_name, _) in _MARKET_MAT_INFO.items():
+        btn = f"Продать {emoji} {mat_name}"
+        if text == btn:
+            inv = get_inventory(user_id)
+            amount = inv.get(mat_key, 0)
+            price = MARKET_PRICES[mat_key]
+            if amount == 0:
+                await message.answer(
+                    f"❌ У тебя нет {emoji} {mat_name} для продажи!",
+                    reply_markup=get_market_kb()
+                )
+                return
+            sell_text = (
+                f"{emoji} <b>{mat_name}</b>\n\n"
+                f"Доступно: {amount}\n"
+                f"Цена: {price}{E_COINS} за единицу\n\n"
+                f"Сколько хочешь продать?"
+            )
+            await state.update_data(sell_material=mat_key)
+            await state.set_state(MarketMenu.selling_resource)
+            await message.answer(sell_text, reply_markup=get_sell_qty_kb(mat_key, amount))
+            return
+
+    # Buy raid ticket button
+    ticket_btn = f"Купить {E_TICKET} Билет рейда ({MARKET_RAID_TICKET_PRICE}{E_COINS})"
+    if text == ticket_btn:
+        if player['coins'] < MARKET_RAID_TICKET_PRICE:
+            await message.answer(
+                f"❌ Недостаточно монет!\n"
+                f"Нужно: {MARKET_RAID_TICKET_PRICE}{E_COINS}\n"
+                f"У тебя: {player['coins']}{E_COINS}",
+                reply_markup=get_market_kb()
+            )
+            return
+        remove_coins_from_player(user_id, MARKET_RAID_TICKET_PRICE)
+        add_raid_tickets_to_player(user_id, 1)
+        updated = get_player(user_id)
+        await message.answer(
+            f"{E_PLUS} Куплен {E_TICKET} Билет рейда!\n\n"
+            f"- {MARKET_RAID_TICKET_PRICE}{E_COINS}\n"
+            f"Теперь билетов: {updated['raid_tickets']} {E_TICKET}",
+            reply_markup=get_market_kb()
+        )
+        return
+
+    # Fallback: refresh market
+    await send_image_with_text(message, "images/rynok.png", _get_market_text(player), reply_markup=get_market_kb())
+
+@dp.message(MarketMenu.selling_resource)
+async def handle_market_sell(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+    player = get_player(user_id)
+    data = await state.get_data()
+    mat_key = data.get('sell_material')
+
+    if not player or not mat_key:
+        await state.set_state(MarketMenu.viewing_market)
+        await message.answer("Произошла ошибка. Вернулись на рынок.", reply_markup=get_market_kb())
+        return
+
+    if text == "⬅️ Назад на рынок":
+        await state.set_state(MarketMenu.viewing_market)
+        await send_image_with_text(message, "images/rynok.png", _get_market_text(player), reply_markup=get_market_kb())
+        return
+
+    emoji, mat_name, _ = _MARKET_MAT_INFO[mat_key]
+    inv = get_inventory(user_id)
+    current_amount = inv.get(mat_key, 0)
+    price = MARKET_PRICES[mat_key]
+
+    # Parse quantity from button text
+    qty = None
+    if text.startswith("Продать всё (") and text.endswith(")"):
+        try:
+            qty = int(text[len("Продать всё ("):-1])
+        except ValueError:
+            pass
+    elif text.startswith("Продать "):
+        try:
+            qty = int(text[len("Продать "):])
+        except ValueError:
+            pass
+
+    if qty is None or qty <= 0:
+        await message.answer(
+            "Выбери количество из кнопок ниже!",
+            reply_markup=get_sell_qty_kb(mat_key, current_amount)
+        )
+        return
+
+    if qty > current_amount:
+        await message.answer(
+            f"❌ Недостаточно {emoji} {mat_name}!\nДоступно: {current_amount}",
+            reply_markup=get_sell_qty_kb(mat_key, current_amount)
+        )
+        return
+
+    # Calculate earnings (round to avoid floating point noise)
+    earned = int(qty * price)
+    if earned == 0:
+        earned = 1  # at least 1 coin
+
+    ok = remove_inventory_material(user_id, mat_key, qty)
+    if not ok:
+        await message.answer(
+            f"❌ Ошибка при продаже. Попробуй снова.",
+            reply_markup=get_sell_qty_kb(mat_key, current_amount)
+        )
+        return
+
+    add_coins_to_player(user_id, earned)
+    updated = get_player(user_id)
+    updated_inv = get_inventory(user_id)
+    await message.answer(
+        f"{E_PLUS} Продано: {qty} {emoji} {mat_name}\n"
+        f"{E_PLUS} Получено: {earned}{E_COINS}\n\n"
+        f"Монет теперь: {updated['coins']}{E_COINS}\n"
+        f"Осталось {emoji}: {updated_inv[mat_key]}",
+        reply_markup=get_sell_qty_kb(mat_key, updated_inv[mat_key])
+    )
+    # Keep state in selling_resource with updated inventory
+    await state.update_data(sell_material=mat_key)
 
 # ============== MAIN ==============
 async def main():
