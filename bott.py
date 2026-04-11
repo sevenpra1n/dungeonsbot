@@ -59,6 +59,12 @@ E_PLUS     = '<tg-emoji emoji-id="5397916757333654639">➕</tg-emoji>'   # пл�
 E_CHECK    = '✅'   # галочка
 E_BELL     = '<tg-emoji emoji-id="5206222720416643915">🔔</tg-emoji>'   # колокол
 E_TIMER    = '🕑'   # таймер
+E_HOURGLASS= '<tg-emoji emoji-id="5906598824012420908">⌛️</tg-emoji>'  # песочные часы
+E_MAP_E    = '<tg-emoji emoji-id="6285108394818802672">🗺</tg-emoji>'   # карта
+E_BOOK2    = '<tg-emoji emoji-id="5334859426178313935">📕</tg-emoji>'   # книга (действие)
+E_MARKET   = '<tg-emoji emoji-id="5246762912428603768">📉</tg-emoji>'   # рынок
+E_TRASH    = '<tg-emoji emoji-id="5276384644739129761">🗑</tg-emoji>'   # продажа
+E_CHART    = '<tg-emoji emoji-id="5278778882848220741">📊</tg-emoji>'   # покупка
 
 
 # Ваш токен от BotFather
@@ -728,7 +734,8 @@ LOCATIONS = {
             "gather": {
                 "name": "Добыча еды",
                 "time": 25,
-                "emoji": "🌽",
+                "emoji": "🥕",
+                "display_emoji": E_FOOD,
                 "rewards": {
                     "food": (2, 5),
                     "experience": (3, 8),
@@ -740,6 +747,7 @@ LOCATIONS = {
                 "name": "Обыскать локацию",
                 "time": 50,
                 "emoji": "🗺️",
+                "display_emoji": E_MAP_E,
                 "rewards": {
                     "coins": (20, 50),
                     "experience": (5, 15),
@@ -846,14 +854,14 @@ def set_player_armor(user_id: int, armor_id: int):
     conn.close()
 
 def get_leaderboard(limit: int = 10):
-    """Получить рейтинг игроков (по силе)"""
+    """Получить рейтинг игроков (по очкам рейтинга, победам, силе)"""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     
     cursor.execute('''
         SELECT nickname, strength, COALESCE(wins, 0), COALESCE(rating_points, 0) FROM players
         WHERE strength > 0
-        ORDER BY strength DESC
+        ORDER BY rating_points DESC, wins DESC, strength DESC
         LIMIT ?
     ''', (limit,))
     
@@ -1231,11 +1239,11 @@ ARMOR = {
 
 # ============== ENEMIES ==============
 ENEMIES = {
-    1: {"name": "Гоблин", "health": 50, "reward": 30, "base_damage": 8},
-    2: {"name": "Лучник", "health": 120, "reward": 60, "base_damage": 15},
-    3: {"name": "Дровосек", "health": 300, "reward": 90, "base_damage": 25},
-    4: {"name": "Гоблин-гигант", "health": 640, "reward": 120, "base_damage": 40},
-    5: {"name": "Дух леса", "health": 950, "reward": 190, "base_damage": 60}
+    1: {"name": "Гоблин", "health": 50, "reward": 30, "base_damage": 8, "rating_points": 5},
+    2: {"name": "Лучник", "health": 120, "reward": 60, "base_damage": 15, "rating_points": 10},
+    3: {"name": "Дровосек", "health": 300, "reward": 90, "base_damage": 25, "rating_points": 15},
+    4: {"name": "Гоблин-гигант", "health": 640, "reward": 120, "base_damage": 40, "rating_points": 25},
+    5: {"name": "Дух леса", "health": 950, "reward": 190, "base_damage": 60, "rating_points": 40}
 }
 
 # ============== RAID FLOORS ==============
@@ -1965,10 +1973,12 @@ async def handle_map(message: types.Message, state: FSMContext):
     for loc_id, loc in LOCATIONS.items():
         if text == loc['name']:
             await state.update_data(selected_location=loc_id)
-            loc_text = f"{loc['emoji']} <b>{loc['name']}</b>\n\nВыбери действие:\n"
+            loc_text = f"{loc['emoji']} <b>{loc['name']}</b>:\n\n{E_BOOK2} Выбери действие:\n"
             for act_key, act in loc['activities'].items():
-                monster_note = f"(⚠️ {int(act['monster_chance']*100)}% шанс монстра)" if act['monster_chance'] > 0 else ""
-                loc_text += f"\n{act['time']}s{E_TIMER}│{act['emoji']}│{E_BULLET} {act['name']} {monster_note}\n"
+                disp_emoji = act.get('display_emoji', act['emoji'])
+                loc_text += f"\n{act['time']}s{E_HOURGLASS} │ {disp_emoji} │ {act['name']}\n"
+            if loc_id == 1:
+                loc_text += f"\n10s{E_HOURGLASS} | {E_SKULL} | Поиск врага\n"
             await send_image_with_text(message, loc.get('image', 'images/meadow.png'), loc_text, reply_markup=get_location_activities_kb(loc_id))
             await state.set_state(LocationMenu.viewing_location)
             return
@@ -2737,8 +2747,9 @@ async def open_raid(message: types.Message, state: FSMContext):
 
         if new_player_health <= 0:
             update_player_raid_floor(user_id, 0)
+            update_rating_points(user_id, -10)
             log += (f"👤 {html.escape(player['nickname'])} повержен!\n\n❌ <b>ВЫ ПРОИГРАЛИ!</b>\n\n"
-                    f"Рекорд: {player['raid_max_floor']} этаж.")
+                    f"Рекорд: {player['raid_max_floor']} этаж.\n-10💠 очков рейтинга")
             await message.answer(log, reply_markup=get_end_battle_kb())
             await state.clear()
             return
@@ -2860,8 +2871,9 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
                 if new_max > player['raid_max_floor']:
                     update_player_raid_max_floor(user_id, new_max)
                 update_player_raid_floor(user_id, 0)
+                update_rating_points(user_id, -10)
                 log += (f"👤 {html.escape(player['nickname'])} повержен!\n\n❌ <b>ВЫ ПРОИГРАЛИ!</b>\n\n"
-                        f"Пройдено этажей: {floors_completed}. Рекорд: {new_max}.")
+                        f"Пройдено этажей: {floors_completed}. Рекорд: {new_max}.\n-10💠 очков рейтинга")
                 await message.answer(log, reply_markup=get_end_battle_kb())
                 await state.clear()
                 return
@@ -2980,8 +2992,9 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
         if new_max > player['raid_max_floor']:
             update_player_raid_max_floor(user_id, new_max)
         update_player_raid_floor(user_id, 0)
+        update_rating_points(user_id, -10)
         log += (f"👤 {html.escape(player['nickname'])} повержен!\n\n❌ <b>ВЫ ПРОИГРАЛИ!</b>\n\n"
-                f"Пройдено этажей: {floors_completed}. Рекорд: {new_max}.")
+                f"Пройдено этажей: {floors_completed}. Рекорд: {new_max}.\n-10💠 очков рейтинга")
         await message.answer(log, reply_markup=get_end_battle_kb())
         await state.clear()
         return
@@ -3047,9 +3060,13 @@ async def start_battle(message: types.Message, state: FSMContext):
         battle_log += f"{E_DMG} Урон: {enemy_damage}\n\n"
         
         if new_player_health <= 0:
+            if not data.get('is_location_battle'):
+                update_rating_points(user_id, -10)
             battle_log += f"👤 {html.escape(player['nickname'])} повержен!\n\n"
             battle_log += f"❌ <b>ВЫ ПРОИГРАЛИ!</b>\n\n"
             battle_log += f"Ты был повержен {enemy_info['name']}..."
+            if not data.get('is_location_battle'):
+                battle_log += "\n-10💠 очков рейтинга"
             
             await message.answer(battle_log, reply_markup=get_end_battle_kb())
             await state.clear()
@@ -3169,7 +3186,11 @@ async def battle_round(message: types.Message, state: FSMContext):
             new_player_health = int(round(new_player_health - enemy_damage))
             battle_log += f"☠️ {enemy_info['name']} атакует (без ответа)!\n{E_DMG} Урон: {enemy_damage}\n\n"
             if new_player_health <= 0:
+                if not data.get('is_location_battle'):
+                    update_rating_points(user_id, -10)
                 battle_log += f"👤 {html.escape(player['nickname'])} повержен!\n\n❌ <b>ВЫ ПРОИГРАЛИ!</b>\n\nТы был повержен {enemy_info['name']}..."
+                if not data.get('is_location_battle'):
+                    battle_log += "\n-10💠 очков рейтинга"
                 await message.answer(battle_log, reply_markup=get_end_battle_kb())
                 await state.clear()
                 return
@@ -3201,7 +3222,8 @@ async def battle_round(message: types.Message, state: FSMContext):
     if new_enemy_health <= 0:
         reward = enemy_info['reward']
         add_coins_to_player(user_id, reward)
-        update_rating_points(user_id, 5)
+        rating_pts = enemy_info.get('rating_points', 5)
+        update_rating_points(user_id, rating_pts)
         player_clan = get_player_clan(user_id)
         if player_clan:
             add_clan_exp(player_clan['clan_id'], 10)
@@ -3209,7 +3231,7 @@ async def battle_round(message: types.Message, state: FSMContext):
         battle_log += f"☠️ {enemy_info['name']} повержен!\n\n"
         battle_log += f"✅ <b>ВЫ ПОБЕДИЛИ!</b>\n\n"
         battle_log += f"💰 Награда: +{reward} монет\n"
-        battle_log += f"+5💠 очков рейтинга\n"
+        battle_log += f"+{rating_pts}💠 очков рейтинга\n"
         
         await message.answer(battle_log, reply_markup=get_end_battle_kb())
         await state.clear()
@@ -3230,7 +3252,11 @@ async def battle_round(message: types.Message, state: FSMContext):
             battle_log += f"☠️ {enemy_info['name']} контратакует!\n{E_DMG} Урон: {enemy_damage_dealt}\n\n"
     
     if new_player_health <= 0:
+        if not data.get('is_location_battle'):
+            update_rating_points(user_id, -10)
         battle_log += f"👤 {html.escape(player['nickname'])} повержен!\n\n❌ <b>ВЫ ПРОИГРАЛИ!</b>\n\nТы был повержен {enemy_info['name']}..."
+        if not data.get('is_location_battle'):
+            battle_log += "\n-10💠 очков рейтинга"
         await message.answer(battle_log, reply_markup=get_end_battle_kb())
         await state.clear()
         return
@@ -4668,13 +4694,16 @@ def _get_market_text(player: dict) -> str:
     """Сформировать текст главной страницы рынка"""
     nickname = html.escape(player['nickname'])
     lines = [
-        f"🛒 <b>РЫНОК</b> | Продажа ресурсов.\n",
+        f"{E_MARKET} <b>РЫНОК</b> | Продажа ресурсов.\n",
         f"{nickname}, курс ресурсов:\n",
+        f"{E_TRASH} | Продажа:",
         f"{E_FOOD} Еда | {MARKET_PRICES['food']}{E_COINS}",
         f"{E_WOOD} Древесина | {MARKET_PRICES['wood']}{E_COINS}",
         f"{E_STONE} Камень | {MARKET_PRICES['stone']}{E_COINS}",
         f"{E_IRON} Железо | {MARKET_PRICES['iron']}{E_COINS}",
         f"{E_GOLD_M} Золото | {MARKET_PRICES['gold']}{E_COINS}",
+        "",
+        f"{E_CHART} | Покупка:",
         f"{E_TICKET} Билет рейда | {MARKET_RAID_TICKET_PRICE}{E_COINS}",
     ]
     return "\n".join(lines)
