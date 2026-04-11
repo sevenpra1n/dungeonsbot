@@ -18,27 +18,28 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, FSInputFile
 # ============== EMOJI CONSTANTS ==============
 # Custom tg-emoji for rich display in messages (used via variables, NOT inline in text)
 E_COINS    = '<tg-emoji emoji-id="5215420556089776398">👛</tg-emoji>'   # монеты
-E_CRYSTALS = '💎'   # кристаллы
-E_TICKET   = '📕'   # билет рейда
-E_EXP      = '📕'   # опыт
-E_STAR     = '⭐️'  # уровень/звезда
-E_PROFILE  = '👤'   # профиль
-E_ONLINE   = '🌐'   # онлайн режим
-E_NICK     = '🆔'   # никнейм
-E_HP       = '❤️'   # HP
-E_DMG      = '💥'   # урон
-E_POW      = '👊'   # мощь/сила
-E_SWORD    = '🗡'   # боевой меч / начало боя
-E_CURSOR   = '🖱'   # твой ход (начало)
-E_MANA     = '💜'   # мана
-E_CROWN    = '👑'   # ты (PvP)
-E_SKULL    = '💀'   # враг (PvP)
-E_ESWORD   = '🗡'   # враг меч (PvP)
+E_CRYSTALS = '<tg-emoji emoji-id="5429321386403327800">💎</tg-emoji>'   # кристаллы
+E_TICKET   = '<tg-emoji emoji-id="5334675412599480338">📕</tg-emoji>'   # билет рейда
+E_EXP      = '<tg-emoji emoji-id="5336829549151823064">📕</tg-emoji>'   # опыт
+E_STAR     = '<tg-emoji emoji-id="5206476089127372379">⭐️</tg-emoji>'  # уровень/звезда
+E_PROFILE  = '<tg-emoji emoji-id="5275979556308674886">👤</tg-emoji>'   # профиль
+E_ONLINE   = '<tg-emoji emoji-id="5447410659077661506">🌐</tg-emoji>'   # онлайн режим
+E_NICK     = '<tg-emoji emoji-id="5280968723463680459">🆔</tg-emoji>'   # никнейм
+E_HP       = '<tg-emoji emoji-id="5267283746477861842">❤️</tg-emoji>'   # HP
+E_DMG      = '<tg-emoji emoji-id="5429507440091612100">💥</tg-emoji>'   # урон
+E_POW      = '<tg-emoji emoji-id="5242487302550199778">👊</tg-emoji>'   # мощь/сила
+E_SWORD    = '<tg-emoji emoji-id="5393607290228067750">🗡</tg-emoji>'   # боевой меч / начало боя
+E_CURSOR   = '<tg-emoji emoji-id="5438335517735267694">🖱</tg-emoji>'   # твой ход (начало)
+E_MANA     = '<tg-emoji emoji-id="6280806319351927135">💜</tg-emoji>'   # мана
+E_CROWN    = '<tg-emoji emoji-id="5217822164362739968">👑</tg-emoji>'   # ты (PvP)
+E_SKULL    = '<tg-emoji emoji-id="5274108672849491069">💀</tg-emoji>'   # враг (PvP)
+E_ESWORD   = '<tg-emoji emoji-id="5438255528264348146">🗡</tg-emoji>'   # враг меч (PvP)
 E_ANGRY    = '😡'   # кик из клана
 
 # Additional emoji
-E_GIFT     = '🎁'   # подарок/сила
-E_TROPHY   = '🏆'   # трофей/победы
+E_GIFT     = '<tg-emoji emoji-id="5429203678529613915">🎁</tg-emoji>'   # подарок/награда
+E_TROPHY   = '<tg-emoji emoji-id="5312315739842026755">🏆</tg-emoji>'   # трофей/победы
+E_ATK      = '<tg-emoji emoji-id="5408935401442267103">⚔️</tg-emoji>'   # сила (профиль)
 E_BULLET   = '▪️'   # маркер-пуля
 E_INV_BOX  = '📦'   # инвентарь
 E_WOOD     = '<tg-emoji emoji-id="5449918202718985124">🌳</tg-emoji>'   # древесина
@@ -46,9 +47,9 @@ E_STONE    = '<tg-emoji emoji-id="5433955200849159326">🪨</tg-emoji>'   # ка
 E_FOOD     = '<tg-emoji emoji-id="6284888960644682300">🥕</tg-emoji>'   # еда
 E_IRON     = '<tg-emoji emoji-id="6280718212392816659">⛰</tg-emoji>'   # железо
 E_GOLD_M   = '<tg-emoji emoji-id="6278282858561803026">🥇</tg-emoji>'   # золото (материал)
-E_PLUS     = '➕'   # плюс (награда)
+E_PLUS     = '<tg-emoji emoji-id="5397916757333654639">➕</tg-emoji>'   # плюс (награда)
 E_CHECK    = '✅'   # галочка
-E_BELL     = '🔔'   # колокол
+E_BELL     = '<tg-emoji emoji-id="5206222720416643915">🔔</tg-emoji>'   # колокол
 E_TIMER    = '🕑'   # таймер
 
 
@@ -553,11 +554,11 @@ def get_experience_progress(user_id: int) -> dict:
 
 # ============== STATUS SYSTEM ==============
 STATUSES = {
-    1: {"name": "Новичок",      "emoji": "🔸", "custom_emoji": "🔸", "required_level": 1,  "type": "default"},
-    2: {"name": "Продвинутый",  "emoji": "🌱", "custom_emoji": "🌱", "required_level": 5,  "type": "unlock_level"},
-    3: {"name": "Охотник",      "emoji": "🔪", "custom_emoji": "🔪", "required_level": 1,  "type": "free"},
-    4: {"name": "Любитель PVP", "emoji": "⚔️", "custom_emoji": "⚔️", "required_level": 1,  "type": "free"},
-    5: {"name": "Добытчик",     "emoji": "🥇", "custom_emoji": "🥇", "required_level": 1,  "type": "free"},
+    1: {"name": "Новичок",      "emoji": "🔸", "custom_emoji": '<tg-emoji emoji-id="5323718538710491847">🔸</tg-emoji>', "required_level": 1,  "type": "default"},
+    2: {"name": "Продвинутый",  "emoji": "🌱", "custom_emoji": '<tg-emoji emoji-id="5343920308229256142">🌱</tg-emoji>', "required_level": 5,  "type": "unlock_level"},
+    3: {"name": "Охотник",      "emoji": "🔪", "custom_emoji": '<tg-emoji emoji-id="5224460534534916102">🔪</tg-emoji>', "required_level": 1,  "type": "free"},
+    4: {"name": "Любитель PVP", "emoji": "⚔️", "custom_emoji": '<tg-emoji emoji-id="5454014806950429357">⚔️</tg-emoji>', "required_level": 1,  "type": "free"},
+    5: {"name": "Добытчик",     "emoji": "🥇", "custom_emoji": '<tg-emoji emoji-id="6278187557532472415">🥇</tg-emoji>', "required_level": 1,  "type": "free"},
 }
 
 def get_player_status_emoji(player: dict) -> str:
@@ -1711,14 +1712,14 @@ async def _send_profile(message, player: dict):
         f'{E_PROFILE} <b>Профиль игрока:</b>\n'
         f'🔒 {E_BULLET} {safe_nick}\n\n'
         f'{status_emoji} <b>{safe_status}</b>\n\n'
-        f'{E_EXP} Очки опыта {E_BULLET} {exp_info["current_exp"]} / {exp_info["needed_exp"]}\n'
+        f'┆{E_EXP}┆Очки опыта {E_BULLET} {exp_info["current_exp"]} / {exp_info["needed_exp"]}\n'
         f'Уровень {E_BULLET} {player["player_level"]}{E_STAR}\n\n'
         f'│{E_TROPHY}│ {player["wins"]} {E_BULLET} Победы\n'
-        f'│{E_GIFT}│ {int(player["strength"])} {E_BULLET} Сила\n'
+        f'│{E_ATK}│ {int(player["strength"])} {E_BULLET} Сила\n'
         f'│{E_HP}│ {health} {E_BULLET} Здоровье\n\n'
-        f'┆{E_COINS}┆ Монеты {E_BULLET} {player["coins"]}\n'
-        f'┆{E_CRYSTALS}┆ Кристаллы {E_BULLET} {player["crystals"]}\n'
-        f'┆{E_TICKET}┆ Билеты рейда {E_BULLET} {player["raid_tickets"]}\n'
+        f'┆{E_COINS}┆Монеты {E_BULLET} {player["coins"]}\n'
+        f'┆{E_CRYSTALS}┆Кристаллы {E_BULLET} {player["crystals"]}\n'
+        f'┆{E_TICKET}┆Билеты рейда {E_BULLET} {player["raid_tickets"]}\n'
     )
     await send_image_with_text(message, "images/profile.png", response, reply_markup=get_profile_kb())
 
@@ -2066,7 +2067,7 @@ async def _give_activity_rewards(user_id: int, activity: dict) -> bool:
         'iron':       (E_IRON,   'Железо'),
         'gold':       (E_GOLD_M, 'Золото'),
         'coins':      (E_COINS,  'Монеты'),
-        'experience': (E_STAR,   'Опыт'),
+        'experience': (E_EXP,    'Опыта'),
     }
     reward_lines = []
     for k, v in earned.items():
@@ -2078,10 +2079,10 @@ async def _give_activity_rewards(user_id: int, activity: dict) -> bool:
     act_emoji = act_cfg.get('emoji', '')
 
     text = (
-        f"{E_CHECK} <b>Активность завершена!</b>\n\n"
+        f"{E_BELL} <b>Добыча окончена!</b>\n\n"
         f"Локация: {loc_name}\n"
         f"Действие: {act_emoji} {act_name}\n\n"
-        f"{E_GIFT} <b>Награды:</b>\n"
+        f"{E_GIFT} <b>Получено:</b>\n"
         + "\n".join(reward_lines)
     )
     if exp_result.get('leveled_up'):
