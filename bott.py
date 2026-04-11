@@ -1280,6 +1280,7 @@ class BattleState(StatesGroup):
     battle_round = State()
 
 class RaidState(StatesGroup):
+    viewing_menu = State()
     in_raid = State()
 
 class OnlineState(StatesGroup):
@@ -1370,10 +1371,10 @@ MARKET_RAID_TICKET_PRICE = 57  # монет за 1 билет рейда
 def get_market_kb() -> ReplyKeyboardMarkup:
     """Клавиатура рынка (продажа ресурсов + покупка билета)"""
     kb = [
-        [KeyboardButton(text=f"Продать {E_FOOD} Еду"),        KeyboardButton(text=f"Продать {E_WOOD} Древесину")],
-        [KeyboardButton(text=f"Продать {E_STONE} Камень"),    KeyboardButton(text=f"Продать {E_IRON} Железо")],
-        [KeyboardButton(text=f"Продать {E_GOLD_M} Золото")],
-        [KeyboardButton(text=f"Купить {E_TICKET} Билет рейда ({MARKET_RAID_TICKET_PRICE}{E_COINS})")],
+        [KeyboardButton(text="Продать еду🥕"),        KeyboardButton(text="Продать древесину🌳")],
+        [KeyboardButton(text="Продать камень🪨"),      KeyboardButton(text="Продать железо⛰")],
+        [KeyboardButton(text="Продать золото🥇")],
+        [KeyboardButton(text=f"Купить билет рейда ({MARKET_RAID_TICKET_PRICE}💰)")],
         [KeyboardButton(text="❌ Выйти с рынка")],
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
@@ -1471,6 +1472,13 @@ def get_end_battle_kb():
     """Меню после боя"""
     kb = [
         [KeyboardButton(text="🏠 В главное меню")]
+    ]
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+def get_raid_menu_kb() -> ReplyKeyboardMarkup:
+    """Меню рейда (до начала боя)"""
+    kb = [
+        [KeyboardButton(text="⚔️ Начать рейд"), KeyboardButton(text="❌ Выйти")]
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
@@ -2685,6 +2693,45 @@ async def open_raid(message: types.Message, state: FSMContext):
         )
         return
 
+    # Показываем меню рейда
+    raid_menu_text = (
+        f'<tg-emoji emoji-id="5201888948091129713">🔗</tg-emoji> | Меню рейда {html.escape(player["nickname"])}:\n'
+        f'<tg-emoji emoji-id="5357471466919056181">🔘</tg-emoji> Рекорд этажа: {player["raid_max_floor"]} <tg-emoji emoji-id="5359669309058603132">🏆</tg-emoji>'
+    )
+    await state.set_state(RaidState.viewing_menu)
+    await send_image_with_text(message, "images/raid.png", raid_menu_text, reply_markup=get_raid_menu_kb())
+
+
+@dp.message(RaidState.viewing_menu)
+async def handle_raid_menu(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+
+    if text == "❌ Выйти":
+        await state.clear()
+        await message.answer("Вернулись в главное меню!", reply_markup=get_main_kb())
+        return
+
+    if text != "⚔️ Начать рейд":
+        await message.answer("Выбери действие!", reply_markup=get_raid_menu_kb())
+        return
+
+    player = get_player(user_id)
+    if not player:
+        await message.answer("Сначала зарегистрируйся! /start")
+        return
+
+    # Проверить наличие билета рейда (повторная проверка)
+    if player['raid_tickets'] <= 0:
+        await state.clear()
+        await message.answer(
+            f"🎫 Для входа в рейд нужен билет рейда!\n\n"
+            f"У тебя: {player['raid_tickets']} {E_TICKET}\n\n"
+            "Билеты можно получить за победы или через события.",
+            reply_markup=get_main_kb()
+        )
+        return
+
     # Снять билет
     remove_raid_ticket(user_id)
 
@@ -3722,7 +3769,7 @@ def _format_clan_menu(clan: dict, leader_nickname: str) -> str:
         exp_display = f"{clan['clan_exp']}📈 (МАКС 🧬)"
     else:
         max_exp = CLAN_LEVEL_EXP[clan['clan_level']]
-        exp_display = f"{clan['clan_exp']} / {max_exp} {E_CLAN_EXP}"
+        exp_display = f'<tg-emoji emoji-id="5267324424113124134">▫️</tg-emoji> {clan["clan_exp"]} / {max_exp} <tg-emoji emoji-id="6284926868026037181">🍾</tg-emoji>'
     co_leaders = get_clan_co_leaders(clan['clan_id'])
     co_str = ", ".join(nick for _, nick in co_leaders) if co_leaders else "—"
     return (
@@ -4681,13 +4728,22 @@ async def activity_monitor_loop():
             logging.error(f"Activity monitor error: {e}")
 
 # ============== MARKET ==============
-# Material key -> display emoji and name (for sell buttons)
+# Material key -> display emoji and name (for message text display)
 _MARKET_MAT_INFO = {
     'food':  (E_FOOD,   'Еду',       "Продать"),
     'wood':  (E_WOOD,   'Древесину',  "Продать"),
     'stone': (E_STONE,  'Камень',    "Продать"),
     'iron':  (E_IRON,   'Железо',    "Продать"),
     'gold':  (E_GOLD_M, 'Золото',    "Продать"),
+}
+
+# Button text -> material key (plain emoji for keyboard buttons)
+_MARKET_SELL_BUTTONS = {
+    "Продать еду🥕": 'food',
+    "Продать древесину🌳": 'wood',
+    "Продать камень🪨": 'stone',
+    "Продать железо⛰": 'iron',
+    "Продать золото🥇": 'gold',
 }
 
 def _get_market_text(player: dict) -> str:
@@ -4732,32 +4788,32 @@ async def handle_market(message: types.Message, state: FSMContext):
         await message.answer("Вернулись в главное меню!", reply_markup=get_main_kb())
         return
 
-    # Check each sell button
-    for mat_key, (emoji, mat_name, _) in _MARKET_MAT_INFO.items():
-        btn = f"Продать {emoji} {mat_name}"
-        if text == btn:
-            inv = get_inventory(user_id)
-            amount = inv.get(mat_key, 0)
-            price = MARKET_PRICES[mat_key]
-            if amount == 0:
-                await message.answer(
-                    f"❌ У тебя нет {emoji} {mat_name} для продажи!",
-                    reply_markup=get_market_kb()
-                )
-                return
-            sell_text = (
-                f"{emoji} <b>{mat_name}</b>\n\n"
-                f"Доступно: {amount}\n"
-                f"Цена: {price}{E_COINS} за единицу\n\n"
-                f"Сколько хочешь продать?"
+    # Check each sell button (plain emoji buttons)
+    if text in _MARKET_SELL_BUTTONS:
+        mat_key = _MARKET_SELL_BUTTONS[text]
+        emoji, mat_name, _ = _MARKET_MAT_INFO[mat_key]
+        inv = get_inventory(user_id)
+        amount = inv.get(mat_key, 0)
+        price = MARKET_PRICES[mat_key]
+        if amount == 0:
+            await message.answer(
+                f"❌ У тебя нет {emoji} {mat_name} для продажи!",
+                reply_markup=get_market_kb()
             )
-            await state.update_data(sell_material=mat_key)
-            await state.set_state(MarketMenu.selling_resource)
-            await message.answer(sell_text, reply_markup=get_sell_qty_kb(mat_key, amount))
             return
+        sell_text = (
+            f"{emoji} <b>{mat_name}</b>\n\n"
+            f"Доступно: {amount}\n"
+            f"Цена: {price}{E_COINS} за единицу\n\n"
+            f"Сколько хочешь продать?"
+        )
+        await state.update_data(sell_material=mat_key)
+        await state.set_state(MarketMenu.selling_resource)
+        await message.answer(sell_text, reply_markup=get_sell_qty_kb(mat_key, amount))
+        return
 
     # Buy raid ticket button
-    ticket_btn = f"Купить {E_TICKET} Билет рейда ({MARKET_RAID_TICKET_PRICE}{E_COINS})"
+    ticket_btn = f"Купить билет рейда ({MARKET_RAID_TICKET_PRICE}💰)"
     if text == ticket_btn:
         if player['coins'] < MARKET_RAID_TICKET_PRICE:
             await message.answer(
