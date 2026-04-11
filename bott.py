@@ -16,8 +16,8 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, FSInputFile
 
 # ============== EMOJI CONSTANTS ==============
-# Using plain Unicode emojis to avoid DOCUMENT_INVALID errors from <tg-emoji> tags
-E_COINS    = '👛'   # монеты
+# Custom tg-emoji for rich display in messages (used via variables, NOT inline in text)
+E_COINS    = '<tg-emoji emoji-id="5215420556089776398">👛</tg-emoji>'   # монеты
 E_CRYSTALS = '💎'   # кристаллы
 E_TICKET   = '📕'   # билет рейда
 E_EXP      = '📕'   # опыт
@@ -41,11 +41,11 @@ E_GIFT     = '🎁'   # подарок/сила
 E_TROPHY   = '🏆'   # трофей/победы
 E_BULLET   = '▪️'   # маркер-пуля
 E_INV_BOX  = '📦'   # инвентарь
-E_WOOD     = '🌳'   # древесина
-E_STONE    = '🪨'   # камень
-E_FOOD     = '🥕'   # еда
-E_IRON     = '⛰'   # железо
-E_GOLD_M   = '🥇'   # золото (материал)
+E_WOOD     = '<tg-emoji emoji-id="5449918202718985124">🌳</tg-emoji>'   # древесина
+E_STONE    = '<tg-emoji emoji-id="5433955200849159326">🪨</tg-emoji>'   # камень
+E_FOOD     = '<tg-emoji emoji-id="6284888960644682300">🥕</tg-emoji>'   # еда
+E_IRON     = '<tg-emoji emoji-id="6280718212392816659">⛰</tg-emoji>'   # железо
+E_GOLD_M   = '<tg-emoji emoji-id="6278282858561803026">🥇</tg-emoji>'   # золото (материал)
 E_PLUS     = '➕'   # плюс (награда)
 E_CHECK    = '✅'   # галочка
 E_BELL     = '🔔'   # колокол
@@ -696,7 +696,7 @@ LOCATIONS = {
     1: {
         "name": "🌾 Ясная Поляна",
         "emoji": "🌾",
-        "image": "images/locations/meadow.png",
+        "image": "images/meadow.png",
         "activities": {
             "gather": {
                 "name": "Добыча еды",
@@ -1310,10 +1310,9 @@ def get_main_kb():
     """Главное меню"""
     kb = [
         [KeyboardButton(text="🗺️ Карта"),      KeyboardButton(text="📦 Инвентарь")],
-        [KeyboardButton(text="🔨 Кузня"),        KeyboardButton(text="⚔️ Враги")],
-        [KeyboardButton(text="🐉 Рейд"),         KeyboardButton(text="🌐 Онлайн")],
-        [KeyboardButton(text="🛡️ Кланы"),       KeyboardButton(text="🏆 Рейтинг")],
-        [KeyboardButton(text="📖 Профиль")]
+        [KeyboardButton(text="🔨 Кузня"),        KeyboardButton(text="🐉 Рейд")],
+        [KeyboardButton(text="🌐 Онлайн"),       KeyboardButton(text="🛡️ Кланы")],
+        [KeyboardButton(text="🏆 Рейтинг"),     KeyboardButton(text="📖 Профиль")]
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
@@ -1721,7 +1720,7 @@ async def _send_profile(message, player: dict):
         f'┆{E_CRYSTALS}┆ Кристаллы {E_BULLET} {player["crystals"]}\n'
         f'┆{E_TICKET}┆ Билеты рейда {E_BULLET} {player["raid_tickets"]}\n'
     )
-    await send_image_with_text(message, "images/profiles/profile_default.png", response, reply_markup=get_profile_kb())
+    await send_image_with_text(message, "images/profile.png", response, reply_markup=get_profile_kb())
 
 @dp.message(ProfileMenu.viewing_profile)
 async def handle_profile_menu(message: types.Message, state: FSMContext):
@@ -1817,7 +1816,7 @@ async def _send_inventory(message, user_id: int, back_button: str = "⬅️ На
         f'┃{inv["gold"]}{E_GOLD_M} {E_BULLET} Золото\n'
     )
     inv_kb = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text=back_button)]], resize_keyboard=True)
-    await send_image_with_text(message, "images/inventory/inventory.png", text, reply_markup=inv_kb)
+    await message.answer(text, reply_markup=inv_kb, parse_mode="HTML")
 
 @dp.message(F.text == "📦 Инвентарь")
 async def open_inventory_main(message: types.Message, state: FSMContext):
@@ -2931,80 +2930,6 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
     )
 
 
-# ============== ENEMIES ==============
-@dp.message(F.text == "⚔️ Враги")
-async def show_enemies(message: types.Message, state: FSMContext):
-    user_id = message.from_user.id
-    player = get_player(user_id)
-    
-    if not player:
-        await message.answer("Сначала зарегистрируйся! /start")
-        return
-    
-    enemies_text = "⚔️ <b>ВРАГИ</b>\n\n"
-    
-    for enemy_id, enemy_info in ENEMIES.items():
-        enemies_text += f"{enemy_info['name']} 🩶 {enemy_info['health']} HP\n"
-    
-    await message.answer(enemies_text, reply_markup=get_enemies_kb())
-    await state.set_state(BattleState.viewing_enemies)
-
-@dp.message(BattleState.viewing_enemies)
-async def select_enemy(message: types.Message, state: FSMContext):
-    user_id = message.from_user.id
-    player = get_player(user_id)
-    text = message.text
-    
-    if text == "❌ Вернуться":
-        await state.clear()
-        await message.answer("Вернулись в главное меню!", reply_markup=get_main_kb())
-        return
-    
-    # Поиск врага
-    selected_enemy = None
-    for enemy_id, enemy_info in ENEMIES.items():
-        if enemy_info['name'] in text:
-            selected_enemy = enemy_id
-            break
-    
-    if selected_enemy is None:
-        await message.answer("❌ Выберите корректного врага!", reply_markup=get_enemies_kb())
-        return
-    
-    # Применяем бафф клана
-    player_clan = get_player_clan(user_id)
-    clan_level = player_clan['clan_level'] if player_clan else 1
-    buffed_strength = apply_clan_strength_buff(player['strength'], clan_level)
-
-    player_health = calculate_player_health(buffed_strength)
-    player_damage = calculate_damage(buffed_strength)
-    enemy_info = ENEMIES[selected_enemy]
-    enemy_damage = calculate_enemy_damage(selected_enemy)
-    
-    battle_info = (
-        f"⚔️ <b>ИНФОРМАЦИЯ О БОЕ</b> ⚔️\n\n"
-        f"информация об {html.escape(player['nickname'])}:\n"
-        f"{E_HP} {player_health}\n"
-        f"⚔️ {player_damage}\n\n"
-        f"☠️ {enemy_info['name']}\n"
-        f"🩶 {enemy_info['health']}\n"
-        f"⚔️ {enemy_damage}\n"
-    )
-    
-    await message.answer(battle_info, reply_markup=get_battle_kb())
-    
-    await state.set_state(BattleState.in_battle)
-    await state.update_data(
-        selected_enemy=selected_enemy,
-        player_health=player_health,
-        player_damage=player_damage,
-        enemy_health=enemy_info['health'],
-        enemy_damage=enemy_damage,
-        player_mana=100,
-        enemy_skip_turn=False,
-        player_blind_turns=0,
-    )
-
 @dp.message(BattleState.in_battle, F.text == "⚔️ Начать сражение")
 async def start_battle(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
@@ -3254,15 +3179,8 @@ async def battle_round(message: types.Message, state: FSMContext):
 
 @dp.message(BattleState.in_battle, F.text == "❌ Назад")
 async def back_to_enemies(message: types.Message, state: FSMContext):
-    user_id = message.from_user.id
-    
-    enemies_text = "⚔️ <b>ВРАГИ</b>\n\n"
-    
-    for enemy_id, enemy_info in ENEMIES.items():
-        enemies_text += f"{enemy_info['name']} 🩶 {enemy_info['health']} HP\n"
-    
-    await message.answer(enemies_text, reply_markup=get_enemies_kb())
-    await state.set_state(BattleState.viewing_enemies)
+    await state.clear()
+    await message.answer("Вернулись в главное меню!", reply_markup=get_main_kb())
 
 @dp.message(F.text == "🏠 В главное меню")
 async def back_to_main(message: types.Message, state: FSMContext):
@@ -4283,12 +4201,24 @@ async def _show_clan_info(message, clan: dict, is_leader: bool, is_co_leader: bo
     leader_name = leader['nickname'] if leader else "—"
     clan_text = _format_clan_menu(clan, leader_name)
     kb = get_my_clan_kb(is_leader, is_co_leader)
+
+    # Если картинка загружена - показать её
     if clan.get('clan_image'):
         try:
             await message.answer_photo(clan['clan_image'], caption=clan_text, reply_markup=kb)
             return
         except Exception:
             pass
+
+    # Если нет загруженной - показать дефолтную
+    try:
+        photo = FSInputFile("images/clan.png")
+        await message.answer_photo(photo, caption=clan_text, reply_markup=kb)
+        return
+    except Exception:
+        pass
+
+    # Если и дефолтной нет - просто текст
     await message.answer(clan_text, reply_markup=kb)
 
 @dp.message(ClanMenu.selecting_clan_customization)
