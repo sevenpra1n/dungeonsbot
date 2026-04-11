@@ -4,7 +4,7 @@ import logging
 import os
 import sqlite3
 import random
-from datetime import datetime
+from datetime import datetime, timezone
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.client.session.aiohttp import AiohttpSession
@@ -678,8 +678,8 @@ def start_activity(user_id: int, activity_type: str, location_id: int, duration_
     """Начать активность в локации"""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    now = datetime.utcnow()
-    end = datetime.utcnow().replace(microsecond=0)
+    now = datetime.now(timezone.utc)
+    end = datetime.now(timezone.utc).replace(microsecond=0)
     import datetime as dt
     end_time = now + dt.timedelta(seconds=duration_seconds)
     cursor.execute('''
@@ -719,7 +719,7 @@ def check_activity_done(user_id: int) -> dict | None:
         end_time = datetime.fromisoformat(activity['end_time'])
     except Exception:
         return None
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     if now >= end_time:
         return activity
     return None
@@ -1934,7 +1934,7 @@ async def open_map(message: types.Message, state: FSMContext):
         except Exception:
             end_time = None
         if end_time:
-            remaining = max(0, int((end_time - datetime.utcnow()).total_seconds()))
+            remaining = max(0, int((end_time - datetime.now(timezone.utc)).total_seconds()))
             loc = LOCATIONS.get(activity['location_id'], {})
             act_cfg = loc.get('activities', {}).get(activity['activity_type'], {})
             await message.answer(
@@ -2013,7 +2013,7 @@ async def handle_location(message: types.Message, state: FSMContext):
         except Exception:
             end_time = None
         if end_time:
-            remaining = max(0, int((end_time - datetime.utcnow()).total_seconds()))
+            remaining = max(0, int((end_time - datetime.now(timezone.utc)).total_seconds()))
             await message.answer(
                 f"⏳ У тебя уже идёт активность! Осталось: {remaining} сек.",
                 reply_markup=get_location_activities_kb(loc_id)
@@ -4665,7 +4665,7 @@ async def activity_monitor_loop():
             user_ids = [row[0] for row in cursor.fetchall()]
             conn.close()
 
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             for uid in user_ids:
                 activity = get_active_activity(uid)
                 if not activity:
