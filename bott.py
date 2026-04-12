@@ -102,6 +102,12 @@ E_PIN      = '<tg-emoji emoji-id="5264910987500220457">📌</tg-emoji>'   # за
 E_CART     = '<tg-emoji emoji-id="5278613311858959074">🛒</tg-emoji>'   # тележка (покупка)
 E_ATK2     = '<tg-emoji emoji-id="6334472841953544334">⚔️</tg-emoji>'   # сила (кузня строки)
 E_CLAN_BOTTLE = '<tg-emoji emoji-id="6284926868026037181">🍾</tg-emoji>' # опыт клана (награда)
+E_GIFT_UP  = '<tg-emoji emoji-id="5886484710481205789">🎁</tg-emoji>'   # подарок (улучшение)
+E_ONLINE2  = '<tg-emoji emoji-id="5298668674532538341">👥</tg-emoji>'   # онлайн режим заголовок
+E_SEARCH   = '<tg-emoji emoji-id="5309965701241379366">🔎</tg-emoji>'   # поиск (лупа)
+E_RATING   = '<tg-emoji emoji-id="5413566144986503832">🏆</tg-emoji>'   # рейтинг заголовок
+E_GIFT_GOLD2 = '<tg-emoji emoji-id="6021412890496473421">🎁</tg-emoji>' # подарок (2 место)
+E_GIFT_GOLD3 = '<tg-emoji emoji-id="6001349144046737619">🎁</tg-emoji>' # подарок (3 место)
 
 # Rarity emoji
 E_RARITY_COMMON    = '<tg-emoji emoji-id="5395855331945392566">🌟</tg-emoji>'  # обычный
@@ -1060,6 +1066,29 @@ def get_leaderboard(limit: int = 10):
     
     return results
 
+def get_leaderboard_page(page: int = 0, per_page: int = 5):
+    """Получить страницу рейтинга игроков с пагинацией"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    
+    # Общее количество
+    cursor.execute('SELECT COUNT(*) FROM players WHERE strength > 0')
+    total = cursor.fetchone()[0]
+    
+    offset = page * per_page
+    cursor.execute('''
+        SELECT nickname, strength, COALESCE(wins, 0), COALESCE(rating_points, 0) FROM players
+        WHERE strength > 0
+        ORDER BY rating_points DESC, wins DESC, strength DESC
+        LIMIT ? OFFSET ?
+    ''', (per_page, offset))
+    
+    results = cursor.fetchall()
+    conn.close()
+    
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    return results, total_pages, total
+
 # ============== CLAN DB FUNCTIONS ==============
 CLAN_LEVEL_EXP = {1: 100, 2: 250, 3: 500, 4: 950, 5: 1500}
 MAX_CLAN_LEVEL = 5
@@ -1549,6 +1578,10 @@ class MarketMenu(StatesGroup):
     viewing_consumables = State()
     viewing_items = State()
 
+class RatingState(StatesGroup):
+    viewing_rating = State()
+    viewing_player = State()
+
 # Словарь для отслеживания cooldown боевых действий (2 сек)
 battle_cooldowns: dict = {}
 
@@ -1762,6 +1795,28 @@ def get_online_menu_kb():
     kb = [
         [KeyboardButton(text="🔍 Поиск игрока")],
         [KeyboardButton(text="❌ Выйти из онлайна")]
+    ]
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+def get_rating_kb(leaderboard, page: int, total_pages: int):
+    """Меню рейтинга с кнопками игроков и пагинацией"""
+    kb = []
+    for nickname, strength, wins, rating_pts in leaderboard:
+        kb.append([KeyboardButton(text=f"👤 {nickname}")])
+    nav = []
+    if page > 0:
+        nav.append(KeyboardButton(text="⬅️ Назад"))
+    if page < total_pages - 1:
+        nav.append(KeyboardButton(text="Далее ➡️"))
+    if nav:
+        kb.append(nav)
+    kb.append([KeyboardButton(text="❌ Выход")])
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+def get_rating_player_kb():
+    """Кнопка возврата из профиля игрока в рейтинг"""
+    kb = [
+        [KeyboardButton(text="⬅️ Назад в рейтинг")]
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
@@ -2766,13 +2821,18 @@ async def handle_weapons_menu(message: types.Message, state: FSMContext):
     update_player_strength(user_id, new_total_strength)
     remove_coins_from_player(user_id, new_weapon['cost'])
 
+    nw_rarity = get_rarity_emoji(new_weapon.get('rarity', 'common'))
+    a_rarity = get_rarity_emoji(armor.get('rarity', 'common'))
     await message.answer(
-        f"✅ Оружие улучшено!\n\n"
-        f"{new_weapon['emoji']} {new_weapon['name']}\n"
-        f"(⚔️) Сила оружия: {new_weapon_strength}\n"
-        f"🛡️ Сила брони: {armor['strength']}\n"
-        f"(⚔️) Общая сила: {int(new_total_strength)}\n\n"
-        f"- {new_weapon['cost']} монет\nОсталось: {new_coins}",
+        f"{E_GIFT_UP} Оружие улучшено!\n\n"
+        f"{nw_rarity} {new_weapon['name']}\n\n"
+        f"{E_SQ}{E_SWORD2}{E_LINK} {nw_rarity} {new_weapon['name']}:\n"
+        f"  ├ Сила: {new_weapon_strength} {E_ATK2}\n\n"
+        f"{E_SQ}{E_SHIELD}{E_LINK} {a_rarity} {armor['name']}\n"
+        f"  ├ Сила: {armor['strength']} {E_ATK2}\n\n"
+        f"{E_SQ}{E_ATK} {int(new_total_strength)} {E_GREEN} общая сила\n\n"
+        f"{E_CROSS} {new_weapon['cost']} {E_COINS} монет\n"
+        f"{E_YELLOW} Осталось: {new_coins} {E_COINS} монет",
         reply_markup=get_next_weapon_kb(chosen_weapon_id)
     )
 
@@ -2840,13 +2900,18 @@ async def handle_armor_menu(message: types.Message, state: FSMContext):
     update_player_strength(user_id, new_total_strength)
     remove_coins_from_player(user_id, new_armor['cost'])
 
+    w_rarity = get_rarity_emoji(weapon.get('rarity', 'common'))
+    na_rarity = get_rarity_emoji(new_armor.get('rarity', 'common'))
     await message.answer(
-        f"✅ Броня улучшена!\n\n"
-        f"{new_armor['emoji']} {new_armor['name']}\n"
-        f"(⚔️) Сила оружия: {weapon['strength']}\n"
-        f"🛡️ Сила брони: {new_armor_strength}\n"
-        f"(⚔️) Общая сила: {int(new_total_strength)}\n\n"
-        f"- {new_armor['cost']} монет\nОсталось: {new_coins}",
+        f"{E_GIFT_UP} Броня улучшена!\n\n"
+        f"{na_rarity} {new_armor['name']}\n\n"
+        f"{E_SQ}{E_SWORD2}{E_LINK} {w_rarity} {weapon['name']}:\n"
+        f"  ├ Сила: {weapon['strength']} {E_ATK2}\n\n"
+        f"{E_SQ}{E_SHIELD}{E_LINK} {na_rarity} {new_armor['name']}\n"
+        f"  ├ Сила: {new_armor_strength} {E_ATK2}\n\n"
+        f"{E_SQ}{E_ATK} {int(new_total_strength)} {E_GREEN} общая сила\n\n"
+        f"{E_CROSS} {new_armor['cost']} {E_COINS} монет\n"
+        f"{E_YELLOW} Осталось: {new_coins} {E_COINS} монет",
         reply_markup=get_next_armor_kb(chosen_armor_id)
     )
 
@@ -2960,8 +3025,36 @@ async def handle_equipment_purchase(message: types.Message, state: FSMContext):
         await message.answer(f"{E_CROSS} Выберите корректное снаряжение!", reply_markup=get_equipment_kb())
 
 # ============== LEADERBOARD ==============
+def _format_rating_page(leaderboard, page: int) -> str:
+    """Форматировать страницу рейтинга"""
+    response = f"{E_RATING} РЕЙТИНГ ИГРОКОВ\n\n"
+    
+    start_index = page * 5 + 1
+    
+    for i, (nickname, strength, wins, rating_pts) in enumerate(leaderboard):
+        index = start_index + i
+        safe_nick = html.escape(nickname)
+        
+        if index == 1:
+            prefix = f"{E_STAR} 1. {E_RARITY_ULTRA}"
+        elif index == 2:
+            prefix = f"{E_YELLOW} 2. {E_GIFT_GOLD2}"
+        elif index == 3:
+            prefix = f"{E_YELLOW} 3. {E_GIFT_GOLD3}"
+        else:
+            prefix = f"{E_RED_C} {index}. {E_HASHTAG}"
+        
+        response += (
+            f"{prefix} {safe_nick}:\n"
+            f"{E_SQ}{int(strength)} {E_ATK}\n"
+            f"{E_SQ}{wins} {E_TROPHY}\n"
+            f"{E_SQ}{rating_pts} 💠\n\n"
+        )
+    
+    return response
+
 @dp.message(F.text == "🏆 Рейтинг")
-async def show_leaderboard(message: types.Message, state: FSMContext = None):
+async def show_leaderboard(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     player = get_player(user_id)
     
@@ -2969,19 +3062,95 @@ async def show_leaderboard(message: types.Message, state: FSMContext = None):
         await message.answer("Сначала зарегистрируйся! /start")
         return
     
-    leaderboard = get_leaderboard(10)
+    leaderboard, total_pages, total = get_leaderboard_page(0, 5)
     
     if not leaderboard:
         await message.answer("📊 Рейтинг пуст. Прокачайся!", reply_markup=get_main_kb())
         return
     
-    response = "🥇 <b>РЕЙТИНГ ИГРОКОВ</b>\n\n"
+    response = _format_rating_page(leaderboard, 0)
     
-    for index, (nickname, strength, wins, rating_pts) in enumerate(leaderboard, 1):
-        medal = "🥇" if index == 1 else "🥈" if index == 2 else "🥉" if index == 3 else f"{index}."
-        response += f"{medal} {html.escape(nickname)} — | {int(strength)}{E_ATK} | | {wins}{E_TROPHY} | | {rating_pts}💠 |\n"
+    await state.set_state(RatingState.viewing_rating)
+    await state.update_data(rating_page=0)
+    await send_image_with_text(message, "images/league.png", response, reply_markup=get_rating_kb(leaderboard, 0, total_pages))
+
+
+@dp.message(RatingState.viewing_rating)
+async def handle_rating_menu(message: types.Message, state: FSMContext):
+    text = message.text
     
-    await send_image_with_text(message, "images/league.png", response, reply_markup=get_main_kb())
+    if text == "❌ Выход":
+        await show_main_menu(message, state)
+        return
+    
+    data = await state.get_data()
+    current_page = data.get('rating_page', 0)
+    
+    if text == "Далее ➡️":
+        new_page = current_page + 1
+        leaderboard, total_pages, total = get_leaderboard_page(new_page, 5)
+        if not leaderboard:
+            await message.answer("Больше игроков нет.")
+            return
+        response = _format_rating_page(leaderboard, new_page)
+        await state.update_data(rating_page=new_page)
+        await send_image_with_text(message, "images/league.png", response, reply_markup=get_rating_kb(leaderboard, new_page, total_pages))
+        return
+    
+    if text == "⬅️ Назад":
+        new_page = max(0, current_page - 1)
+        leaderboard, total_pages, total = get_leaderboard_page(new_page, 5)
+        response = _format_rating_page(leaderboard, new_page)
+        await state.update_data(rating_page=new_page)
+        await send_image_with_text(message, "images/league.png", response, reply_markup=get_rating_kb(leaderboard, new_page, total_pages))
+        return
+    
+    # Check if player nickname button was pressed
+    if text and text.startswith("👤 "):
+        nickname = text[2:].strip()
+        target = get_player_by_nickname(nickname)
+        if target:
+            full_player = get_player(target['user_id'])
+            if full_player:
+                health = calculate_player_health(full_player['strength'])
+                damage = calculate_damage(full_player['strength'])
+                exp_info = get_experience_progress(full_player['user_id'])
+                status_emoji = get_player_status_emoji(full_player)
+                safe_nick = html.escape(full_player["nickname"])
+                safe_status = html.escape(full_player["status"])
+                profile_text = (
+                    f'{E_PROFILE} Профиль игрока {safe_nick}:\n'
+                    f'{E_LOCK}{E_HASHTAG} {safe_nick}\n\n'
+                    f'{E_DOT} {status_emoji} {safe_status}\n\n'
+                    f'Уровень {E_CIRCLE} {full_player["player_level"]}{E_STAR}\n'
+                    f'{E_SQ}{exp_info["current_exp"]} / {exp_info["needed_exp"]}{E_EXP_DOT}{E_EXP} Опыта\n\n\n'
+                    f'{E_SQ}{full_player["wins"]} - {E_TROPHY} {E_YELLOW} Победы\n'
+                    f'{E_SQ}{int(full_player["strength"])} - {E_ATK} {E_YELLOW} Сила\n'
+                    f'{E_SQ}{health} - {E_HP} {E_YELLOW} Здоровье\n\n'
+                    f'{E_SQ}{full_player["coins"]} - {E_COINS}{E_GREEN} Монеты  \n'
+                    f'{E_SQ}{full_player["crystals"]} - {E_CRYSTALS}{E_GREEN} Кристаллы  \n'
+                    f'{E_SQ}{full_player["raid_tickets"]} - {E_TICKET}{E_GREEN} Билеты рейда\n'
+                )
+                await state.set_state(RatingState.viewing_player)
+                await send_image_with_text(message, "images/profile.png", profile_text, reply_markup=get_rating_player_kb())
+                return
+        await message.answer(f"{E_CROSS} Игрок не найден!")
+        return
+
+
+@dp.message(RatingState.viewing_player, F.text == "⬅️ Назад в рейтинг")
+async def back_to_rating(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    page = data.get('rating_page', 0)
+    leaderboard, total_pages, total = get_leaderboard_page(page, 5)
+    
+    if not leaderboard:
+        await show_main_menu(message, state)
+        return
+    
+    response = _format_rating_page(leaderboard, page)
+    await state.set_state(RatingState.viewing_rating)
+    await send_image_with_text(message, "images/league.png", response, reply_markup=get_rating_kb(leaderboard, page, total_pages))
 
 # ============== RAID ==============
 def _get_raid_floor_text(floor_id: int, enemy_info: dict) -> str:
@@ -3768,14 +3937,14 @@ async def open_online(message: types.Message, state: FSMContext):
     mana = 100
 
     online_text = (
-        f'{E_ONLINE} <b>ОНЛАЙН РЕЖИМ:</b>\n'
-        f'Начните подбор игрока, нажав на кнопку.\n'
-        f'{E_SQ} Возможно долгий подбор, не выходите из поиска если хотите найти игрока.\n\n'
-        f'{E_SQ} Характеристики {html.escape(player["nickname"])}:\n\n'
-        f'{E_SQ}{int(buffed_strength)} {E_ATK}\n'
-        f'{E_SQ}{health} {E_HP}\n'
-        f'{E_SQ}{damage} {E_DMG}\n'
-        f'{E_SQ}{E_MANA} {mana} / 100\n'
+        f'{E_ONLINE2}{E_SWORD2} ОНЛАЙН РЕЖИМ:\n'
+        f'{E_SQ}Начните подбор игрока, нажав на кнопку.\n'
+        f'{E_SQ}{E_WARN} Возможно долгий подбор, не выходите из поиска если хотите найти игрока.\n\n'
+        f'{E_PROFILE} Характеристики {html.escape(player["nickname"])}:\n\n'
+        f'{E_SQ}{E_ATK} {int(buffed_strength)} Сила {E_YELLOW}\n'
+        f'{E_SQ}{E_HP} {health} Здоровье {E_YELLOW}\n'
+        f'{E_SQ}{E_DMG} {damage} Урон {E_YELLOW}\n'
+        f'{E_SQ}{E_MANA} {mana} / 100 {E_BOOK_MANA}{E_YELLOW}\n'
     )
     await send_image_with_text(message, "images/online.png", online_text, reply_markup=get_online_menu_kb())
     await state.set_state(OnlineState.viewing_menu)
@@ -3809,13 +3978,7 @@ async def start_online_search(message: types.Message, state: FSMContext):
     damage = calculate_damage(buffed_strength)
 
     search_text = (
-        f'{E_ONLINE} <b>ОНЛАЙН РЕЖИМ</b>\n\n'
-        'Твои характеристики:\n'
-        f'{E_NICK} {html.escape(player["nickname"])}\n'
-        f'{E_HP} {health}\n'
-        f'{E_DMG} {damage}\n'
-        f'{int(buffed_strength)}{E_ATK} | {player["wins"]}{E_TROPHY}\n\n'
-        '🔍 Ищем соперника...'
+        f'{E_SQ}{E_SEARCH} ищем соперника... {E_GREEN}'
     )
 
     pvp_queue[user_id] = {
