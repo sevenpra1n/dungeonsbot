@@ -1494,6 +1494,7 @@ class RaidState(StatesGroup):
     in_raid = State()
 
 class OnlineState(StatesGroup):
+    viewing_menu = State()
     searching = State()
     waiting_accept = State()
     in_pvp_battle = State()
@@ -1753,6 +1754,14 @@ def get_searching_kb():
     """Меню поиска соперника"""
     kb = [
         [KeyboardButton(text="🚫 Прекратить поиск")]
+    ]
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+def get_online_menu_kb():
+    """Главное меню онлайн-режима (лобби)"""
+    kb = [
+        [KeyboardButton(text="🔍 Поиск игрока")],
+        [KeyboardButton(text="❌ Выйти из онлайна")]
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
@@ -2070,7 +2079,7 @@ async def _send_profile(message, player: dict):
     response = (
         f'{E_PROFILE} Профиль игрока:\n'
         f'{E_LOCK}{E_HASHTAG} {safe_nick}\n\n'
-        f'{E_DOT} {safe_status} (заглушка)\n\n'
+        f'{E_DOT} {status_emoji} {safe_status}\n\n'
         f'Уровень {E_CIRCLE} {player["player_level"]}{E_STAR}\n'
         f'{E_SQ}{exp_info["current_exp"]} / {exp_info["needed_exp"]}{E_EXP_DOT}{E_EXP} Опыта\n\n\n'
         f'{E_SQ}{player["wins"]} - {E_TROPHY} {E_YELLOW} Победы\n'
@@ -3753,6 +3762,48 @@ async def open_online(message: types.Message, state: FSMContext):
     player_clan = get_player_clan(user_id)
     clan_level = player_clan['clan_level'] if player_clan else 1
     buffed_strength = apply_clan_strength_buff(player['strength'], clan_level)
+    health = calculate_player_health(buffed_strength)
+    damage = calculate_damage(buffed_strength)
+
+    mana = 100
+
+    online_text = (
+        f'{E_ONLINE} <b>ОНЛАЙН РЕЖИМ:</b>\n'
+        f'Начните подбор игрока, нажав на кнопку.\n'
+        f'{E_SQ} Возможно долгий подбор, не выходите из поиска если хотите найти игрока.\n\n'
+        f'{E_SQ} Характеристики {html.escape(player["nickname"])}:\n\n'
+        f'{E_SQ}{int(buffed_strength)} {E_ATK}\n'
+        f'{E_SQ}{health} {E_HP}\n'
+        f'{E_SQ}{damage} {E_DMG}\n'
+        f'{E_SQ}{E_MANA} {mana} / 100\n'
+    )
+    await send_image_with_text(message, "images/online.png", online_text, reply_markup=get_online_menu_kb())
+    await state.set_state(OnlineState.viewing_menu)
+
+
+@dp.message(OnlineState.viewing_menu, F.text == "❌ Выйти из онлайна")
+async def leave_online_menu(message: types.Message, state: FSMContext):
+    await show_main_menu(message, state)
+
+
+@dp.message(OnlineState.viewing_menu, F.text == "🔍 Поиск игрока")
+async def start_online_search(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    player = get_player(user_id)
+
+    if not player:
+        await message.answer("Сначала зарегистрируйся! /start")
+        return
+
+    if user_id in pvp_queue:
+        await message.answer("Ты уже в очереди поиска!", reply_markup=get_searching_kb())
+        await state.set_state(OnlineState.searching)
+        return
+
+    # Применяем бафф клана
+    player_clan = get_player_clan(user_id)
+    clan_level = player_clan['clan_level'] if player_clan else 1
+    buffed_strength = apply_clan_strength_buff(player['strength'], clan_level)
 
     health = calculate_player_health(buffed_strength)
     damage = calculate_damage(buffed_strength)
@@ -3776,7 +3827,7 @@ async def open_online(message: types.Message, state: FSMContext):
         "chat_id": message.chat.id
     }
 
-    await send_image_with_text(message, "images/online.png", search_text, reply_markup=get_searching_kb())
+    await send_image_with_text(message, "images/search.png", search_text, reply_markup=get_searching_kb())
     await state.set_state(OnlineState.searching)
 
     # Проверяем, есть ли ещё кто-то в очереди
