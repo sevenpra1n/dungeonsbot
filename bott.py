@@ -189,6 +189,11 @@ def init_database():
         'ALTER TABLE players ADD COLUMN player_level INTEGER DEFAULT 1',
         "ALTER TABLE players ADD COLUMN status TEXT DEFAULT 'Новичок'",
         'ALTER TABLE players ADD COLUMN online_matches INTEGER DEFAULT 0',
+        'ALTER TABLE players ADD COLUMN deaths INTEGER DEFAULT 0',
+        'ALTER TABLE players ADD COLUMN dodges INTEGER DEFAULT 0',
+        'ALTER TABLE players ADD COLUMN pve_wins INTEGER DEFAULT 0',
+        'ALTER TABLE players ADD COLUMN has_set_clan_image INTEGER DEFAULT 0',
+        'ALTER TABLE players ADD COLUMN is_spammer INTEGER DEFAULT 0',
     ]:
         try:
             cursor.execute(col_sql)
@@ -352,6 +357,19 @@ def init_database():
         SELECT user_id FROM players
     ''')
 
+    # Таблица дружбы
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS friendships (
+            user_id INTEGER NOT NULL,
+            friend_id INTEGER NOT NULL,
+            status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'accepted')),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, friend_id),
+            FOREIGN KEY (user_id) REFERENCES players(user_id),
+            FOREIGN KEY (friend_id) REFERENCES players(user_id)
+        )
+    ''')
+
     conn.commit()
     conn.close()
 
@@ -392,7 +410,9 @@ def get_player(user_id: int):
                COALESCE(materials, 0), COALESCE(raid_floor, 1), COALESCE(raid_max_floor, 0),
                COALESCE(coins, 0), COALESCE(crystals, 0), COALESCE(raid_tickets, 0),
                COALESCE(experience, 0), COALESCE(player_level, 1), COALESCE(status, 'Новичок'),
-               COALESCE(online_matches, 0)
+               COALESCE(online_matches, 0),
+               COALESCE(deaths, 0), COALESCE(dodges, 0), COALESCE(pve_wins, 0),
+               COALESCE(has_set_clan_image, 0), COALESCE(is_spammer, 0)
         FROM players
         WHERE user_id = ?
     ''', (user_id,))
@@ -420,6 +440,11 @@ def get_player(user_id: int):
             "player_level": result[15],
             "status": result[16],
             "online_matches": result[17],
+            "deaths": result[18],
+            "dodges": result[19],
+            "pve_wins": result[20],
+            "has_set_clan_image": result[21],
+            "is_spammer": result[22],
         }
     return None
 
@@ -648,6 +673,18 @@ STATUSES = {
     3: {"name": "Охотник",      "emoji": "🔪", "custom_emoji": '<tg-emoji emoji-id="5224460534534916102">🔪</tg-emoji>', "required_level": 1,  "type": "free"},
     4: {"name": "Любитель PVP", "emoji": "⚔️", "custom_emoji": '<tg-emoji emoji-id="5454014806950429357">⚔️</tg-emoji>', "required_level": 1,  "type": "free"},
     5: {"name": "Добытчик",     "emoji": "🥇", "custom_emoji": '<tg-emoji emoji-id="6278187557532472415">🥇</tg-emoji>', "required_level": 1,  "type": "free"},
+    # Page 2 - new statuses
+    6:  {"name": "Сердцеед",     "emoji": "❤️", "custom_emoji": '<tg-emoji emoji-id="5355174247826217637">❤️</tg-emoji>', "required_level": 1, "type": "unlock_friends", "required_friends": 1},
+    7:  {"name": "Стиляга",      "emoji": "👓", "custom_emoji": '<tg-emoji emoji-id="5834901642155137299">👓</tg-emoji>', "required_level": 1, "type": "unlock_strength", "required_strength": 200},
+    8:  {"name": "Press F",      "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="5938394329465756346">🎁</tg-emoji>', "required_level": 1, "type": "unlock_deaths", "required_deaths": 20},
+    9:  {"name": "Лидер",        "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="5936238625250350064">🎁</tg-emoji>', "required_level": 1, "type": "unlock_strength", "required_strength": 1000},
+    10: {"name": "Удачливый",    "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="5960593366151337910">🎁</tg-emoji>', "required_level": 1, "type": "unlock_dodges", "required_dodges": 30},
+    # Page 3 - new statuses
+    11: {"name": "Гладиатор",    "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="6001349144046737619">🎁</tg-emoji>', "required_level": 1, "type": "unlock_pve_wins", "required_pve_wins": 50},
+    12: {"name": "Убийца",       "emoji": "👹", "custom_emoji": '<tg-emoji emoji-id="5796297917752941521">👹</tg-emoji>', "required_level": 1, "type": "unlock_pve_wins", "required_pve_wins": 120},
+    13: {"name": "Творчество",   "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="6021462012037437193">🎁</tg-emoji>', "required_level": 1, "type": "unlock_clan_image"},
+    14: {"name": "Пример для подражания", "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="6021486768228940485">🎁</tg-emoji>', "required_level": 1, "type": "unlock_strength", "required_strength": 2000},
+    15: {"name": "Какашка",      "emoji": "💩", "custom_emoji": '<tg-emoji emoji-id="6005662304824203821">💩</tg-emoji>', "required_level": 1, "type": "unlock_spam"},
 }
 
 def get_player_status_emoji(player: dict) -> str:
@@ -672,6 +709,7 @@ def get_available_statuses(user_id: int) -> dict:
     if not player:
         return {}
     available = {}
+    friends_count = get_friends_count(user_id)
     for status_id, status_info in STATUSES.items():
         is_available = False
         if status_info["type"] in ("default", "free"):
@@ -683,9 +721,183 @@ def get_available_statuses(user_id: int) -> dict:
             required = status_info.get('required_matches', 0) or 0
             if player.get('online_matches', 0) >= required:
                 is_available = True
+        elif status_info["type"] == "unlock_friends":
+            if friends_count >= status_info.get('required_friends', 1):
+                is_available = True
+        elif status_info["type"] == "unlock_strength":
+            if player.get('strength', 0) >= status_info.get('required_strength', 0):
+                is_available = True
+        elif status_info["type"] == "unlock_deaths":
+            if player.get('deaths', 0) >= status_info.get('required_deaths', 0):
+                is_available = True
+        elif status_info["type"] == "unlock_dodges":
+            if player.get('dodges', 0) >= status_info.get('required_dodges', 0):
+                is_available = True
+        elif status_info["type"] == "unlock_pve_wins":
+            if player.get('pve_wins', 0) >= status_info.get('required_pve_wins', 0):
+                is_available = True
+        elif status_info["type"] == "unlock_clan_image":
+            if player.get('has_set_clan_image', 0) >= 1:
+                is_available = True
+        elif status_info["type"] == "unlock_spam":
+            if player.get('is_spammer', 0) >= 1:
+                is_available = True
         if is_available:
             available[status_id] = status_info
     return available
+
+# ============== FRIENDSHIP FUNCTIONS ==============
+def send_friend_request(user_id: int, friend_id: int) -> str:
+    """Отправить заявку в друзья. Возвращает: 'sent', 'already_friends', 'already_pending', 'self'"""
+    if user_id == friend_id:
+        return 'self'
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    # Check if already friends or pending
+    cursor.execute('''
+        SELECT status FROM friendships
+        WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)
+    ''', (user_id, friend_id, friend_id, user_id))
+    row = cursor.fetchone()
+    if row:
+        conn.close()
+        if row[0] == 'accepted':
+            return 'already_friends'
+        return 'already_pending'
+    cursor.execute('''
+        INSERT INTO friendships (user_id, friend_id, status) VALUES (?, ?, 'pending')
+    ''', (user_id, friend_id))
+    conn.commit()
+    conn.close()
+    return 'sent'
+
+def accept_friend_request(user_id: int, requester_id: int) -> bool:
+    """Принять заявку в друзья. user_id - тот кто принимает, requester_id - тот кто отправил."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE friendships SET status = 'accepted'
+        WHERE user_id = ? AND friend_id = ? AND status = 'pending'
+    ''', (requester_id, user_id))
+    changed = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return changed
+
+def decline_friend_request(user_id: int, requester_id: int) -> bool:
+    """Отклонить заявку в друзья."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        DELETE FROM friendships
+        WHERE user_id = ? AND friend_id = ? AND status = 'pending'
+    ''', (requester_id, user_id))
+    changed = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return changed
+
+def remove_friend(user_id: int, friend_id: int) -> bool:
+    """Удалить друга (удаляет связь в обе стороны)."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        DELETE FROM friendships
+        WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)
+    ''', (user_id, friend_id, friend_id, user_id))
+    changed = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return changed
+
+def get_friends_list(user_id: int) -> list:
+    """Получить список друзей (accepted). Возвращает list of user_ids."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT CASE WHEN user_id = ? THEN friend_id ELSE user_id END as fid
+        FROM friendships
+        WHERE (user_id = ? OR friend_id = ?) AND status = 'accepted'
+    ''', (user_id, user_id, user_id))
+    friends = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return friends
+
+def get_friend_requests(user_id: int) -> list:
+    """Получить входящие заявки в друзья (pending). Возвращает list of user_ids."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT user_id FROM friendships
+        WHERE friend_id = ? AND status = 'pending'
+    ''', (user_id,))
+    requests = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return requests
+
+def get_friends_count(user_id: int) -> int:
+    """Количество друзей (accepted)."""
+    return len(get_friends_list(user_id))
+
+def get_friendship_status(user_id: int, other_id: int) -> str:
+    """Статус дружбы: 'none', 'pending_sent', 'pending_received', 'accepted'"""
+    if user_id == other_id:
+        return 'self'
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT user_id, friend_id, status FROM friendships
+        WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)
+    ''', (user_id, other_id, other_id, user_id))
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        return 'none'
+    if row[2] == 'accepted':
+        return 'accepted'
+    if row[0] == user_id:
+        return 'pending_sent'
+    return 'pending_received'
+
+def increment_player_deaths(user_id: int):
+    """Увеличить счётчик смертей на 1"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('UPDATE players SET deaths = COALESCE(deaths, 0) + 1 WHERE user_id = ?', (user_id,))
+    conn.commit()
+    conn.close()
+
+def increment_player_dodges(user_id: int):
+    """Увеличить счётчик уворотов/промахов на 1"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('UPDATE players SET dodges = COALESCE(dodges, 0) + 1 WHERE user_id = ?', (user_id,))
+    conn.commit()
+    conn.close()
+
+def increment_player_pve_wins(user_id: int):
+    """Увеличить счётчик PvE побед (локации/рейд) на 1"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('UPDATE players SET pve_wins = COALESCE(pve_wins, 0) + 1 WHERE user_id = ?', (user_id,))
+    conn.commit()
+    conn.close()
+
+def set_player_clan_image_flag(user_id: int):
+    """Отметить что игрок установил картину в клане"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('UPDATE players SET has_set_clan_image = 1 WHERE user_id = ?', (user_id,))
+    conn.commit()
+    conn.close()
+
+def set_player_spammer_flag(user_id: int):
+    """Отметить что игрок наспамил в чате клана"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('UPDATE players SET is_spammer = 1 WHERE user_id = ?', (user_id,))
+    conn.commit()
+    conn.close()
 
 # ============== INVENTORY FUNCTIONS ==============
 def get_inventory(user_id: int) -> dict:
@@ -1582,6 +1794,11 @@ class RatingState(StatesGroup):
     viewing_rating = State()
     viewing_player = State()
 
+class FriendsMenu(StatesGroup):
+    viewing_friends = State()
+    viewing_requests = State()
+    viewing_friend_profile = State()
+
 # Словарь для отслеживания cooldown боевых действий (2 сек)
 battle_cooldowns: dict = {}
 
@@ -1593,6 +1810,9 @@ pvp_pairs: dict = {}
 # Активные сессии клан-чата: clan_id -> set(user_id)
 clan_chat_sessions: dict = {}
 
+# Трекер сообщений в чате клана для детекции спама: user_id -> list of timestamps
+clan_chat_spam_tracker: dict = {}
+
 # ============== KEYBOARDS ==============
 def get_main_kb():
     """Главное меню"""
@@ -1601,7 +1821,7 @@ def get_main_kb():
         [KeyboardButton(text="🔨 Кузня"),        KeyboardButton(text="🐉 Рейд")],
         [KeyboardButton(text="🌐 Онлайн"),       KeyboardButton(text="🛡️ Кланы")],
         [KeyboardButton(text="🏆 Рейтинг"),     KeyboardButton(text="📖 Профиль")],
-        [KeyboardButton(text="🛒 Рынок")]
+        [KeyboardButton(text="👥 Друзья"),       KeyboardButton(text="🛒 Рынок")]
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
@@ -1813,11 +2033,20 @@ def get_rating_kb(leaderboard, page: int, total_pages: int):
     kb.append([KeyboardButton(text="❌ Выход")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
-def get_rating_player_kb():
-    """Кнопка возврата из профиля игрока в рейтинг"""
-    kb = [
-        [KeyboardButton(text="⬅️ Назад в рейтинг")]
-    ]
+def get_rating_player_kb(viewer_id: int = None, target_id: int = None):
+    """Кнопка возврата из профиля игрока в рейтинг + кнопка друзей"""
+    kb = []
+    if viewer_id and target_id and viewer_id != target_id:
+        fs = get_friendship_status(viewer_id, target_id)
+        if fs == 'none':
+            kb.append([KeyboardButton(text="➕ Добавить в друзья")])
+        elif fs == 'accepted':
+            kb.append([KeyboardButton(text="✅ В друзьях")])
+        elif fs == 'pending_sent':
+            kb.append([KeyboardButton(text="⏳ Заявка отправлена")])
+        elif fs == 'pending_received':
+            kb.append([KeyboardButton(text="➕ Добавить в друзья")])
+    kb.append([KeyboardButton(text="⬅️ Назад в рейтинг")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 def get_pvp_accept_kb():
@@ -1997,21 +2226,109 @@ def get_profile_kb() -> ReplyKeyboardMarkup:
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
-def get_statuses_kb(player: dict) -> ReplyKeyboardMarkup:
-    """Клавиатура статусов"""
+STATUSES_PER_PAGE = 5
+
+def is_status_available(player: dict, status_info: dict) -> bool:
+    """Проверить, доступен ли статус для игрока"""
+    s_type = status_info.get("type", "default")
+    if s_type in ("default", "free"):
+        return True
+    if s_type == "unlock_level":
+        return player.get('player_level', 1) >= status_info.get('required_level', 1)
+    if s_type == "unlock_matches":
+        return player.get('online_matches', 0) >= (status_info.get('required_matches', 0) or 0)
+    if s_type == "unlock_friends":
+        friends_count = get_friends_count(player['user_id'])
+        return friends_count >= status_info.get('required_friends', 1)
+    if s_type == "unlock_strength":
+        return player.get('strength', 0) >= status_info.get('required_strength', 0)
+    if s_type == "unlock_deaths":
+        return player.get('deaths', 0) >= status_info.get('required_deaths', 0)
+    if s_type == "unlock_dodges":
+        return player.get('dodges', 0) >= status_info.get('required_dodges', 0)
+    if s_type == "unlock_pve_wins":
+        return player.get('pve_wins', 0) >= status_info.get('required_pve_wins', 0)
+    if s_type == "unlock_clan_image":
+        return player.get('has_set_clan_image', 0) >= 1
+    if s_type == "unlock_spam":
+        return player.get('is_spammer', 0) >= 1
+    return False
+
+def _get_status_requirement_text(status_info: dict) -> str:
+    """Получить текст условия для заблокированного статуса"""
+    s_type = status_info.get("type", "default")
+    if s_type == "unlock_level":
+        return f"🔒 Ур.{status_info.get('required_level', 1)}"
+    if s_type == "unlock_friends":
+        return f"🔒 Друзья: {status_info.get('required_friends', 1)}"
+    if s_type == "unlock_strength":
+        return f"🔒 Сила: {status_info.get('required_strength', 0)}+"
+    if s_type == "unlock_deaths":
+        return f"🔒 Смертей: {status_info.get('required_deaths', 0)}"
+    if s_type == "unlock_dodges":
+        return f"🔒 Уворотов: {status_info.get('required_dodges', 0)}"
+    if s_type == "unlock_pve_wins":
+        return f"🔒 PvE побед: {status_info.get('required_pve_wins', 0)}"
+    if s_type == "unlock_clan_image":
+        return "🔒 Картина в клане"
+    if s_type == "unlock_spam":
+        return "🔒 Спам в чате клана"
+    return "🔒"
+
+def get_statuses_kb(player: dict, page: int = 0) -> ReplyKeyboardMarkup:
+    """Клавиатура статусов с пагинацией (5 на страницу)"""
+    all_ids = sorted(STATUSES.keys())
+    total_pages = max(1, (len(all_ids) + STATUSES_PER_PAGE - 1) // STATUSES_PER_PAGE)
+    page = max(0, min(page, total_pages - 1))
+    start = page * STATUSES_PER_PAGE
+    end = start + STATUSES_PER_PAGE
+    page_ids = all_ids[start:end]
+
     kb = []
-    for s_id, s in STATUSES.items():
+    for s_id in page_ids:
+        s = STATUSES[s_id]
         owned = (player.get('status') == s['name'])
-        can_unlock = (player.get('player_level', 1) >= s.get('required_level', 1))
+        can_unlock = is_status_available(player, s)
         if owned:
             label = f"{s['emoji']} {s['name']} [✅ Активен]"
         elif can_unlock:
             label = f"{s['emoji']} {s['name']} [Выбрать]"
         else:
-            label = f"{s['emoji']} {s['name']} [🔒 Ур.{s.get('required_level', 1)}]"
+            req_text = _get_status_requirement_text(s)
+            label = f"{s['emoji']} {s['name']} [{req_text}]"
         kb.append([KeyboardButton(text=label)])
+
+    nav = []
+    if page > 0:
+        nav.append(KeyboardButton(text="⬅️ Пред. страница"))
+    if page < total_pages - 1:
+        nav.append(KeyboardButton(text="След. страница ➡️"))
+    if nav:
+        kb.append(nav)
     kb.append([KeyboardButton(text="⬅️ Назад")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+def _format_statuses_text(player: dict, page: int = 0) -> str:
+    """Форматировать текст списка статусов с пагинацией"""
+    all_ids = sorted(STATUSES.keys())
+    total_pages = max(1, (len(all_ids) + STATUSES_PER_PAGE - 1) // STATUSES_PER_PAGE)
+    page = max(0, min(page, total_pages - 1))
+    start = page * STATUSES_PER_PAGE
+    end = start + STATUSES_PER_PAGE
+    page_ids = all_ids[start:end]
+
+    # Count unlocked statuses
+    unlocked_count = sum(1 for s_id in all_ids if is_status_available(player, STATUSES[s_id]))
+
+    text = f"🎭 <b>СТАТУСЫ</b> ({unlocked_count}/{len(all_ids)})\nСтраница {page + 1}/{total_pages}\n\nВыбери статус для своего персонажа:\n\n"
+    for s_id in page_ids:
+        s = STATUSES[s_id]
+        can = is_status_available(player, s)
+        owned = (player.get('status') == s['name'])
+        lock = "" if can else f" {_get_status_requirement_text(s)}"
+        check = " ✅" if owned else ""
+        text += f"{s.get('custom_emoji', s['emoji'])} | {s['name']}{lock}{check}\n"
+    return text
 
 # ============== HELPER FUNCTIONS ==============
 def calculate_player_health(strength: float) -> int:
@@ -2134,7 +2451,7 @@ async def _send_profile(message, player: dict):
     response = (
         f'{E_PROFILE} Профиль игрока:\n'
         f'{E_LOCK}{E_HASHTAG} {safe_nick}\n\n'
-        f'{E_DOT} {status_emoji} {safe_status}\n\n'
+        f'{status_emoji} {safe_status}\n\n'
         f'Уровень {E_CIRCLE} {player["player_level"]}{E_STAR}\n'
         f'{E_SQ}{exp_info["current_exp"]} / {exp_info["needed_exp"]}{E_EXP_DOT}{E_EXP} Опыта\n\n\n'
         f'{E_SQ}{player["wins"]} - {E_TROPHY} {E_YELLOW} Победы\n'
@@ -2163,15 +2480,9 @@ async def handle_profile_menu(message: types.Message, state: FSMContext):
     if text == "🎭 Статусы":
         player = get_player(user_id)
         await state.set_state(ProfileMenu.viewing_statuses)
-        statuses_text = "🎭 <b>СТАТУСЫ</b>\n\nВыбери статус для своего персонажа:\n\n"
-        for s_id, s in STATUSES.items():
-            req_lvl = s.get('required_level', 1)
-            can = (player.get('player_level', 1) >= req_lvl)
-            owned = (player.get('status') == s['name'])
-            lock = "" if can else f" 🔒(ур.{req_lvl})"
-            check = " ✅" if owned else ""
-            statuses_text += f"{s.get('custom_emoji', s['emoji'])} | {s['name']}{lock}{check}\n"
-        await message.answer(statuses_text, reply_markup=get_statuses_kb(player))
+        await state.update_data(statuses_page=0)
+        statuses_text = _format_statuses_text(player, 0)
+        await message.answer(statuses_text, reply_markup=get_statuses_kb(player, 0))
         return
 
     # Refresh profile
@@ -2198,31 +2509,47 @@ async def handle_profile_statuses(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     player = get_player(user_id)
     text = message.text
+    data = await state.get_data()
+    current_page = data.get('statuses_page', 0)
 
     if text == "⬅️ Назад":
         await state.set_state(ProfileMenu.viewing_profile)
         await _send_profile(message, player)
         return
 
+    if text == "След. страница ➡️":
+        new_page = current_page + 1
+        await state.update_data(statuses_page=new_page)
+        statuses_text = _format_statuses_text(player, new_page)
+        await message.answer(statuses_text, reply_markup=get_statuses_kb(player, new_page))
+        return
+
+    if text == "⬅️ Пред. страница":
+        new_page = max(0, current_page - 1)
+        await state.update_data(statuses_page=new_page)
+        statuses_text = _format_statuses_text(player, new_page)
+        await message.answer(statuses_text, reply_markup=get_statuses_kb(player, new_page))
+        return
+
     # Check if player selected a status
     for s_id, s in STATUSES.items():
-        req_lvl = s.get('required_level', 1)
-        can = (player.get('player_level', 1) >= req_lvl)
+        can = is_status_available(player, s)
         owned = (player.get('status') == s['name'])
         label_base = f"{s['emoji']} {s['name']}"
         if text.startswith(label_base):
             if owned:
-                await message.answer(f"✅ Статус «{s['name']}» уже активен!", reply_markup=get_statuses_kb(player))
+                await message.answer(f"✅ Статус «{s['name']}» уже активен!", reply_markup=get_statuses_kb(player, current_page))
                 return
             if not can:
-                await message.answer(f"🔒 Нужен уровень {req_lvl} для этого статуса!", reply_markup=get_statuses_kb(player))
+                req_text = _get_status_requirement_text(s)
+                await message.answer(f"{req_text} — условие не выполнено!", reply_markup=get_statuses_kb(player, current_page))
                 return
             set_player_status(user_id, s['name'])
             updated = get_player(user_id)
-            await message.answer(f"✅ Статус изменён на «{s['name']}» {s['emoji']}!", reply_markup=get_statuses_kb(updated))
+            await message.answer(f"✅ Статус изменён на «{s['name']}» {s['emoji']}!", reply_markup=get_statuses_kb(updated, current_page))
             return
 
-    await message.answer("Выбери статус из списка!", reply_markup=get_statuses_kb(player))
+    await message.answer("Выбери статус из списка!", reply_markup=get_statuses_kb(player, current_page))
 
 # ============== INVENTORY TAB ==============
 async def _send_inventory(message, user_id: int, back_button: str = "⬅️ Назад"):
@@ -3121,7 +3448,7 @@ async def handle_rating_menu(message: types.Message, state: FSMContext):
                 profile_text = (
                     f'{E_PROFILE} Профиль игрока {safe_nick}:\n'
                     f'{E_LOCK}{E_HASHTAG} {safe_nick}\n\n'
-                    f'{E_DOT} {status_emoji} {safe_status}\n\n'
+                    f'{status_emoji} {safe_status}\n\n'
                     f'Уровень {E_CIRCLE} {full_player["player_level"]}{E_STAR}\n'
                     f'{E_SQ}{exp_info["current_exp"]} / {exp_info["needed_exp"]}{E_EXP_DOT}{E_EXP} Опыта\n\n\n'
                     f'{E_SQ}{full_player["wins"]} - {E_TROPHY} {E_YELLOW} Победы\n'
@@ -3131,8 +3458,10 @@ async def handle_rating_menu(message: types.Message, state: FSMContext):
                     f'{E_SQ}{full_player["crystals"]} - {E_CRYSTALS}{E_GREEN} Кристаллы  \n'
                     f'{E_SQ}{full_player["raid_tickets"]} - {E_TICKET}{E_GREEN} Билеты рейда\n'
                 )
+                viewer_id = message.from_user.id
                 await state.set_state(RatingState.viewing_player)
-                await send_image_with_text(message, "images/profile.png", profile_text, reply_markup=get_rating_player_kb())
+                await state.update_data(viewing_player_id=full_player['user_id'])
+                await send_image_with_text(message, "images/profile.png", profile_text, reply_markup=get_rating_player_kb(viewer_id, full_player['user_id']))
                 return
         await message.answer(f"{E_CROSS} Игрок не найден!")
         return
@@ -3151,6 +3480,304 @@ async def back_to_rating(message: types.Message, state: FSMContext):
     response = _format_rating_page(leaderboard, page)
     await state.set_state(RatingState.viewing_rating)
     await send_image_with_text(message, "images/league.png", response, reply_markup=get_rating_kb(leaderboard, page, total_pages))
+
+@dp.message(RatingState.viewing_player, F.text == "➕ Добавить в друзья")
+async def add_friend_from_rating(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    data = await state.get_data()
+    target_id = data.get('viewing_player_id')
+    if not target_id:
+        await message.answer("❌ Ошибка: игрок не найден.")
+        return
+    result = send_friend_request(user_id, target_id)
+    if result == 'sent':
+        await message.answer("✅ Заявка в друзья отправлена!")
+        # Send notification to target player
+        player = get_player(user_id)
+        if player:
+            safe_nick = html.escape(player['nickname'])
+            try:
+                await bot.send_message(
+                    chat_id=target_id,
+                    text=f"{E_PROFILE} 👤 {safe_nick} добавил тебя в друзья!\n\nПринять можно во вкладке «👥 Друзья» → «📩 Заявки в друзья»",
+                    parse_mode="HTML"
+                )
+            except Exception:
+                pass
+        # Refresh the keyboard to show updated state
+        await send_image_with_text(message, "images/profile.png", "⏳ Заявка отправлена!", reply_markup=get_rating_player_kb(user_id, target_id))
+    elif result == 'already_friends':
+        await message.answer("✅ Вы уже друзья!")
+    elif result == 'already_pending':
+        await message.answer("⏳ Заявка уже отправлена!")
+    elif result == 'self':
+        await message.answer("❌ Нельзя добавить себя в друзья!")
+
+@dp.message(RatingState.viewing_player, F.text.in_({"✅ В друзьях", "⏳ Заявка отправлена"}))
+async def friend_status_info(message: types.Message, state: FSMContext):
+    if message.text == "✅ В друзьях":
+        await message.answer("✅ Этот игрок уже у вас в друзьях!")
+    else:
+        await message.answer("⏳ Заявка уже отправлена, ожидайте ответа!")
+
+# ============== FRIENDS MENU ==============
+FRIENDS_PER_PAGE = 5
+
+def get_friends_kb(friends_data: list, page: int, total_pages: int, has_requests: bool = False) -> ReplyKeyboardMarkup:
+    """Клавиатура списка друзей с пагинацией"""
+    kb = []
+    for friend in friends_data:
+        kb.append([KeyboardButton(text=f"👤 {friend['nickname']}")])
+    nav = []
+    if page > 0:
+        nav.append(KeyboardButton(text="⬅️ Назад"))
+    if page < total_pages - 1:
+        nav.append(KeyboardButton(text="Далее ➡️"))
+    if nav:
+        kb.append(nav)
+    if has_requests:
+        kb.append([KeyboardButton(text="📩 Заявки в друзья")])
+    kb.append([KeyboardButton(text="⬅️ Назад в меню")])
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+def get_friend_requests_kb(requests_data: list) -> ReplyKeyboardMarkup:
+    """Клавиатура заявок в друзья"""
+    kb = []
+    for req in requests_data:
+        kb.append([
+            KeyboardButton(text=f"✅ Принять: {req['nickname']}"),
+            KeyboardButton(text=f"❌ Отклонить: {req['nickname']}")
+        ])
+    kb.append([KeyboardButton(text="⬅️ Назад в друзья")])
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+def get_friend_profile_kb() -> ReplyKeyboardMarkup:
+    """Клавиатура профиля друга"""
+    kb = [
+        [KeyboardButton(text="❌ Удалить из друзей")],
+        [KeyboardButton(text="⬅️ Назад в друзья")]
+    ]
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+def _get_friends_page_data(user_id: int, page: int) -> tuple:
+    """Получить данные друзей для страницы. Возвращает (friends_data, total_pages, total)"""
+    friends_ids = get_friends_list(user_id)
+    total = len(friends_ids)
+    total_pages = max(1, (total + FRIENDS_PER_PAGE - 1) // FRIENDS_PER_PAGE)
+    page = max(0, min(page, total_pages - 1))
+    start = page * FRIENDS_PER_PAGE
+    end = start + FRIENDS_PER_PAGE
+    page_ids = friends_ids[start:end]
+    friends_data = []
+    for fid in page_ids:
+        fp = get_player(fid)
+        if fp:
+            friends_data.append(fp)
+    return friends_data, total_pages, total
+
+@dp.message(F.text == "👥 Друзья")
+async def open_friends(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    player = get_player(user_id)
+    if not player:
+        await message.answer("Сначала зарегистрируйся! /start")
+        return
+    await state.set_state(FriendsMenu.viewing_friends)
+    await state.update_data(friends_page=0)
+    await _send_friends_list(message, state, user_id, 0)
+
+async def _send_friends_list(message, state: FSMContext, user_id: int, page: int):
+    """Показать список друзей"""
+    friends_data, total_pages, total = _get_friends_page_data(user_id, page)
+    requests = get_friend_requests(user_id)
+    has_requests = len(requests) > 0
+
+    if total == 0:
+        text = (
+            f'<tg-emoji emoji-id="5386745190914482793">😢</tg-emoji> У вас пока нету друзей...\n'
+            f'{E_SQ}<tg-emoji emoji-id="5276240711795107620">⚠️</tg-emoji> вы можете добавить друзей во вкладке "Рейтинг"!'
+        )
+        kb = []
+        if has_requests:
+            kb.append([KeyboardButton(text="📩 Заявки в друзья")])
+        kb.append([KeyboardButton(text="⬅️ Назад в меню")])
+        await message.answer(text, reply_markup=ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True), parse_mode="HTML")
+        return
+
+    text = f'<tg-emoji emoji-id="5298668674532538341">👥</tg-emoji> Всего в друзьях: {total}\n\n'
+    start_index = page * FRIENDS_PER_PAGE
+    for i, friend in enumerate(friends_data):
+        idx = start_index + i + 1
+        safe_nick = html.escape(friend['nickname'])
+        status_emoji = get_player_status_emoji(friend)
+        safe_status = html.escape(friend.get('status', 'Новичок'))
+        text += (
+            f'{E_SQ}{idx}. {E_RARITY_ULTRA} {safe_nick}\n'
+            f'  ├ Сила: {int(friend["strength"])} {E_ATK}\n'
+            f'  ├ Уровень: {friend["player_level"]} {E_STAR}\n'
+            f'  ├ Статус: {status_emoji} {safe_status}\n\n'
+        )
+
+    await message.answer(text, reply_markup=get_friends_kb(friends_data, page, total_pages, has_requests), parse_mode="HTML")
+
+@dp.message(FriendsMenu.viewing_friends)
+async def handle_friends_menu(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+
+    if text == "⬅️ Назад в меню":
+        await show_main_menu(message, state)
+        return
+
+    data = await state.get_data()
+    current_page = data.get('friends_page', 0)
+
+    if text == "Далее ➡️":
+        new_page = current_page + 1
+        await state.update_data(friends_page=new_page)
+        await _send_friends_list(message, state, user_id, new_page)
+        return
+
+    if text == "⬅️ Назад":
+        new_page = max(0, current_page - 1)
+        await state.update_data(friends_page=new_page)
+        await _send_friends_list(message, state, user_id, new_page)
+        return
+
+    if text == "📩 Заявки в друзья":
+        await state.set_state(FriendsMenu.viewing_requests)
+        await _send_friend_requests(message, user_id)
+        return
+
+    # Check if friend nickname button was pressed
+    if text and text.startswith("👤 "):
+        nickname = text[2:].strip()
+        target = get_player_by_nickname(nickname)
+        if target:
+            full_player = get_player(target['user_id'])
+            if full_player:
+                await state.set_state(FriendsMenu.viewing_friend_profile)
+                await state.update_data(viewing_friend_id=full_player['user_id'])
+                await _send_friend_profile(message, full_player)
+                return
+        await message.answer(f"{E_CROSS} Друг не найден!")
+        return
+
+    await _send_friends_list(message, state, user_id, current_page)
+
+async def _send_friend_profile(message, friend: dict):
+    """Показать профиль друга"""
+    health = calculate_player_health(friend['strength'])
+    damage = calculate_damage(friend['strength'])
+    exp_info = get_experience_progress(friend['user_id'])
+    status_emoji = get_player_status_emoji(friend)
+    safe_nick = html.escape(friend["nickname"])
+    safe_status = html.escape(friend["status"])
+    profile_text = (
+        f'{E_PROFILE} Профиль друга {safe_nick}:\n'
+        f'{E_LOCK}{E_HASHTAG} {safe_nick}\n\n'
+        f'{status_emoji} {safe_status}\n\n'
+        f'Уровень {E_CIRCLE} {friend["player_level"]}{E_STAR}\n'
+        f'{E_SQ}{exp_info["current_exp"]} / {exp_info["needed_exp"]}{E_EXP_DOT}{E_EXP} Опыта\n\n\n'
+        f'{E_SQ}{friend["wins"]} - {E_TROPHY} {E_YELLOW} Победы\n'
+        f'{E_SQ}{int(friend["strength"])} - {E_ATK} {E_YELLOW} Сила\n'
+        f'{E_SQ}{health} - {E_HP} {E_YELLOW} Здоровье\n\n'
+        f'{E_SQ}{friend["coins"]} - {E_COINS}{E_GREEN} Монеты  \n'
+        f'{E_SQ}{friend["crystals"]} - {E_CRYSTALS}{E_GREEN} Кристаллы  \n'
+        f'{E_SQ}{friend["raid_tickets"]} - {E_TICKET}{E_GREEN} Билеты рейда\n'
+    )
+    await send_image_with_text(message, "images/profile.png", profile_text, reply_markup=get_friend_profile_kb())
+
+@dp.message(FriendsMenu.viewing_friend_profile)
+async def handle_friend_profile(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+
+    if text == "⬅️ Назад в друзья":
+        await state.set_state(FriendsMenu.viewing_friends)
+        data = await state.get_data()
+        page = data.get('friends_page', 0)
+        await _send_friends_list(message, state, user_id, page)
+        return
+
+    if text == "❌ Удалить из друзей":
+        data = await state.get_data()
+        friend_id = data.get('viewing_friend_id')
+        if friend_id:
+            remove_friend(user_id, friend_id)
+            await message.answer("✅ Друг удалён!")
+        await state.set_state(FriendsMenu.viewing_friends)
+        page = data.get('friends_page', 0)
+        await _send_friends_list(message, state, user_id, page)
+        return
+
+async def _send_friend_requests(message, user_id: int):
+    """Показать заявки в друзья"""
+    request_ids = get_friend_requests(user_id)
+
+    if not request_ids:
+        text = '<tg-emoji emoji-id="5206510891247371052">🔽</tg-emoji> 🔽 У вас нет новых заявок в друзья!'
+        kb = [[KeyboardButton(text="⬅️ Назад в друзья")]]
+        await message.answer(text, reply_markup=ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True), parse_mode="HTML")
+        return
+
+    requests_data = []
+    for rid in request_ids:
+        rp = get_player(rid)
+        if rp:
+            requests_data.append(rp)
+
+    text = f'<tg-emoji emoji-id="5206510891247371052">🔽</tg-emoji> 🔽 Заявки в друзья: {len(requests_data)}\n\n'
+    for req in requests_data:
+        safe_nick = html.escape(req['nickname'])
+        text += (
+            f'{E_SQ}{E_RARITY_ULTRA} {safe_nick}\n'
+            f'  ├ Сила: {int(req["strength"])} {E_ATK}\n\n'
+        )
+
+    await message.answer(text, reply_markup=get_friend_requests_kb(requests_data), parse_mode="HTML")
+
+@dp.message(FriendsMenu.viewing_requests)
+async def handle_friend_requests(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+
+    if text == "⬅️ Назад в друзья":
+        await state.set_state(FriendsMenu.viewing_friends)
+        data = await state.get_data()
+        page = data.get('friends_page', 0)
+        await _send_friends_list(message, state, user_id, page)
+        return
+
+    if text and text.startswith("✅ Принять: "):
+        nickname = text[len("✅ Принять: "):]
+        target = get_player_by_nickname(nickname)
+        if target:
+            accepted = accept_friend_request(user_id, target['user_id'])
+            if accepted:
+                await message.answer(f"✅ Вы приняли {html.escape(nickname)} в друзья!", parse_mode="HTML")
+            else:
+                await message.answer("❌ Заявка не найдена.")
+        else:
+            await message.answer("❌ Игрок не найден.")
+        await _send_friend_requests(message, user_id)
+        return
+
+    if text and text.startswith("❌ Отклонить: "):
+        nickname = text[len("❌ Отклонить: "):]
+        target = get_player_by_nickname(nickname)
+        if target:
+            declined = decline_friend_request(user_id, target['user_id'])
+            if declined:
+                await message.answer(f"❌ Заявка от {html.escape(nickname)} отклонена.", parse_mode="HTML")
+            else:
+                await message.answer("❌ Заявка не найдена.")
+        else:
+            await message.answer("❌ Игрок не найден.")
+        await _send_friend_requests(message, user_id)
+        return
+
+    await _send_friend_requests(message, user_id)
 
 # ============== RAID ==============
 def _get_raid_floor_text(floor_id: int, enemy_info: dict) -> str:
@@ -3324,6 +3951,7 @@ async def handle_raid_menu(message: types.Message, state: FSMContext):
         if new_player_health <= 0:
             update_player_raid_floor(user_id, 0)
             update_rating_points(user_id, -10)
+            increment_player_deaths(user_id)
             log += _fmt_defeat(html.escape(player['nickname']), enemy_info['name'])
             log += f"\n\nРекорд: {player['raid_max_floor']} этаж."
             await message.answer(log, reply_markup=get_end_battle_kb())
@@ -3397,6 +4025,7 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
 
         # 10% базовый промах
         if roll_miss():
+            increment_player_dodges(user_id)
             log += f"{E_CROSS}{E_ATK} Промах! Враг уклонился\n\n"
             player_hit = 0
         elif sk_id == 1:  # Мега-молот: 70% урон + стан
@@ -3421,6 +4050,7 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
     elif action == "Крит💥20%":
         is_crit = random.random() < 0.20
         if not is_crit:
+            increment_player_dodges(user_id)
             log += (
                 f"{E_CROSS}{E_ATK} Ты промахиваешься!\n"
                 f"{E_SQ}Неудачный крит шанс.\n\n"
@@ -3449,6 +4079,7 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
                     update_player_raid_max_floor(user_id, new_max)
                 update_player_raid_floor(user_id, 0)
                 update_rating_points(user_id, -10)
+                increment_player_deaths(user_id)
                 log += _fmt_defeat(html.escape(player['nickname']), enemy_info['name'])
                 log += f"\n\nПройдено этажей: {floors_completed}. Рекорд: {new_max}."
                 await message.answer(log, reply_markup=get_end_battle_kb())
@@ -3465,6 +4096,7 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
         # Крит успешный
         if roll_miss():
             player_hit = 0
+            increment_player_dodges(user_id)
             log += f"{E_CROSS}{E_ATK} Промах! Враг уклонился\n\n"
         else:
             base_dmg = int(round(data['player_damage'] * random.uniform(0.8, 1.2)))
@@ -3474,6 +4106,7 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
         # Обычная атака
         if roll_miss():
             player_hit = 0
+            increment_player_dodges(user_id)
             log += f"{E_CROSS}{E_ATK} Промах! Враг уклонился\n\n"
         else:
             player_hit = int(round(data['player_damage'] * random.uniform(0.8, 1.2)))
@@ -3490,6 +4123,7 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
         reward = enemy_info['reward']
         add_coins_to_player(user_id, reward)
         update_rating_points(user_id, 5)
+        increment_player_pve_wins(user_id)
         if floor_id > player['raid_max_floor']:
             update_player_raid_max_floor(user_id, floor_id)
         player_clan = get_player_clan(user_id)
@@ -3557,6 +4191,7 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
         blind_extra = SKILLS[3]['miss_chance_add'] if new_player_blind > 0 else 0.0
         if roll_miss(blind_extra):
             enemy_hit = 0
+            increment_player_dodges(user_id)
             log += f"{E_CROSS}{E_ATK} {enemy_info['name']} промахивается!\n\n"
         else:
             enemy_hit = int(round(data['enemy_damage'] * random.uniform(0.7, 1.3)))
@@ -3573,6 +4208,7 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
             update_player_raid_max_floor(user_id, new_max)
         update_player_raid_floor(user_id, 0)
         update_rating_points(user_id, -10)
+        increment_player_deaths(user_id)
         log += _fmt_defeat(html.escape(player['nickname']), enemy_info['name'])
         log += f"\n\nПройдено этажей: {floors_completed}. Рекорд: {new_max}."
         await message.answer(log, reply_markup=get_end_battle_kb())
@@ -3642,6 +4278,7 @@ async def start_battle(message: types.Message, state: FSMContext):
         if new_player_health <= 0:
             if not data.get('is_location_battle'):
                 update_rating_points(user_id, -10)
+            increment_player_deaths(user_id)
             battle_log += _fmt_defeat(html.escape(player['nickname']), enemy_info['name'], data.get('is_location_battle'))
             
             await message.answer(battle_log, reply_markup=get_end_battle_kb())
@@ -3722,6 +4359,7 @@ async def battle_round(message: types.Message, state: FSMContext):
         battle_log += f"✨ {sk['name']}!\n"
 
         if roll_miss():
+            increment_player_dodges(user_id)
             battle_log += f"{E_CROSS}{E_ATK} Промах! Враг уклонился\n\n"
             player_hit = 0
         elif sk_id == 1:
@@ -3746,6 +4384,7 @@ async def battle_round(message: types.Message, state: FSMContext):
     elif action == "Крит💥20%":
         is_crit = random.random() < 0.20
         if not is_crit:
+            increment_player_dodges(user_id)
             battle_log += (
                 f"{E_CROSS}{E_ATK} Ты промахиваешься!\n"
                 f"{E_SQ}Неудачный крит шанс.\n\n"
@@ -3769,6 +4408,7 @@ async def battle_round(message: types.Message, state: FSMContext):
             if new_player_health <= 0:
                 if not data.get('is_location_battle'):
                     update_rating_points(user_id, -10)
+                increment_player_deaths(user_id)
                 battle_log += _fmt_defeat(html.escape(player['nickname']), enemy_info['name'], data.get('is_location_battle'))
                 await message.answer(battle_log, reply_markup=get_end_battle_kb())
                 await state.clear()
@@ -3783,6 +4423,7 @@ async def battle_round(message: types.Message, state: FSMContext):
             return
         if roll_miss():
             player_hit = 0
+            increment_player_dodges(user_id)
             battle_log += f"{E_CROSS}{E_ATK} Промах! Враг уклонился\n\n"
         else:
             base_damage = int(round(data['player_damage'] * random.uniform(0.8, 1.2)))
@@ -3791,6 +4432,7 @@ async def battle_round(message: types.Message, state: FSMContext):
     else:
         if roll_miss():
             player_hit = 0
+            increment_player_dodges(user_id)
             battle_log += f"{E_CROSS}{E_ATK} Промах! Враг уклонился\n\n"
         else:
             player_hit = int(round(data['player_damage'] * random.uniform(0.8, 1.2)))
@@ -3804,6 +4446,7 @@ async def battle_round(message: types.Message, state: FSMContext):
 
     if new_enemy_health <= 0:
         if data.get('is_location_battle') and data.get('location_enemy_cfg'):
+            increment_player_pve_wins(user_id)
             loc_cfg = data['location_enemy_cfg']
             loc_rewards = loc_cfg.get('rewards', {})
             reward_lines = []
@@ -3872,6 +4515,7 @@ async def battle_round(message: types.Message, state: FSMContext):
     else:
         blind_extra = SKILLS[3]['miss_chance_add'] if new_player_blind > 0 else 0.0
         if roll_miss(blind_extra):
+            increment_player_dodges(user_id)
             battle_log += f"{E_CROSS}{E_ATK} {enemy_info['name']} промахивается!\n\n"
             enemy_damage_dealt = 0
         else:
@@ -3885,6 +4529,7 @@ async def battle_round(message: types.Message, state: FSMContext):
     if new_player_health <= 0:
         if not data.get('is_location_battle'):
             update_rating_points(user_id, -10)
+        increment_player_deaths(user_id)
         battle_log += _fmt_defeat(html.escape(player['nickname']), enemy_info['name'], data.get('is_location_battle'))
         await message.answer(battle_log, reply_markup=get_end_battle_kb())
         await state.clear()
@@ -4233,6 +4878,7 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
 
         if roll_miss():
             dealt = 0
+            increment_player_dodges(user_id)
             battle_log += f"{E_CROSS}{E_ATK} Промах! Соперник уклонился\n\n"
         elif sk_id == 1:
             dealt = int(round(my_damage * sk['damage_mult'] * random.uniform(0.8, 1.2)))
@@ -4257,12 +4903,14 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
         is_crit = random.random() < 0.20
         if not is_crit:
             dealt = 0
+            increment_player_dodges(user_id)
             battle_log += (
                 f"{E_CROSS}{E_ATK} Ты промахиваешься!\n"
                 f"{E_SQ}Неудачный крит шанс.\n\n"
             )
         elif roll_miss():
             dealt = 0
+            increment_player_dodges(user_id)
             battle_log += f"{E_CROSS}{E_ATK} Промах! Соперник уклонился\n\n"
         else:
             base = int(round(my_damage * random.uniform(0.8, 1.2)))
@@ -4271,6 +4919,7 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
     else:
         if roll_miss():
             dealt = 0
+            increment_player_dodges(user_id)
             battle_log += f"{E_CROSS}{E_ATK} Промах! Соперник уклонился\n\n"
         else:
             dealt = int(round(my_damage * random.uniform(0.8, 1.2)))
@@ -4287,6 +4936,7 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
         add_online_match(user_id)
         if opponent_id:
             add_online_match(opponent_id)
+            increment_player_deaths(opponent_id)
         winner_clan = get_player_clan(user_id)
         if winner_clan:
             add_clan_exp(winner_clan['clan_id'], 2)
@@ -4883,6 +5533,16 @@ async def handle_clan_chat(message: types.Message, state: FSMContext):
     # Save to DB
     save_clan_message(clan_id, user_id, nickname, text)
 
+    # Track spam for "Какашка" status (20-30 messages in 6 seconds)
+    now = datetime.now()
+    if user_id not in clan_chat_spam_tracker:
+        clan_chat_spam_tracker[user_id] = []
+    clan_chat_spam_tracker[user_id].append(now)
+    # Keep only messages from last 6 seconds
+    clan_chat_spam_tracker[user_id] = [t for t in clan_chat_spam_tracker[user_id] if (now - t).total_seconds() <= 6]
+    if len(clan_chat_spam_tracker[user_id]) >= 20:
+        set_player_spammer_flag(user_id)
+
     # Broadcast to all members currently in chat session
     active_members = clan_chat_sessions.get(clan_id, set()).copy()
     from datetime import datetime
@@ -5137,6 +5797,7 @@ async def handle_clan_image_change(message: types.Message, state: FSMContext):
 
     photo_file_id = message.photo[-1].file_id
     update_clan_image(clan_id, photo_file_id)
+    set_player_clan_image_flag(message.from_user.id)
     updated_clan = get_clan(clan_id)
     await message.answer("✅ Картина клана обновлена!")
     await _show_clan_info(message, updated_clan, True)
