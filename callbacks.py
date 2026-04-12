@@ -1,12 +1,13 @@
 from aiogram import Router, F, types
 from aiogram.fsm.context import FSMContext
-import bott
 
 router = Router()
 
 @router.callback_query(F.data.startswith("main_"))
 async def handle_main_menu(query: types.CallbackQuery, state: FSMContext):
     """Обработка нажатий inline-кнопок главного меню"""
+    import bott  # lazy import to avoid circular dependency
+
     await query.answer()
 
     action = query.data.replace("main_", "")
