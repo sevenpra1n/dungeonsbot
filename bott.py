@@ -65,6 +65,24 @@ E_BOOK2    = '<tg-emoji emoji-id="5334859426178313935">📕</tg-emoji>'   # кн
 E_MARKET   = '<tg-emoji emoji-id="5246762912428603768">📉</tg-emoji>'   # рынок
 E_TRASH    = '<tg-emoji emoji-id="5276384644739129761">🗑</tg-emoji>'   # продажа
 E_CHART    = '<tg-emoji emoji-id="5278778882848220741">📊</tg-emoji>'   # покупка
+E_CROSS    = '<tg-emoji emoji-id="5019523782004441717">❌</tg-emoji>'   # крестик ошибки
+E_LOCK     = '<tg-emoji emoji-id="6034962180875490251">🔓</tg-emoji>'   # замок
+E_HASHTAG  = '<tg-emoji emoji-id="5354857360844152098">#️⃣</tg-emoji>'  # решётка
+E_DOT      = '<tg-emoji emoji-id="5323718538710491847">🔸</tg-emoji>'   # точка
+E_CIRCLE   = '<tg-emoji emoji-id="5357471466919056181">🔘</tg-emoji>'   # кружок
+E_SQ       = '<tg-emoji emoji-id="5267324424113124134">▫️</tg-emoji>'   # квадрат
+E_YELLOW   = '<tg-emoji emoji-id="5906800644525660990">🟡</tg-emoji>'   # жёлтый
+E_GREEN    = '<tg-emoji emoji-id="5906852613629941703">🟢</tg-emoji>'   # зелёный
+E_RED_C    = '<tg-emoji emoji-id="5907027122446145395">🔴</tg-emoji>'   # красный
+E_WARN     = '<tg-emoji emoji-id="5276240711795107620">⚠️</tg-emoji>'   # предупреждение
+E_ITEMS_STAR = '<tg-emoji emoji-id="5276111746812112286">⭐️</tg-emoji>' # звезда предметов
+E_AXE_S1   = '<tg-emoji emoji-id="5204460680018666213">⭐️</tg-emoji>'  # топор 1
+E_AXE_S2   = '<tg-emoji emoji-id="5204221415980539813">⭐️</tg-emoji>'  # топор 2
+E_AXE_S3   = '<tg-emoji emoji-id="5204347567759956677">⭐️</tg-emoji>'  # топор 3
+E_AXE_S4   = '<tg-emoji emoji-id="5204141284775697953">⭐️</tg-emoji>'  # топор 4
+E_AXE_S5   = '<tg-emoji emoji-id="5217979901331644711">⭐️</tg-emoji>'  # топор 5
+E_TREE     = '<tg-emoji emoji-id="5217972428088556660">🌳</tg-emoji>'   # дерево (локация)
+E_EXP_DOT  = '<tg-emoji emoji-id="5321440402157353076">🔸</tg-emoji>'  # точка (опыт профиль)
 
 
 # Ваш токен от BotFather
@@ -267,6 +285,15 @@ def init_database():
             location_id INTEGER,
             start_time TIMESTAMP,
             end_time TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES players(user_id)
+        )
+    ''')
+
+    # Таблица купленных топоров
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS player_axes (
+            user_id INTEGER PRIMARY KEY,
+            axe_level INTEGER DEFAULT 0,
             FOREIGN KEY (user_id) REFERENCES players(user_id)
         )
     ''')
@@ -756,6 +783,32 @@ LOCATIONS = {
                 "monster_chance": 0.05
             }
         }
+    },
+    2: {
+        "name": "🌳 Лес",
+        "emoji": "🌳",
+        "image": "images/les.png",
+        "activities": {
+            "chop_wood": {
+                "name": "Добыча древесины",
+                "time": 40,
+                "emoji": "🌳",
+                "display_emoji": "🌳",
+                "rewards": {},
+                "monster_chance": 0
+            },
+            "search": {
+                "name": "Обыскать локацию",
+                "time": 60,
+                "emoji": "🗺️",
+                "display_emoji": E_MAP_E,
+                "rewards": {
+                    "coins": (10, 30),
+                    "experience": (9, 9),
+                },
+                "monster_chance": 0
+            }
+        }
     }
 }
 
@@ -777,6 +830,60 @@ LOCATION_ENEMIES = {
     },
 }
 
+# Топоры (для магазина предметов)
+AXES = {
+    1: {"level": 1, "min_wood": 2,  "max_wood": 6,   "cost": 250,   "star_emoji": '<tg-emoji emoji-id="5204460680018666213">⭐️</tg-emoji>'},
+    2: {"level": 2, "min_wood": 8,  "max_wood": 14,  "cost": 900,   "star_emoji": '<tg-emoji emoji-id="5204221415980539813">⭐️</tg-emoji>'},
+    3: {"level": 3, "min_wood": 17, "max_wood": 35,  "cost": 3250,  "star_emoji": '<tg-emoji emoji-id="5204347567759956677">⭐️</tg-emoji>'},
+    4: {"level": 4, "min_wood": 30, "max_wood": 75,  "cost": 9500,  "star_emoji": '<tg-emoji emoji-id="5204141284775697953">⭐️</tg-emoji>'},
+    5: {"level": 5, "min_wood": 80, "max_wood": 115, "cost": 25300, "star_emoji": '<tg-emoji emoji-id="5217979901331644711">⭐️</tg-emoji>'},
+}
+
+# Враги леса (по силе игрока)
+FOREST_ENEMIES = {
+    "lizard": {
+        "name": "Ящерица",
+        "emoji": "🦎",
+        "strength": 80,
+        "health": 80,
+        "min_player_strength": 0,
+        "max_player_strength": 89,
+        "rewards": {
+            "coins": (10, 30),
+            "experience": (5, 12),
+            "clan_exp": (6, 10),
+        },
+    },
+    "forest_archer": {
+        "name": "Лесной лучник",
+        "emoji": "🏹",
+        "strength": 135,
+        "health": 135,
+        "min_player_strength": 90,
+        "max_player_strength": 199,
+        "rewards": {
+            "coins": (35, 90),
+            "wood": (4, 10),
+            "experience": (15, 20),
+            "clan_exp": (10, 15),
+        },
+    },
+    "forest_brute": {
+        "name": "Лесной громила",
+        "emoji": "👹",
+        "strength": 475,
+        "health": 475,
+        "min_player_strength": 200,
+        "max_player_strength": 999999,
+        "rewards": {
+            "coins": (120, 250),
+            "wood": (4, 10),
+            "experience": (15, 20),
+            "clan_exp": (10, 15),
+        },
+    },
+}
+
 def get_location_enemy_for_player(player_strength: float) -> dict:
     """Вернуть врага локации по силе игрока"""
     for enemy in LOCATION_ENEMIES.values():
@@ -784,6 +891,31 @@ def get_location_enemy_for_player(player_strength: float) -> dict:
             return enemy
     # fallback
     return LOCATION_ENEMIES["wolf"]
+
+def get_forest_enemy_for_player(player_strength: float) -> dict:
+    """Вернуть врага леса по силе игрока"""
+    for enemy in FOREST_ENEMIES.values():
+        if enemy['min_player_strength'] <= player_strength <= enemy['max_player_strength']:
+            return enemy
+    # fallback to strongest
+    return FOREST_ENEMIES["forest_brute"]
+
+def get_player_axe_level(user_id: int) -> int:
+    """Получить уровень топора игрока (0 = нет топора)"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('SELECT axe_level FROM player_axes WHERE user_id = ?', (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] if row else 0
+
+def set_player_axe_level(user_id: int, level: int):
+    """Установить уровень топора игрока"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('INSERT OR REPLACE INTO player_axes (user_id, axe_level) VALUES (?, ?)', (user_id, level))
+    conn.commit()
+    conn.close()
 
 def has_purchased_equipment(user_id: int, equipment_id: int) -> bool:
     """Проверить, купил ли игрок это снаряжение"""
@@ -1699,6 +1831,8 @@ def get_location_activities_kb(location_id: int) -> ReplyKeyboardMarkup:
         kb.append([KeyboardButton(text=f"{act['emoji']} {act['name']} ({act['time']}с)")])
     if location_id == 1:
         kb.append([KeyboardButton(text="🔍 Поиск врага (10с)")])
+    if location_id == 2:
+        kb.append([KeyboardButton(text="💀 Поиск врага (30с)")])
     kb.append([KeyboardButton(text="⬅️ Назад на карту")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
@@ -1845,17 +1979,17 @@ async def _send_profile(message, player: dict):
     safe_nick = html.escape(player["nickname"])
     safe_status = html.escape(player["status"])
     response = (
-        f'{E_PROFILE} <b>Профиль игрока:</b>\n'
-        f'🔒 {E_BULLET} {safe_nick}\n\n'
-        f'{status_emoji} <b>{safe_status}</b>\n\n'
-        f'┆{E_EXP}┆Очки опыта {E_BULLET} {exp_info["current_exp"]} / {exp_info["needed_exp"]}\n'
-        f'Уровень {E_BULLET} {player["player_level"]}{E_STAR}\n\n'
-        f'│{E_TROPHY}│ {player["wins"]} {E_BULLET} Победы\n'
-        f'│{E_ATK}│ {int(player["strength"])} {E_BULLET} Сила\n'
-        f'│{E_HP}│ {health} {E_BULLET} Здоровье\n\n'
-        f'┆{E_COINS}┆Монеты {E_BULLET} {player["coins"]}\n'
-        f'┆{E_CRYSTALS}┆Кристаллы {E_BULLET} {player["crystals"]}\n'
-        f'┆{E_TICKET}┆Билеты рейда {E_BULLET} {player["raid_tickets"]}\n'
+        f'{E_PROFILE} Профиль игрока:\n'
+        f'{E_LOCK}{E_HASHTAG} {safe_nick}\n\n'
+        f'{E_DOT} {safe_status} (заглушка)\n\n'
+        f'Уровень {E_CIRCLE} {player["player_level"]}{E_STAR}\n'
+        f'{E_SQ}{exp_info["current_exp"]} / {exp_info["needed_exp"]}{E_EXP_DOT}{E_EXP} Опыта\n\n\n'
+        f'{E_SQ}{player["wins"]} - {E_TROPHY} {E_YELLOW} Победы\n'
+        f'{E_SQ}{int(player["strength"])} - {E_ATK} {E_YELLOW} Сила\n'
+        f'{E_SQ}{health} - {E_HP} {E_YELLOW} Здоровье\n\n'
+        f'{E_SQ}{player["coins"]} - {E_COINS}{E_GREEN} Монеты  \n'
+        f'{E_SQ}{player["crystals"]} - {E_CRYSTALS}{E_GREEN} Кристаллы  \n'
+        f'{E_SQ}{player["raid_tickets"]} - {E_TICKET}{E_GREEN} Билеты рейда\n'
     )
     await send_image_with_text(message, "images/profile.png", response, reply_markup=get_profile_kb())
 
@@ -1945,11 +2079,11 @@ async def _send_inventory(message, user_id: int, back_button: str = "⬅️ На
     nickname = html.escape(player['nickname']) if player else "Игрок"
     text = (
         f'{E_INV_BOX} | Инвентарь {nickname}:\n\n'
-        f'| {inv["wood"]} {E_WOOD} | ({E_BOOK} Древесина)\n'
-        f'| {inv["stone"]} {E_STONE} | ({E_BOOK} Камень)\n'
-        f'| {inv["food"]} {E_FOOD} | ({E_BOOK} Еда)\n'
-        f'| {inv["iron"]} {E_IRON} | ({E_BOOK} Железо)\n'
-        f'| {inv["gold"]} {E_GOLD_M} | ({E_BOOK} Золото)\n'
+        f'{E_SQ}{inv["wood"]} {E_WOOD}  Древесина\n'
+        f'{E_SQ}{inv["stone"]} {E_STONE}  Камень\n'
+        f'{E_SQ}{inv["food"]} {E_FOOD}  Еда\n'
+        f'{E_SQ}{inv["iron"]} {E_IRON}  Железо\n'
+        f'{E_SQ}{inv["gold"]} {E_GOLD_M}  Золото\n'
     )
     inv_kb = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text=back_button)]], resize_keyboard=True)
     await send_image_with_text(message, "images/inventory.png", text, reply_markup=inv_kb)
@@ -2034,6 +2168,9 @@ async def handle_map(message: types.Message, state: FSMContext):
                 loc_text += f"\n{act['time']}s{E_HOURGLASS} │ {disp_emoji} │ {act['name']}\n"
             if loc_id == 1:
                 loc_text += f"\n10s{E_HOURGLASS} | {E_SKULL} | Поиск врага\n"
+            if loc_id == 2:
+                loc_text += f"\n{E_SQ}{E_WARN} (необходим топор для добычи!)\n"
+                loc_text += f"\n30s{E_HOURGLASS} | {E_SKULL} | Поиск врага\n"
             await send_image_with_text(message, loc.get('image', 'images/meadow.png'), loc_text, reply_markup=get_location_activities_kb(loc_id))
             await state.set_state(LocationMenu.viewing_location)
             return
@@ -2078,6 +2215,15 @@ async def handle_location(message: types.Message, state: FSMContext):
     for act_key, act in loc['activities'].items():
         btn_text = f"{act['emoji']} {act['name']} ({act['time']}с)"
         if text == btn_text:
+            # Check if axe is needed for forest wood chopping
+            if loc_id == 2 and act_key == 'chop_wood':
+                axe_level = get_player_axe_level(user_id)
+                if axe_level <= 0:
+                    await message.answer(
+                        f"{E_CROSS} Необходим топор для добычи древесины!\nКупи топор в магазине (Рынок → Предметы).",
+                        reply_markup=get_location_activities_kb(loc_id)
+                    )
+                    return
             start_activity(user_id, act_key, loc_id, act['time'])
             await message.answer(
                 f"✅ Начато: {act['name']}\n"
@@ -2096,14 +2242,23 @@ async def handle_location(message: types.Message, state: FSMContext):
             "🔍 <b>Поиск врага...</b>\n\n⏳ Осталось 10 секунд. Подожди — кнопки заблокированы.",
             reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True)
         )
-        asyncio.create_task(_run_enemy_search(user_id, message.chat.id))
+        asyncio.create_task(_run_enemy_search(user_id, message.chat.id, search_time=10, location_id=1))
+        return
+
+    if text == "💀 Поиск врага (30с)":
+        await state.set_state(LocationMenu.searching_enemy)
+        await message.answer(
+            f"{E_SKULL} <b>Поиск врага...</b>\n\n⏳ Осталось 30 секунд. Подожди — кнопки заблокированы.",
+            reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True)
+        )
+        asyncio.create_task(_run_enemy_search(user_id, message.chat.id, search_time=30, location_id=2))
         return
 
     await message.answer("Выбери действие!", reply_markup=get_location_activities_kb(loc_id))
 
-async def _run_enemy_search(user_id: int, chat_id: int):
-    """Фоновая задача: ждёт 10 секунд, затем спаунит врага и начинает бой"""
-    await asyncio.sleep(10)
+async def _run_enemy_search(user_id: int, chat_id: int, search_time: int = 10, location_id: int = 1):
+    """Фоновая задача: ждёт search_time секунд, затем спаунит врага и начинает бой"""
+    await asyncio.sleep(search_time)
 
     player = get_player(user_id)
     if not player:
@@ -2116,9 +2271,16 @@ async def _run_enemy_search(user_id: int, chat_id: int):
     if current_state != LocationMenu.searching_enemy.state:
         return
 
-    enemy_cfg = get_location_enemy_for_player(player['strength'])
+    if location_id == 2:
+        enemy_cfg = get_forest_enemy_for_player(player['strength'])
+    else:
+        enemy_cfg = get_location_enemy_for_player(player['strength'])
     enemy_strength = enemy_cfg['strength']
-    enemy_health = calculate_player_health(enemy_strength)
+    # For forest enemies, use the explicit health value if available
+    if 'health' in enemy_cfg:
+        enemy_health = enemy_cfg['health']
+    else:
+        enemy_health = calculate_player_health(enemy_strength)
     enemy_damage = calculate_damage(enemy_strength)
 
     player_clan = get_player_clan(user_id)
@@ -2141,16 +2303,14 @@ async def _run_enemy_search(user_id: int, chat_id: int):
         enemy_skip_turn=False,
         player_blind_turns=0,
         is_location_battle=True,
+        location_id=location_id,
     )
 
     battle_info = (
-        f"⚔️ <b>ВРАГ НАЙДЕН!</b>\n\n"
-        f"{enemy_cfg['emoji']} {enemy_cfg['name']}\n"
-        f"🩶 {enemy_health}\n"
-        f"⚔️ {enemy_damage}\n\n"
-        f"👤 {html.escape(player['nickname'])}\n"
-        f"{E_HP} {player_health}\n"
-        f"⚔️ {player_damage}\n"
+        f"{E_SKULL}{E_WARN} Враг найден!\n\n"
+        f"{E_SQ}{E_RED_C} {enemy_cfg['name']}\n"
+        f"{E_SQ}Сила: {enemy_cfg.get('strength', enemy_strength)} {E_ATK}\n"
+        f"{E_SQ_B}Здоровье: {enemy_health} {E_ESWORD}\n"
     )
     try:
         await bot.send_message(
@@ -2182,8 +2342,19 @@ async def _give_activity_rewards(user_id: int, activity: dict) -> bool:
 
     # Calculate rewards
     earned = {}
-    for rew_key, (min_v, max_v) in rewards.items():
-        earned[rew_key] = random.randint(min_v, max_v)
+    # Special handling for Forest wood chopping (depends on axe level)
+    if loc_id == 2 and act_type == 'chop_wood':
+        axe_level = get_player_axe_level(user_id)
+        if axe_level > 0:
+            for axe_id, axe_data in AXES.items():
+                if axe_id <= axe_level:
+                    wood_amount = random.randint(axe_data['min_wood'], axe_data['max_wood'])
+                    if 'wood' not in earned:
+                        earned['wood'] = 0
+                    earned['wood'] += wood_amount
+    else:
+        for rew_key, (min_v, max_v) in rewards.items():
+            earned[rew_key] = random.randint(min_v, max_v)
 
     # Apply rewards
     if 'coins' in earned:
@@ -2446,7 +2617,7 @@ async def handle_weapons_menu(message: types.Message, state: FSMContext):
 
     if chosen_weapon_id is None:
         current_wid = get_player_weapon(user_id)
-        await message.answer("❌ Выбери оружие из списка!", reply_markup=get_next_weapon_kb(current_wid))
+        await message.answer(f"{E_CROSS} Выбери оружие из списка!", reply_markup=get_next_weapon_kb(current_wid))
         return
 
     current_weapon_id = get_player_weapon(user_id)
@@ -2455,7 +2626,7 @@ async def handle_weapons_menu(message: types.Message, state: FSMContext):
 
     if new_weapon['strength'] <= current_weapon['strength']:
         await message.answer(
-            f"❌ Нельзя надеть оружие слабее или равное текущему!\n"
+            f"{E_CROSS} Нельзя надеть оружие слабее или равное текущему!\n"
             f"Текущее: {current_weapon['emoji']} {current_weapon['name']} (сила: {current_weapon['strength']})",
             reply_markup=get_next_weapon_kb(current_weapon_id)
         )
@@ -2463,7 +2634,7 @@ async def handle_weapons_menu(message: types.Message, state: FSMContext):
 
     if player['coins'] < new_weapon['cost']:
         await message.answer(
-            f"❌ Недостаточно монет!\nТребуется: {new_weapon['cost']}\nУ вас есть: {player['coins']}",
+            f"{E_CROSS} Недостаточно монет!\nТребуется: {new_weapon['cost']}\nУ вас есть: {player['coins']}",
             reply_markup=get_next_weapon_kb(current_weapon_id)
         )
         return
@@ -2526,7 +2697,7 @@ async def handle_armor_menu(message: types.Message, state: FSMContext):
 
     if chosen_armor_id is None:
         current_aid = get_player_armor(user_id)
-        await message.answer("❌ Выбери броню из списка!", reply_markup=get_next_armor_kb(current_aid))
+        await message.answer(f"{E_CROSS} Выбери броню из списка!", reply_markup=get_next_armor_kb(current_aid))
         return
 
     current_armor_id = get_player_armor(user_id)
@@ -2535,7 +2706,7 @@ async def handle_armor_menu(message: types.Message, state: FSMContext):
 
     if new_armor['strength'] <= current_armor['strength']:
         await message.answer(
-            f"❌ Нельзя надеть броню слабее или равную текущей!\n"
+            f"{E_CROSS} Нельзя надеть броню слабее или равную текущей!\n"
             f"Текущая: {current_armor['emoji']} {current_armor['name']} (сила: {current_armor['strength']})",
             reply_markup=get_next_armor_kb(current_armor_id)
         )
@@ -2543,7 +2714,7 @@ async def handle_armor_menu(message: types.Message, state: FSMContext):
 
     if player['coins'] < new_armor['cost']:
         await message.answer(
-            f"❌ Недостаточно монет!\nТребуется: {new_armor['cost']}\nУ вас есть: {player['coins']}",
+            f"{E_CROSS} Недостаточно монет!\nТребуется: {new_armor['cost']}\nУ вас есть: {player['coins']}",
             reply_markup=get_next_armor_kb(current_armor_id)
         )
         return
@@ -2605,7 +2776,7 @@ async def handle_skills_menu(message: types.Message, state: FSMContext):
                 return
             if player['coins'] < skill['price']:
                 await message.answer(
-                    f'❌ Недостаточно монет!\nТребуется: {skill["price"]} монет\nУ вас: {player["coins"]}',
+                    f'{E_CROSS} Недостаточно монет!\nТребуется: {skill["price"]} монет\nУ вас: {player["coins"]}',
                     reply_markup=get_skills_kb(user_id)
                 )
                 return
@@ -2657,12 +2828,12 @@ async def handle_equipment_purchase(message: types.Message, state: FSMContext):
     for equip_id, equip_info in EQUIPMENT.items():
         if equip_info['name'] in text:
             if has_purchased_equipment(user_id, equip_id):
-                await message.answer("❌ Вы уже купили данное снаряжение!", reply_markup=get_equipment_kb())
+                await message.answer(f"{E_CROSS} Вы уже купили данное снаряжение!", reply_markup=get_equipment_kb())
                 return
             
             if player['points'] < equip_info['cost']:
                 await message.answer(
-                    f"❌ Недостаточно очков!\nТребуется: {equip_info['cost']}\nУ вас есть: {player['points']}",
+                    f"{E_CROSS} Недостаточно очков!\nТребуется: {equip_info['cost']}\nУ вас есть: {player['points']}",
                     reply_markup=get_equipment_kb()
                 )
                 return
@@ -2682,7 +2853,7 @@ async def handle_equipment_purchase(message: types.Message, state: FSMContext):
             break
     
     if not equipment_purchased:
-        await message.answer("❌ Выберите корректное снаряжение!", reply_markup=get_equipment_kb())
+        await message.answer(f"{E_CROSS} Выберите корректное снаряжение!", reply_markup=get_equipment_kb())
 
 # ============== LEADERBOARD ==============
 @dp.message(F.text == "🏆 Рейтинг")
@@ -2839,7 +3010,7 @@ async def handle_raid_menu(message: types.Message, state: FSMContext):
         if new_player_health <= 0:
             update_player_raid_floor(user_id, 0)
             update_rating_points(user_id, -10)
-            log += (f"👤 {html.escape(player['nickname'])} повержен!\n\n❌ <b>ВЫ ПРОИГРАЛИ!</b>\n\n"
+            log += (f"👤 {html.escape(player['nickname'])} повержен!\n\n{E_CROSS} <b>ВЫ ПРОИГРАЛИ!</b>\n\n"
                     f"Рекорд: {player['raid_max_floor']} этаж.\n-10💠 очков рейтинга")
             await message.answer(log, reply_markup=get_end_battle_kb())
             await state.clear()
@@ -2905,7 +3076,7 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
         # Проверка маны
         if mana < sk['mana_cost']:
             await message.answer(
-                f"❌ Недостаточно маны! Требуется {sk['mana_cost']}{E_MANA}",
+                f"{E_CROSS} Недостаточно маны! Требуется {sk['mana_cost']}{E_MANA}",
                 reply_markup=get_battle_action_kb(user_id, mana)
             )
             return
@@ -2962,7 +3133,7 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
                     update_player_raid_max_floor(user_id, new_max)
                 update_player_raid_floor(user_id, 0)
                 update_rating_points(user_id, -10)
-                log += (f"👤 {html.escape(player['nickname'])} повержен!\n\n❌ <b>ВЫ ПРОИГРАЛИ!</b>\n\n"
+                log += (f"👤 {html.escape(player['nickname'])} повержен!\n\n{E_CROSS} <b>ВЫ ПРОИГРАЛИ!</b>\n\n"
                         f"Пройдено этажей: {floors_completed}. Рекорд: {new_max}.\n-10💠 очков рейтинга")
                 await message.answer(log, reply_markup=get_end_battle_kb())
                 await state.clear()
@@ -3083,7 +3254,7 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
             update_player_raid_max_floor(user_id, new_max)
         update_player_raid_floor(user_id, 0)
         update_rating_points(user_id, -10)
-        log += (f"👤 {html.escape(player['nickname'])} повержен!\n\n❌ <b>ВЫ ПРОИГРАЛИ!</b>\n\n"
+        log += (f"👤 {html.escape(player['nickname'])} повержен!\n\n{E_CROSS} <b>ВЫ ПРОИГРАЛИ!</b>\n\n"
                 f"Пройдено этажей: {floors_completed}. Рекорд: {new_max}.\n-10💠 очков рейтинга")
         await message.answer(log, reply_markup=get_end_battle_kb())
         await state.clear()
@@ -3153,7 +3324,7 @@ async def start_battle(message: types.Message, state: FSMContext):
             if not data.get('is_location_battle'):
                 update_rating_points(user_id, -10)
             battle_log += f"👤 {html.escape(player['nickname'])} повержен!\n\n"
-            battle_log += f"❌ <b>ВЫ ПРОИГРАЛИ!</b>\n\n"
+            battle_log += f"{E_CROSS} <b>ВЫ ПРОИГРАЛИ!</b>\n\n"
             battle_log += f"Ты был повержен {enemy_info['name']}..."
             if not data.get('is_location_battle'):
                 battle_log += "\n-10💠 очков рейтинга"
@@ -3229,7 +3400,7 @@ async def battle_round(message: types.Message, state: FSMContext):
         sk_id, sk = skill_used
         if mana < sk['mana_cost']:
             await message.answer(
-                f"❌ Недостаточно маны! Требуется {sk['mana_cost']}{E_MANA}",
+                f"{E_CROSS} Недостаточно маны! Требуется {sk['mana_cost']}{E_MANA}",
                 reply_markup=get_battle_action_kb(user_id, mana)
             )
             return
@@ -3278,7 +3449,7 @@ async def battle_round(message: types.Message, state: FSMContext):
             if new_player_health <= 0:
                 if not data.get('is_location_battle'):
                     update_rating_points(user_id, -10)
-                battle_log += f"👤 {html.escape(player['nickname'])} повержен!\n\n❌ <b>ВЫ ПРОИГРАЛИ!</b>\n\nТы был повержен {enemy_info['name']}..."
+                battle_log += f"👤 {html.escape(player['nickname'])} повержен!\n\n{E_CROSS} <b>ВЫ ПРОИГРАЛИ!</b>\n\nТы был повержен {enemy_info['name']}..."
                 if not data.get('is_location_battle'):
                     battle_log += "\n-10💠 очков рейтинга"
                 await message.answer(battle_log, reply_markup=get_end_battle_kb())
@@ -3310,6 +3481,34 @@ async def battle_round(message: types.Message, state: FSMContext):
     new_enemy_health = int(round(new_enemy_health - player_hit))
 
     if new_enemy_health <= 0:
+        if data.get('is_location_battle') and data.get('location_id') == 2:
+            loc_cfg = data['location_enemy_cfg']
+            loc_rewards = loc_cfg.get('rewards', {})
+            reward_lines = []
+            if 'coins' in loc_rewards:
+                coin_earned = random.randint(*loc_rewards['coins'])
+                add_coins_to_player(user_id, coin_earned)
+                reward_lines.append(f"{E_PLUS} {coin_earned} {E_COINS} Монет")
+            if 'wood' in loc_rewards:
+                wood_earned = random.randint(*loc_rewards['wood'])
+                add_inventory_material(user_id, 'wood', wood_earned)
+                reward_lines.append(f"{E_PLUS} {wood_earned} {E_WOOD} Древесина")
+            if 'experience' in loc_rewards:
+                exp_earned = random.randint(*loc_rewards['experience'])
+                add_experience_to_player(user_id, exp_earned)
+                reward_lines.append(f"{E_PLUS} {exp_earned} {E_EXP} Опыта")
+            if 'clan_exp' in loc_rewards:
+                clan_exp_earned = random.randint(*loc_rewards['clan_exp'])
+                player_clan = get_player_clan(user_id)
+                if player_clan:
+                    add_clan_exp(player_clan['clan_id'], clan_exp_earned)
+                    reward_lines.append(f"{E_PLUS} {clan_exp_earned} опыта клану")
+            battle_log += f"☠️ {enemy_info['name']} повержен!\n\n"
+            battle_log += f"✅ <b>ВЫ ПОБЕДИЛИ!</b>\n\n"
+            battle_log += f"{E_GIFT} <b>Получено:</b>\n" + "\n".join(reward_lines) + "\n"
+            await message.answer(battle_log, reply_markup=get_end_battle_kb())
+            await state.clear()
+            return
         reward = enemy_info['reward']
         add_coins_to_player(user_id, reward)
         rating_pts = enemy_info.get('rating_points', 5)
@@ -3344,7 +3543,7 @@ async def battle_round(message: types.Message, state: FSMContext):
     if new_player_health <= 0:
         if not data.get('is_location_battle'):
             update_rating_points(user_id, -10)
-        battle_log += f"👤 {html.escape(player['nickname'])} повержен!\n\n❌ <b>ВЫ ПРОИГРАЛИ!</b>\n\nТы был повержен {enemy_info['name']}..."
+        battle_log += f"👤 {html.escape(player['nickname'])} повержен!\n\n{E_CROSS} <b>ВЫ ПРОИГРАЛИ!</b>\n\nТы был повержен {enemy_info['name']}..."
         if not data.get('is_location_battle'):
             battle_log += "\n-10💠 очков рейтинга"
         await message.answer(battle_log, reply_markup=get_end_battle_kb())
@@ -3512,7 +3711,7 @@ async def handle_pvp_accept(message: types.Message, state: FSMContext):
                 try:
                     await bot.send_message(
                         chat_id=opponent_id,
-                        text="❌ Соперник отклонил игру.",
+                        text=f"{E_CROSS} Соперник отклонил игру.",
                         reply_markup=get_main_kb()
                     )
                 except Exception:
@@ -3649,7 +3848,7 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
         sk_id, sk = skill_used
         if my_mana < sk['mana_cost']:
             await message.answer(
-                f"❌ Недостаточно маны! Требуется {sk['mana_cost']}{E_MANA}",
+                f"{E_CROSS} Недостаточно маны! Требуется {sk['mana_cost']}{E_MANA}",
                 reply_markup=get_battle_action_kb(user_id, my_mana)
             )
             return
@@ -3721,7 +3920,7 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
             try:
                 await bot.send_message(
                     chat_id=opponent_id,
-                    text=f'⚔️ <b>PvP БОЙ</b> ⚔️\n\nСоперник атакует!\n{E_DMG} Урон: {dealt}\n\n❌ <b>ВЫ ПРОИГРАЛИ!</b>',
+                    text=f'⚔️ <b>PvP БОЙ</b> ⚔️\n\nСоперник атакует!\n{E_DMG} Урон: {dealt}\n\n{E_CROSS} <b>ВЫ ПРОИГРАЛИ!</b>',
                     reply_markup=get_end_battle_kb(),
                     parse_mode="HTML"
                 )
@@ -3863,11 +4062,11 @@ async def handle_clans_list(message: types.Message, state: FSMContext):
 
     if text == "➕ Создать клан":
         if get_player_clan(user_id):
-            await message.answer("❌ Вы уже состоите в клане!", reply_markup=get_clans_list_kb(get_all_clans()))
+            await message.answer(f"{E_CROSS} Вы уже состоите в клане!", reply_markup=get_clans_list_kb(get_all_clans()))
             return
         if player['coins'] < 2000:
             await message.answer(
-                f"❌ Недостаточно монет!\nТребуется: 2000💰\nУ вас: {player['coins']}💰",
+                f"{E_CROSS} Недостаточно монет!\nТребуется: 2000💰\nУ вас: {player['coins']}💰",
                 reply_markup=get_clans_list_kb(get_all_clans())
             )
             return
@@ -3885,11 +4084,11 @@ async def handle_clans_list(message: types.Message, state: FSMContext):
         expected_btn = f"🛡️ {clan_name} [ур.{clan_level}] [{members_count}👥] [{min_power}⚔️]"
         if text == expected_btn:
             if get_player_clan(user_id):
-                await message.answer("❌ Вы уже состоите в клане!")
+                await message.answer(f"{E_CROSS} Вы уже состоите в клане!")
                 return
             if player['strength'] < min_power:
                 await message.answer(
-                    f"❌ Ваша мощь недостаточна. Требуется {min_power}⚔️\nВаша мощь: {int(player['strength'])}⚔️",
+                    f"{E_CROSS} Ваша мощь недостаточна. Требуется {min_power}⚔️\nВаша мощь: {int(player['strength'])}⚔️",
                     reply_markup=get_clans_list_kb(clans)
                 )
                 return
@@ -3920,7 +4119,7 @@ async def handle_create_clan_confirm(message: types.Message, state: FSMContext):
 
     if text == "✅ Да, создать":
         if player['coins'] < 2000:
-            await message.answer("❌ Недостаточно монет для создания клана!", reply_markup=get_main_kb())
+            await message.answer(f"{E_CROSS} Недостаточно монет для создания клана!", reply_markup=get_main_kb())
             await state.clear()
             return
         remove_coins_from_player(user_id, 2000)
@@ -3934,7 +4133,7 @@ async def handle_create_clan_confirm(message: types.Message, state: FSMContext):
 async def handle_create_clan_name(message: types.Message, state: FSMContext):
     clan_name = message.text.strip()
     if not clan_name or len(clan_name) > 32:
-        await message.answer("❌ Название должно быть от 1 до 32 символов. Введите ещё раз:")
+        await message.answer(f"{E_CROSS} Название должно быть от 1 до 32 символов. Введите ещё раз:")
         return
     await state.update_data(new_clan_name=clan_name)
     await message.answer("Введите описание клана:")
@@ -3949,7 +4148,7 @@ async def handle_create_clan_description(message: types.Message, state: FSMConte
 
     clan_id = create_clan(clan_name, user_id, description)
     if clan_id == -1:
-        await message.answer("❌ Клан с таким названием уже существует! Попробуйте другое.")
+        await message.answer(f"{E_CROSS} Клан с таким названием уже существует! Попробуйте другое.")
         await state.set_state(ClanMenu.creating_clan_name)
         await message.answer("Введите название клана:")
         return
@@ -4132,7 +4331,7 @@ async def handle_kick_member(message: types.Message, state: FSMContext):
             break
 
     if not kicked:
-        await message.answer("❌ Игрок не найден!",
+        await message.answer(f"{E_CROSS} Игрок не найден!",
                              reply_markup=get_kick_members_kb(members, clan['leader_id'],
                                                               co_leader_ids if is_co_leader else []))
         return
@@ -4164,7 +4363,7 @@ async def handle_promote_member(message: types.Message, state: FSMContext):
         return
 
     if clan['leader_id'] != user_id:
-        await message.answer("❌ Только глава может назначать соруководителей.",
+        await message.answer(f"{E_CROSS} Только глава может назначать соруководителей.",
                              reply_markup=get_my_clan_kb(False))
         await state.set_state(ClanMenu.viewing_my_clan)
         return
@@ -4186,7 +4385,7 @@ async def handle_promote_member(message: types.Message, state: FSMContext):
             break
 
     if not promoted:
-        await message.answer("❌ Игрок не найден!",
+        await message.answer(f"{E_CROSS} Игрок не найден!",
                              reply_markup=get_promote_members_kb(members, clan['leader_id']))
         return
 
@@ -4217,7 +4416,7 @@ async def handle_demote_member(message: types.Message, state: FSMContext):
         return
 
     if clan['leader_id'] != user_id:
-        await message.answer("❌ Только глава может снимать соруководителей.",
+        await message.answer(f"{E_CROSS} Только глава может снимать соруководителей.",
                              reply_markup=get_my_clan_kb(False))
         await state.set_state(ClanMenu.viewing_my_clan)
         return
@@ -4239,7 +4438,7 @@ async def handle_demote_member(message: types.Message, state: FSMContext):
             break
 
     if not demoted:
-        await message.answer("❌ Игрок не найден!",
+        await message.answer(f"{E_CROSS} Игрок не найден!",
                              reply_markup=get_demote_members_kb(co_leaders))
         return
 
@@ -4276,7 +4475,7 @@ async def handle_clan_chat(message: types.Message, state: FSMContext):
 
     # Validate message length
     if len(text) > CLAN_CHAT_MAX_MSG_LEN:
-        await message.answer(f"❌ Сообщение слишком длинное (максимум {CLAN_CHAT_MAX_MSG_LEN} символов).",
+        await message.answer(f"{E_CROSS} Сообщение слишком длинное (максимум {CLAN_CHAT_MAX_MSG_LEN} символов).",
                              reply_markup=get_clan_chat_kb())
         return
 
@@ -4324,7 +4523,7 @@ async def handle_change_min_power(message: types.Message, state: FSMContext):
         if new_power < 0:
             raise ValueError
     except ValueError:
-        await message.answer("❌ Введите корректное число (≥ 0):")
+        await message.answer(f"{E_CROSS} Введите корректное число (≥ 0):")
         return
 
     set_clan_min_power(clan_id, new_power)
@@ -4364,7 +4563,7 @@ async def handle_delete_clan_confirm(message: types.Message, state: FSMContext):
             await state.set_state(ClanMenu.viewing_clans)
         else:
             await state.clear()
-            await message.answer("❌ Ошибка при удалении клана.", reply_markup=get_main_kb())
+            await message.answer(f"{E_CROSS} Ошибка при удалении клана.", reply_markup=get_main_kb())
         return
 
     await message.answer("Нажмите ✅ Да, удалить или ❌ Нет", reply_markup=get_delete_clan_confirm_kb())
@@ -4406,7 +4605,7 @@ async def handle_select_clan_customization(message: types.Message, state: FSMCon
 
     if not clan or clan['leader_id'] != user_id:
         await state.set_state(ClanMenu.viewing_my_clan)
-        await message.answer("❌ Ошибка доступа.", reply_markup=get_my_clan_kb(False))
+        await message.answer(f"{E_CROSS} Ошибка доступа.", reply_markup=get_my_clan_kb(False))
         return
 
     if text == "❌ Отмена":
@@ -4418,7 +4617,7 @@ async def handle_select_clan_customization(message: types.Message, state: FSMCon
 
     if text == "📝 Изменить название (500 монет)":
         if player['coins'] < 500:
-            await message.answer(f"❌ Недостаточно монет! Нужно 500, у вас {player['coins']}.")
+            await message.answer(f"{E_CROSS} Недостаточно монет! Нужно 500, у вас {player['coins']}.")
             return
         await message.answer(
             "Введите новое название клана (1-32 символа):",
@@ -4429,7 +4628,7 @@ async def handle_select_clan_customization(message: types.Message, state: FSMCon
 
     if text == "📄 Изменить описание (500 монет)":
         if player['coins'] < 500:
-            await message.answer(f"❌ Недостаточно монет! Нужно 500, у вас {player['coins']}.")
+            await message.answer(f"{E_CROSS} Недостаточно монет! Нужно 500, у вас {player['coins']}.")
             return
         await message.answer(
             "Введите новое описание клана:",
@@ -4470,13 +4669,13 @@ async def handle_clan_name_change(message: types.Message, state: FSMContext):
 
     new_name = text.strip()
     if not new_name or len(new_name) > 32:
-        await message.answer("❌ Название должно быть от 1 до 32 символов. Введите ещё раз:")
+        await message.answer(f"{E_CROSS} Название должно быть от 1 до 32 символов. Введите ещё раз:")
         return
 
     player = get_player(user_id)
     if player['coins'] < 500:
         clan = get_clan(clan_id)
-        await message.answer("❌ Недостаточно монет!")
+        await message.answer(f"{E_CROSS} Недостаточно монет!")
         if clan:
             await _show_clan_info(message, clan, True)
         await state.set_state(ClanMenu.viewing_my_clan)
@@ -4484,7 +4683,7 @@ async def handle_clan_name_change(message: types.Message, state: FSMContext):
 
     success = update_clan_name(clan_id, new_name)
     if not success:
-        await message.answer("❌ Клан с таким названием уже существует! Введите другое:")
+        await message.answer(f"{E_CROSS} Клан с таким названием уже существует! Введите другое:")
         return
 
     remove_coins_from_player(user_id, 500)
@@ -4510,7 +4709,7 @@ async def handle_clan_description_change(message: types.Message, state: FSMConte
     player = get_player(user_id)
     if player['coins'] < 500:
         clan = get_clan(clan_id)
-        await message.answer("❌ Недостаточно монет!")
+        await message.answer(f"{E_CROSS} Недостаточно монет!")
         if clan:
             await _show_clan_info(message, clan, True)
         await state.set_state(ClanMenu.viewing_my_clan)
@@ -4538,7 +4737,7 @@ async def handle_clan_image_change(message: types.Message, state: FSMContext):
         return
 
     if not message.photo:
-        await message.answer("❌ Отправьте фото! Или нажмите ❌ Отмена.")
+        await message.answer(f"{E_CROSS} Отправьте фото! Или нажмите ❌ Отмена.")
         return
 
     photo_file_id = message.photo[-1].file_id
@@ -4599,7 +4798,7 @@ async def admin_coins_nickname(message: types.Message, state: FSMContext):
     nickname = message.text.strip()
     target = get_player_by_nickname(nickname)
     if not target:
-        await message.answer(f"❌ Игрок «{nickname}» не найден. Введите никнейм ещё раз:")
+        await message.answer(f"{E_CROSS} Игрок «{nickname}» не найден. Введите никнейм ещё раз:")
         return
     await state.update_data(target_user_id=target['user_id'], target_nickname=target['nickname'])
     await message.answer("Введите сумму монет для добавления:")
@@ -4610,7 +4809,7 @@ async def admin_coins_amount(message: types.Message, state: FSMContext):
     try:
         amount = int(message.text.strip())
     except ValueError:
-        await message.answer("❌ Введите корректное число:")
+        await message.answer(f"{E_CROSS} Введите корректное число:")
         return
     data = await state.get_data()
     add_coins_to_player(data['target_user_id'], amount)
@@ -4623,7 +4822,7 @@ async def admin_strength_nickname(message: types.Message, state: FSMContext):
     nickname = message.text.strip()
     target = get_player_by_nickname(nickname)
     if not target:
-        await message.answer(f"❌ Игрок «{nickname}» не найден. Введите никнейм ещё раз:")
+        await message.answer(f"{E_CROSS} Игрок «{nickname}» не найден. Введите никнейм ещё раз:")
         return
     await state.update_data(target_user_id=target['user_id'], target_nickname=target['nickname'])
     await message.answer("Введите сумму силы для добавления:")
@@ -4634,7 +4833,7 @@ async def admin_strength_amount(message: types.Message, state: FSMContext):
     try:
         amount = float(message.text.strip())
     except ValueError:
-        await message.answer("❌ Введите корректное число:")
+        await message.answer(f"{E_CROSS} Введите корректное число:")
         return
     data = await state.get_data()
     add_strength_to_player(data['target_user_id'], amount)
@@ -4647,7 +4846,7 @@ async def admin_experience_nickname(message: types.Message, state: FSMContext):
     nickname = message.text.strip()
     target = get_player_by_nickname(nickname)
     if not target:
-        await message.answer(f"❌ Игрок «{nickname}» не найден. Введите никнейм ещё раз:")
+        await message.answer(f"{E_CROSS} Игрок «{nickname}» не найден. Введите никнейм ещё раз:")
         return
     await state.update_data(target_user_id=target['user_id'], target_nickname=target['nickname'])
     await message.answer("Введите количество опыта для добавления:")
@@ -4658,7 +4857,7 @@ async def admin_experience_amount(message: types.Message, state: FSMContext):
     try:
         amount = int(message.text.strip())
     except ValueError:
-        await message.answer("❌ Введите корректное число:")
+        await message.answer(f"{E_CROSS} Введите корректное число:")
         return
     data = await state.get_data()
     result = add_experience_to_player(data['target_user_id'], amount)
@@ -4672,7 +4871,7 @@ async def admin_crystals_nickname(message: types.Message, state: FSMContext):
     nickname = message.text.strip()
     target = get_player_by_nickname(nickname)
     if not target:
-        await message.answer(f"❌ Игрок «{nickname}» не найден. Введите никнейм ещё раз:")
+        await message.answer(f"{E_CROSS} Игрок «{nickname}» не найден. Введите никнейм ещё раз:")
         return
     await state.update_data(target_user_id=target['user_id'], target_nickname=target['nickname'])
     await message.answer("Введите количество кристаллов для добавления:")
@@ -4683,7 +4882,7 @@ async def admin_crystals_amount(message: types.Message, state: FSMContext):
     try:
         amount = int(message.text.strip())
     except ValueError:
-        await message.answer("❌ Введите корректное число:")
+        await message.answer(f"{E_CROSS} Введите корректное число:")
         return
     data = await state.get_data()
     add_crystals_to_player(data['target_user_id'], amount)
@@ -4696,7 +4895,7 @@ async def admin_raid_tickets_nickname(message: types.Message, state: FSMContext)
     nickname = message.text.strip()
     target = get_player_by_nickname(nickname)
     if not target:
-        await message.answer(f"❌ Игрок «{nickname}» не найден. Введите никнейм ещё раз:")
+        await message.answer(f"{E_CROSS} Игрок «{nickname}» не найден. Введите никнейм ещё раз:")
         return
     await state.update_data(target_user_id=target['user_id'], target_nickname=target['nickname'])
     await message.answer("Введите количество билетов рейда для добавления:")
@@ -4707,7 +4906,7 @@ async def admin_raid_tickets_amount(message: types.Message, state: FSMContext):
     try:
         amount = int(message.text.strip())
     except ValueError:
-        await message.answer("❌ Введите корректное число:")
+        await message.answer(f"{E_CROSS} Введите корректное число:")
         return
     data = await state.get_data()
     add_raid_tickets_to_player(data['target_user_id'], amount)
@@ -4720,7 +4919,7 @@ async def admin_materials_nickname(message: types.Message, state: FSMContext):
     nickname = message.text.strip()
     target = get_player_by_nickname(nickname)
     if not target:
-        await message.answer(f"❌ Игрок «{nickname}» не найден. Введите никнейм ещё раз:")
+        await message.answer(f"{E_CROSS} Игрок «{nickname}» не найден. Введите никнейм ещё раз:")
         return
     await state.update_data(target_user_id=target['user_id'], target_nickname=target['nickname'])
     await message.answer("Введите количество материалов для добавления (каждого вида):")
@@ -4731,7 +4930,7 @@ async def admin_materials_amount(message: types.Message, state: FSMContext):
     try:
         amount = int(message.text.strip())
     except ValueError:
-        await message.answer("❌ Введите корректное число:")
+        await message.answer(f"{E_CROSS} Введите корректное число:")
         return
     data = await state.get_data()
     add_admin_materials_to_player(data['target_user_id'], amount)
@@ -4853,7 +5052,8 @@ async def handle_market_category(message: types.Message, state: FSMContext):
 
     if text == "🎁 Предметы":
         await state.set_state(MarketMenu.viewing_items)
-        await message.answer("🎁 <b>Предметы</b>\n\nВ разработке 🔧", reply_markup=ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="⬅️ Назад к категориям")]], resize_keyboard=True), parse_mode="HTML")
+        items_text = _get_items_text(user_id)
+        await message.answer(items_text, reply_markup=_get_items_kb(user_id), parse_mode="HTML")
         return
 
     # Fallback
@@ -4882,7 +5082,7 @@ async def handle_market(message: types.Message, state: FSMContext):
         price = MARKET_PRICES[mat_key]
         if amount == 0:
             await message.answer(
-                f"❌ У тебя нет {emoji} {mat_name} для продажи!",
+                f"{E_CROSS} У тебя нет {emoji} {mat_name} для продажи!",
                 reply_markup=get_market_kb()
             )
             return
@@ -4945,7 +5145,7 @@ async def handle_market_sell(message: types.Message, state: FSMContext):
 
     if qty > current_amount:
         await message.answer(
-            f"❌ Недостаточно {emoji} {mat_name}!\nДоступно: {current_amount}",
+            f"{E_CROSS} Недостаточно {emoji} {mat_name}!\nДоступно: {current_amount}",
             reply_markup=get_sell_qty_kb(mat_key, current_amount)
         )
         return
@@ -4956,7 +5156,7 @@ async def handle_market_sell(message: types.Message, state: FSMContext):
     ok = remove_inventory_material(user_id, mat_key, qty)
     if not ok:
         await message.answer(
-            f"❌ Ошибка при продаже. Попробуй снова.",
+            f"{E_CROSS} Ошибка при продаже. Попробуй снова.",
             reply_markup=get_sell_qty_kb(mat_key, current_amount)
         )
         return
@@ -4992,7 +5192,7 @@ async def handle_consumables(message: types.Message, state: FSMContext):
     if text == ticket_btn:
         if player['coins'] < MARKET_RAID_TICKET_PRICE:
             await message.answer(
-                f"❌ Недостаточно монет!\n"
+                f"{E_CROSS} Недостаточно монет!\n"
                 f"Нужно: {MARKET_RAID_TICKET_PRICE}{E_COINS}\n"
                 f"У тебя: {player['coins']}{E_COINS}",
                 reply_markup=get_consumables_kb()
@@ -5023,7 +5223,66 @@ async def handle_items(message: types.Message, state: FSMContext):
         await send_image_with_text(message, "images/rynokcategory.png", _get_market_category_text(), reply_markup=get_market_category_kb())
         return
 
-    await message.answer("🎁 <b>Предметы</b>\n\nВ разработке 🔧", reply_markup=ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="⬅️ Назад к категориям")]], resize_keyboard=True), parse_mode="HTML")
+    # Handle axe purchase
+    for axe_id, axe_data in AXES.items():
+        btn_text = f"🛒 Купить 🪓 ур.{axe_id} ({axe_data['cost']}👛)"
+        if text == btn_text:
+            player = get_player(user_id)
+            if not player:
+                await message.answer("Сначала зарегистрируйся! /start")
+                return
+            current_axe = get_player_axe_level(user_id)
+            if current_axe >= axe_id:
+                await message.answer(
+                    f"{E_CROSS} Топор 🪓 {axe_id} level уже куплен!",
+                    reply_markup=_get_items_kb(user_id), parse_mode="HTML"
+                )
+                return
+            # Calculate total cost (buy all levels up to axe_id)
+            total_cost = 0
+            for lvl in range(current_axe + 1, axe_id + 1):
+                total_cost += AXES[lvl]['cost']
+            if player['coins'] < total_cost:
+                await message.answer(
+                    f"{E_CROSS} Недостаточно монет!\nТребуется: {total_cost}{E_COINS}\nУ вас: {player['coins']}{E_COINS}",
+                    reply_markup=_get_items_kb(user_id), parse_mode="HTML"
+                )
+                return
+            remove_coins_from_player(user_id, total_cost)
+            set_player_axe_level(user_id, axe_id)
+            await message.answer(
+                f"✅ Топор 🪓 {axe_id} level куплен и экипирован!\n- {total_cost}{E_COINS}",
+                reply_markup=_get_items_kb(user_id), parse_mode="HTML"
+            )
+            return
+
+    items_text = _get_items_text(user_id)
+    await message.answer(items_text, reply_markup=_get_items_kb(user_id), parse_mode="HTML")
+
+
+def _get_items_text(user_id: int) -> str:
+    """Сформировать текст списка предметов (топоров)"""
+    current_axe = get_player_axe_level(user_id)
+    lines = [f"{E_ITEMS_STAR} Список предметов:\n"]
+    for axe_id, axe_data in AXES.items():
+        owned = "✅" if current_axe >= axe_id else "❌"
+        lines.append(
+            f"{E_SQ}Топор - 🪓 {axe_id} level {axe_data['star_emoji']}\n"
+            f"├ добывает {axe_data['min_wood']}-{axe_data['max_wood']}🌳\n"
+            f"├ в наличии {owned}\n"
+            f"{E_CIRCLE}Цена - {axe_data['cost']}{E_COINS}\n"
+        )
+    return "\n".join(lines)
+
+def _get_items_kb(user_id: int) -> ReplyKeyboardMarkup:
+    """Клавиатура предметов (топоры)"""
+    current_axe = get_player_axe_level(user_id)
+    kb = []
+    for axe_id, axe_data in AXES.items():
+        if current_axe < axe_id:
+            kb.append([KeyboardButton(text=f"🛒 Купить 🪓 ур.{axe_id} ({axe_data['cost']}👛)")])
+    kb.append([KeyboardButton(text="⬅️ Назад к категориям")])
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 # ============== MAIN ==============
 async def main():
