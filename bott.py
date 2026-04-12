@@ -34,6 +34,7 @@ E_MANA     = '<tg-emoji emoji-id="6280806319351927135">💜</tg-emoji>'   # ма
 E_CROWN    = '<tg-emoji emoji-id="5217822164362739968">👑</tg-emoji>'   # ты (PvP)
 E_SKULL    = '<tg-emoji emoji-id="5274108672849491069">💀</tg-emoji>'   # враг (PvP)
 E_ESWORD   = '<tg-emoji emoji-id="5438255528264348146">🗡</tg-emoji>'   # враг меч (PvP)
+E_SQ_B     = '<tg-emoji emoji-id="5438255528264348146">🗡</tg-emoji>'   # здоровье врага (бой)
 E_ANGRY    = '😡'   # кик из клана
 
 # Additional emoji
