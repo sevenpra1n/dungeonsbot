@@ -1361,15 +1361,15 @@ def get_main_kb():
 def get_main_kb_inline():
     """Главное меню с inline-кнопками"""
     kb = [
-        [InlineKeyboardButton(text="🗺️ Карта", callback_data="menu_map")],
-        [InlineKeyboardButton(text="📦 Инвентарь", callback_data="menu_inventory")],
-        [InlineKeyboardButton(text="🔨 Кузня", callback_data="menu_forge")],
-        [InlineKeyboardButton(text="🐉 Рейд", callback_data="menu_raid")],
-        [InlineKeyboardButton(text="🌐 Онлайн", callback_data="menu_online")],
-        [InlineKeyboardButton(text="🛡️ Кланы", callback_data="menu_clans")],
-        [InlineKeyboardButton(text="🏆 Рейтинг", callback_data="menu_leaderboard")],
-        [InlineKeyboardButton(text="📖 Профиль", callback_data="menu_profile")],
-        [InlineKeyboardButton(text="🛒 Рынок", callback_data="menu_market")],
+        [InlineKeyboardButton(text="🗺️ Карта", callback_data="main_map")],
+        [InlineKeyboardButton(text="📦 Инвентарь", callback_data="main_inventory")],
+        [InlineKeyboardButton(text="🔨 Кузня", callback_data="main_forge")],
+        [InlineKeyboardButton(text="🐉 Рейд", callback_data="main_raid")],
+        [InlineKeyboardButton(text="🌐 Онлайн", callback_data="main_online")],
+        [InlineKeyboardButton(text="🛡️ Кланы", callback_data="main_clans")],
+        [InlineKeyboardButton(text="🏆 Рейтинг", callback_data="main_leaderboard")],
+        [InlineKeyboardButton(text="📖 Профиль", callback_data="main_profile")],
+        [InlineKeyboardButton(text="🛒 Рынок", callback_data="main_market")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=kb)
 
@@ -1780,32 +1780,6 @@ async def send_image_with_text(message, image_path: str, text: str, reply_markup
         print(f"❌ Ошибка при отправке фото: {e}")
         await message.answer(text, reply_markup=reply_markup, parse_mode="HTML")
 
-
-# ============== MAIN MENU CALLBACK HANDLER ==============
-@dp.callback_query(F.data.startswith("menu_"))
-async def handle_main_menu_callback(query: types.CallbackQuery, state: FSMContext):
-    """Обработка нажатий inline-кнопок главного меню"""
-    action = query.data.replace("menu_", "")
-
-    # Маппинг callback_data на функции
-    actions = {
-        "map": open_map,
-        "inventory": open_inventory_main,
-        "forge": open_forge,
-        "raid": open_raid,
-        "online": open_online,
-        "clans": open_clans,
-        "leaderboard": show_leaderboard,
-        "profile": show_profile,
-        "market": open_market,
-    }
-
-    if action in actions:
-        await query.answer()  # закрыть loading на кнопке
-        # query.message.from_user — это бот, подменяем на реального пользователя
-        query.message.from_user = query.from_user
-        # Вызвать соответствующую функцию
-        await actions[action](query.message, state)
 
 
 # ============== COMMANDS ==============
@@ -4960,6 +4934,10 @@ async def handle_market_sell(message: types.Message, state: FSMContext):
     )
     # Keep state in selling_resource with updated inventory
     await state.update_data(sell_material=mat_key)
+
+# ============== CALLBACKS ROUTER ==============
+from callbacks import router
+dp.include_router(router)
 
 # ============== MAIN ==============
 async def main():
