@@ -93,6 +93,39 @@ E_BOOK_MANA= '<tg-emoji emoji-id="5206626000665868017">📚</tg-emoji>'   # кн
 E_BOOK_LOSS= '<tg-emoji emoji-id="5334598421015731428">📕</tg-emoji>'   # книга (поражение)
 E_BAN      = '<tg-emoji emoji-id="5278578973595427038">🚫</tg-emoji>'   # запрет (потери)
 
+# Forge / equipment display emoji
+E_LINK     = '<tg-emoji emoji-id="5201888948091129713">🔗</tg-emoji>'   # ссылка (экипировка)
+E_SHIELD   = '<tg-emoji emoji-id="5251203410396458957">🛡</tg-emoji>'   # щит (броня)
+E_SWORD2   = '<tg-emoji emoji-id="5393607290228067750">🗡</tg-emoji>'   # меч (оружие в кузне)
+E_HAMMER   = '<tg-emoji emoji-id="5276314275994954605">🔨</tg-emoji>'   # молот (кузня выбор)
+E_PIN      = '<tg-emoji emoji-id="5264910987500220457">📌</tg-emoji>'   # закрепить (текущее)
+E_CART     = '<tg-emoji emoji-id="5278613311858959074">🛒</tg-emoji>'   # тележка (покупка)
+E_ATK2     = '<tg-emoji emoji-id="6334472841953544334">⚔️</tg-emoji>'   # сила (кузня строки)
+E_CLAN_BOTTLE = '<tg-emoji emoji-id="6284926868026037181">🍾</tg-emoji>' # опыт клана (награда)
+
+# Rarity emoji
+E_RARITY_COMMON    = '<tg-emoji emoji-id="5395855331945392566">🌟</tg-emoji>'  # обычный
+E_RARITY_UNCOMMON  = '<tg-emoji emoji-id="5395404338904472969">🌟</tg-emoji>'  # необычный
+E_RARITY_RARE      = '<tg-emoji emoji-id="5395316601312548706">🌟</tg-emoji>'  # редкий
+E_RARITY_EPIC      = '<tg-emoji emoji-id="5395550054259921224">🌟</tg-emoji>'  # эпический
+E_RARITY_LEGENDARY = '<tg-emoji emoji-id="5395487888903280719">🌟</tg-emoji>'  # легендарный
+E_RARITY_MYTHIC    = '<tg-emoji emoji-id="5395620513198410698">🌟</tg-emoji>'  # мифический
+E_RARITY_ULTRA     = '<tg-emoji emoji-id="5936138290519349485">🎁</tg-emoji>'  # ультра
+
+RARITY_EMOJIS = {
+    "common":    E_RARITY_COMMON,
+    "uncommon":  E_RARITY_UNCOMMON,
+    "rare":      E_RARITY_RARE,
+    "epic":      E_RARITY_EPIC,
+    "legendary": E_RARITY_LEGENDARY,
+    "mythic":    E_RARITY_MYTHIC,
+    "ultra":     E_RARITY_ULTRA,
+}
+
+def get_rarity_emoji(rarity: str) -> str:
+    """Получить эмодзи редкости по ключу"""
+    return RARITY_EMOJIS.get(rarity, "")
+
 
 # Ваш токен от BotFather
 TOKEN = "Ваш токен"
@@ -823,12 +856,20 @@ LOCATIONS = {
 
 # Враги в локациях: порог определяется силой игрока
 LOCATION_ENEMIES = {
-    "wolf": {
-        "name": "Волк",
-        "emoji": "🐺",
+    "goblin": {
+        "name": "Гоблин",
+        "emoji": "👺",
         "strength": 35,
         "min_player_strength": 0,
         "max_player_strength": 99,
+        "rewards": {
+            "coins": (10, 30),
+            "rating_points": 2,
+            "clan_exp": (2, 5),
+            "experience": (3, 9),
+            "food": (2, 2),
+            "food_chance": 0.20,
+        },
     },
     "angry_hawk": {
         "name": "Яростный ястреб",
@@ -836,6 +877,14 @@ LOCATION_ENEMIES = {
         "strength": 125,
         "min_player_strength": 100,
         "max_player_strength": 9999,
+        "rewards": {
+            "coins": (50, 60),
+            "food": (3, 9),
+            "clan_exp": (8, 15),
+            "experience": (10, 16),
+            "crystals": 1,
+            "crystals_chance": 0.05,
+        },
     },
 }
 
@@ -899,7 +948,7 @@ def get_location_enemy_for_player(player_strength: float) -> dict:
         if enemy['min_player_strength'] <= player_strength <= enemy['max_player_strength']:
             return enemy
     # fallback
-    return LOCATION_ENEMIES["wolf"]
+    return LOCATION_ENEMIES["goblin"]
 
 def get_forest_enemy_for_player(player_strength: float) -> dict:
     """Вернуть врага леса по силе игрока"""
@@ -1349,33 +1398,53 @@ EQUIPMENT = {
 }
 
 # ============== FORGE: WEAPONS & ARMOR ==============
-DEFAULT_WEAPON = {"name": "палка", "strength": 10, "emoji": "🔹"}
-DEFAULT_ARMOR = {"name": "трусы", "strength": 10, "emoji": "🔹"}
+DEFAULT_WEAPON = {"name": "палка", "strength": 10, "emoji": "🔹", "rarity": "common"}
+DEFAULT_ARMOR = {"name": "трусы", "strength": 10, "emoji": "🔹", "rarity": "common"}
 
 WEAPONS = {
-    1:  {"name": "большая палка",              "strength": 16,  "cost": 50,    "emoji": "🔹"},
-    2:  {"name": "деревянный меч",             "strength": 22,  "cost": 110,   "emoji": "🔹"},
-    3:  {"name": "каменная булава",            "strength": 31,  "cost": 200,   "emoji": "🔹"},
-    4:  {"name": "золотой клинок",             "strength": 40,  "cost": 345,   "emoji": "🔹"},
-    5:  {"name": "железный меч",               "strength": 55,  "cost": 650,   "emoji": "🔹"},
-    6:  {"name": "зачарованный золотой меч",   "strength": 70,  "cost": 1150,  "emoji": "🔸"},
-    7:  {"name": "алмазный клинок",            "strength": 95,  "cost": 1750,  "emoji": "🔸"},
-    8:  {"name": "катана",                     "strength": 125, "cost": 2800,  "emoji": "🔸"},
-    9:  {"name": "мурасама",                   "strength": 165, "cost": 4500,  "emoji": "🔸"},
-    10: {"name": "огненный клинок",            "strength": 200, "cost": 10000, "emoji": "♦️"},
+    1:  {"name": "Большая палка",              "strength": 16,   "cost": 90,     "emoji": "🔹", "rarity": "common"},
+    2:  {"name": "Деревянный меч",             "strength": 22,   "cost": 170,    "emoji": "🔹", "rarity": "common"},
+    3:  {"name": "Каменная булава",            "strength": 31,   "cost": 350,    "emoji": "🔹", "rarity": "common"},
+    4:  {"name": "Золотой клинок",             "strength": 40,   "cost": 550,    "emoji": "🔸", "rarity": "uncommon"},
+    5:  {"name": "Железный меч",               "strength": 55,   "cost": 790,    "emoji": "🔸", "rarity": "uncommon"},
+    6:  {"name": "Зачарованный золотой меч",   "strength": 70,   "cost": 1350,   "emoji": "🔸", "rarity": "uncommon"},
+    7:  {"name": "Арбалет",                    "strength": 95,   "cost": 1750,   "emoji": "🔸", "rarity": "rare"},
+    8:  {"name": "Длинный тисовый лук",        "strength": 125,  "cost": 2800,   "emoji": "🔸", "rarity": "rare"},
+    9:  {"name": "Катана",                     "strength": 165,  "cost": 3900,   "emoji": "🔸", "rarity": "rare"},
+    10: {"name": "Нунчаки",                    "strength": 200,  "cost": 5000,   "emoji": "♦️", "rarity": "epic"},
+    11: {"name": "Чакрам",                     "strength": 265,  "cost": 6700,   "emoji": "♦️", "rarity": "epic"},
+    12: {"name": "Нагината",                   "strength": 320,  "cost": 8600,   "emoji": "♦️", "rarity": "epic"},
+    13: {"name": "Алмазный клинок",            "strength": 400,  "cost": 12500,  "emoji": "💎", "rarity": "legendary"},
+    14: {"name": "Зачарованная глефа",         "strength": 520,  "cost": 16900,  "emoji": "💎", "rarity": "legendary"},
+    15: {"name": "Великий трезубец",           "strength": 640,  "cost": 23000,  "emoji": "💎", "rarity": "legendary"},
+    16: {"name": "Могучий боевой молот",       "strength": 770,  "cost": 40000,  "emoji": "🌟", "rarity": "mythic"},
+    17: {"name": "Обсидиановый клеймор",       "strength": 850,  "cost": 70000,  "emoji": "🌟", "rarity": "mythic"},
+    18: {"name": "Мега-кинжалы охотника",      "strength": 985,  "cost": 100000, "emoji": "🌟", "rarity": "mythic"},
+    19: {"name": "Рапира божества",            "strength": 1120, "cost": 145000, "emoji": "🎁", "rarity": "ultra"},
+    20: {"name": "Сокрушитель земель",         "strength": 1400, "cost": 220000, "emoji": "🎁", "rarity": "ultra"},
 }
 
 ARMOR = {
-    1:  {"name": "кожаный торс и трусы",  "strength": 16,  "cost": 50,    "emoji": "🔹"},
-    2:  {"name": "тканевая одежда",        "strength": 22,  "cost": 110,   "emoji": "🔹"},
-    3:  {"name": "кожанные доспехи",       "strength": 31,  "cost": 200,   "emoji": "🔹"},
-    4:  {"name": "кольчуга",               "strength": 40,  "cost": 345,   "emoji": "🔹"},
-    5:  {"name": "железные доспехи",       "strength": 55,  "cost": 650,   "emoji": "🔹"},
-    6:  {"name": "золотые доспехи",        "strength": 70,  "cost": 1150,  "emoji": "🔸"},
-    7:  {"name": "стальные доспехи",       "strength": 95,  "cost": 1750,  "emoji": "🔸"},
-    8:  {"name": "алмазные доспехи",       "strength": 125, "cost": 2800,  "emoji": "🔸"},
-    9:  {"name": "обсидиановые доспехи",   "strength": 165, "cost": 4500,  "emoji": "🔸"},
-    10: {"name": "легендарные доспехи",    "strength": 200, "cost": 10000, "emoji": "♦️"},
+    1:  {"name": "Тряпичные обмотки",          "strength": 10,   "cost": 100,    "emoji": "🔹", "rarity": "common"},
+    2:  {"name": "Конопляная рубаха",          "strength": 22,   "cost": 220,    "emoji": "🔹", "rarity": "common"},
+    3:  {"name": "Травяные сандалии",          "strength": 31,   "cost": 370,    "emoji": "🔹", "rarity": "common"},
+    4:  {"name": "Кожаная куртка",              "strength": 40,   "cost": 500,    "emoji": "🔸", "rarity": "uncommon"},
+    5:  {"name": "Капюшон следопыта",          "strength": 55,   "cost": 820,    "emoji": "🔸", "rarity": "uncommon"},
+    6:  {"name": "Кольчужная рубаха",          "strength": 70,   "cost": 1150,   "emoji": "🔸", "rarity": "uncommon"},
+    7:  {"name": "Ламеллярный доспех",         "strength": 95,   "cost": 2000,   "emoji": "🔸", "rarity": "rare"},
+    8:  {"name": "Кожаный шлем с маской",      "strength": 125,  "cost": 2800,   "emoji": "🔸", "rarity": "rare"},
+    9:  {"name": "Поножи с медными вставками", "strength": 140,  "cost": 3800,   "emoji": "🔸", "rarity": "rare"},
+    10: {"name": "Рыцарская кираса",           "strength": 180,  "cost": 5300,   "emoji": "♦️", "rarity": "epic"},
+    11: {"name": "Латные рукавицы",            "strength": 215,  "cost": 6500,   "emoji": "♦️", "rarity": "epic"},
+    12: {"name": "Полные латные поножи",       "strength": 260,  "cost": 8200,   "emoji": "♦️", "rarity": "epic"},
+    13: {"name": "Наплечники с гербом",        "strength": 325,  "cost": 11000,  "emoji": "💎", "rarity": "legendary"},
+    14: {"name": "Мантия эфира",               "strength": 400,  "cost": 19500,  "emoji": "💎", "rarity": "legendary"},
+    15: {"name": "Мифриловая кольчуга",        "strength": 475,  "cost": 24200,  "emoji": "💎", "rarity": "legendary"},
+    16: {"name": "Шлем с рогами демона",       "strength": 580,  "cost": 34600,  "emoji": "🌟", "rarity": "mythic"},
+    17: {"name": "Амулет «Каменная кожа»",     "strength": 650,  "cost": 50000,  "emoji": "🌟", "rarity": "mythic"},
+    18: {"name": "Доспех из чешуи дракона",    "strength": 780,  "cost": 87000,  "emoji": "🌟", "rarity": "mythic"},
+    19: {"name": "Вспышка небес",              "strength": 900,  "cost": 120000, "emoji": "🎁", "rarity": "ultra"},
+    20: {"name": "Звездная мантия",            "strength": 1100, "cost": 195000, "emoji": "🎁", "rarity": "ultra"},
 }
 
 # ============== ENEMIES ==============
@@ -1425,6 +1494,7 @@ class RaidState(StatesGroup):
     in_raid = State()
 
 class OnlineState(StatesGroup):
+    viewing_menu = State()
     searching = State()
     waiting_accept = State()
     in_pvp_battle = State()
@@ -1585,11 +1655,22 @@ def get_forge_kb():
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
+
+def _weapon_btn_text(w: dict) -> str:
+    """Текст кнопки оружия (используется в KB и при matching)"""
+    return f"⚔️ {w['name']} — {w['cost']} монет"
+
+
+def _armor_btn_text(a: dict) -> str:
+    """Текст кнопки брони (используется в KB и при matching)"""
+    return f"🛡️ {a['name']} — {a['cost']} монет"
+
+
 def get_weapons_kb():
     """Меню выбора оружия"""
     kb = []
     for w_id, w_info in WEAPONS.items():
-        btn = f"{w_info['emoji']} {w_info['name']} (сила: {w_info['strength']}) — {w_info['cost']} монет"
+        btn = _weapon_btn_text(w_info)
         kb.append([KeyboardButton(text=btn)])
     kb.append([KeyboardButton(text="⬅️ Назад")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
@@ -1598,7 +1679,7 @@ def get_armor_kb():
     """Меню выбора брони"""
     kb = []
     for a_id, a_info in ARMOR.items():
-        btn = f"{a_info['emoji']} {a_info['name']} (сила: {a_info['strength']}) — {a_info['cost']} монет"
+        btn = _armor_btn_text(a_info)
         kb.append([KeyboardButton(text=btn)])
     kb.append([KeyboardButton(text="⬅️ Назад")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
@@ -1676,6 +1757,14 @@ def get_searching_kb():
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
+def get_online_menu_kb():
+    """Главное меню онлайн-режима (лобби)"""
+    kb = [
+        [KeyboardButton(text="🔍 Поиск игрока")],
+        [KeyboardButton(text="❌ Выйти из онлайна")]
+    ]
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
 def get_pvp_accept_kb():
     """Меню подтверждения PvP"""
     kb = [
@@ -1694,7 +1783,7 @@ def get_next_weapon_kb(current_weapon_id: int) -> ReplyKeyboardMarkup:
         ]
     else:
         w = WEAPONS[next_id]
-        btn = f"{w['emoji']} {w['name']} (сила: {w['strength']}) — {w['cost']} монет"
+        btn = _weapon_btn_text(w)
         kb = [
             [KeyboardButton(text=btn)],
             [KeyboardButton(text="⬅️ Назад")]
@@ -1711,7 +1800,7 @@ def get_next_armor_kb(current_armor_id: int) -> ReplyKeyboardMarkup:
         ]
     else:
         a = ARMOR[next_id]
-        btn = f"{a['emoji']} {a['name']} (сила: {a['strength']}) — {a['cost']} монет"
+        btn = _armor_btn_text(a)
         kb = [
             [KeyboardButton(text=btn)],
             [KeyboardButton(text="⬅️ Назад")]
@@ -1990,7 +2079,7 @@ async def _send_profile(message, player: dict):
     response = (
         f'{E_PROFILE} Профиль игрока:\n'
         f'{E_LOCK}{E_HASHTAG} {safe_nick}\n\n'
-        f'{E_DOT} {safe_status} (заглушка)\n\n'
+        f'{E_DOT} {status_emoji} {safe_status}\n\n'
         f'Уровень {E_CIRCLE} {player["player_level"]}{E_STAR}\n'
         f'{E_SQ}{exp_info["current_exp"]} / {exp_info["needed_exp"]}{E_EXP_DOT}{E_EXP} Опыта\n\n\n'
         f'{E_SQ}{player["wins"]} - {E_TROPHY} {E_YELLOW} Победы\n'
@@ -2488,6 +2577,22 @@ def _get_armor_info(armor_id: int) -> dict:
         return DEFAULT_ARMOR
     return ARMOR.get(armor_id, DEFAULT_ARMOR)
 
+
+def _build_forge_main_text(player: dict, weapon: dict, armor: dict) -> str:
+    """Построить текст главного меню кузни"""
+    total_strength = int(player['strength'])
+    w_rarity = get_rarity_emoji(weapon.get('rarity', 'common'))
+    a_rarity = get_rarity_emoji(armor.get('rarity', 'common'))
+    return (
+        f"{E_FORGE}{E_YELLOW} КУЗНЯ:\n\n"
+        f"{E_SQ}{E_ATK} {total_strength} {E_GREEN} общая сила\n\n"
+        f"{E_SQ}{E_SWORD2}{E_LINK} {w_rarity} {weapon['name']}:\n"
+        f"  ├ Сила: {weapon['strength']} {E_ATK2}\n\n"
+        f"{E_SQ}{E_SHIELD}{E_LINK} {a_rarity} {armor['name']}\n"
+        f"  ├ Сила: {armor['strength']} {E_ATK2}\n\n"
+        f"{E_ITEMS_STAR}{E_HAMMER} Выбери раздел для улучшения:"
+    )
+
 @dp.message(F.text == "🔨 Кузня")
 async def open_forge(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
@@ -2502,13 +2607,7 @@ async def open_forge(message: types.Message, state: FSMContext):
     weapon = _get_weapon_info(weapon_id)
     armor = _get_armor_info(armor_id)
 
-    forge_text = (
-        f"{E_FORGE} <b>КУЗНЯ</b>\n\n"
-        f"{E_ATK} Общая сила: {int(player['strength'])}\n\n"
-        f"{E_WEAPON} | Оружие: {weapon['emoji']} {weapon['name']} (сила: {weapon['strength']})\n"
-        f"{E_ARMOR_E} | Броня: {armor['emoji']} {armor['name']} (сила: {armor['strength']})\n\n"
-        "⚙️🔧 | Выбери раздел для улучшения:"
-    )
+    forge_text = _build_forge_main_text(player, weapon, armor)
     await send_image_with_text(message, "images/kusnya.png", forge_text, reply_markup=get_forge_kb())
     await state.set_state(ForgeMenu.viewing_forge)
 
@@ -2525,22 +2624,30 @@ async def handle_forge_menu(message: types.Message, state: FSMContext):
     if text == "⚔️ Оружие":
         weapon_id = get_player_weapon(user_id)
         weapon = _get_weapon_info(weapon_id)
+        w_rarity = get_rarity_emoji(weapon.get('rarity', 'common'))
         next_weapon_id = weapon_id + 1
         if next_weapon_id > max(WEAPONS.keys()):
             weapons_text = (
-                "⚔️ <b>ОРУЖИЕ</b>\n\n"
-                f"Текущее оружие: {weapon['emoji']} {weapon['name']} (сила: {weapon['strength']})\n"
-                f"Монеты: {player['coins']}\n\n"
+                f"{E_ATK} Твоё ОРУЖИЕ {E_PROFILE}\n\n"
+                f"{E_PIN}{E_YELLOW} Текущее оружие: \n"
+                f" ├ {w_rarity} {weapon['name']}\n"
+                f" ├ Сила: {weapon['strength']} {E_ATK2}{E_ARROW_UP}\n"
+                f"{E_SQ}Монеты: {player['coins']}{E_COINS}\n\n"
                 "✅ Вы достигли максимума"
             )
         else:
             next_w = WEAPONS[next_weapon_id]
+            nw_rarity = get_rarity_emoji(next_w.get('rarity', 'common'))
             weapons_text = (
-                "⚔️ <b>ОРУЖИЕ</b>\n\n"
-                f"Текущее оружие: {weapon['emoji']} {weapon['name']} (сила: {weapon['strength']})\n"
-                f"Монеты: {player['coins']}\n\n"
-                f"Следующее улучшение:\n"
-                f"{next_w['emoji']} {next_w['name']} (сила: {next_w['strength']}) — {next_w['cost']} монет"
+                f"{E_ATK} Твоё ОРУЖИЕ {E_PROFILE}\n\n"
+                f"{E_PIN}{E_YELLOW} Текущее оружие: \n"
+                f" ├ {w_rarity} {weapon['name']}\n"
+                f" ├ Сила: {weapon['strength']} {E_ATK2}{E_ARROW_UP}\n"
+                f"{E_SQ}Монеты: {player['coins']}{E_COINS}\n\n"
+                f"{E_SQ}{E_GREEN} Следующее улучшение:\n"
+                f"{E_STAR} {nw_rarity} {next_w['name']}\n"
+                f" ├ Сила: {next_w['strength']} {E_ATK2}{E_ARROW_UP}\n"
+                f"{E_SQ}{E_CART} Цена апгрейда: {next_w['cost']}{E_COINS}"
             )
         await send_image_with_text(message, "images/weapon.png", weapons_text, reply_markup=get_next_weapon_kb(weapon_id))
         await state.set_state(ForgeMenu.viewing_weapons)
@@ -2549,22 +2656,30 @@ async def handle_forge_menu(message: types.Message, state: FSMContext):
     if text == "🛡️ Броня":
         armor_id = get_player_armor(user_id)
         armor = _get_armor_info(armor_id)
+        a_rarity = get_rarity_emoji(armor.get('rarity', 'common'))
         next_armor_id = armor_id + 1
         if next_armor_id > max(ARMOR.keys()):
             armor_text = (
-                "🛡️ <b>БРОНЯ</b>\n\n"
-                f"Текущая броня: {armor['emoji']} {armor['name']} (сила: {armor['strength']})\n"
-                f"Монеты: {player['coins']}\n\n"
+                f"{E_SHIELD} Твоя БРОНЯ {E_PROFILE}\n\n"
+                f"{E_PIN}{E_YELLOW} Текущая броня: \n"
+                f" ├ {a_rarity} {armor['name']}\n"
+                f" ├ Сила: {armor['strength']} {E_ATK2}{E_ARROW_UP}\n"
+                f"{E_SQ}Монеты: {player['coins']}{E_COINS}\n\n"
                 "✅ Вы достигли максимума"
             )
         else:
             next_a = ARMOR[next_armor_id]
+            na_rarity = get_rarity_emoji(next_a.get('rarity', 'common'))
             armor_text = (
-                "🛡️ <b>БРОНЯ</b>\n\n"
-                f"Текущая броня: {armor['emoji']} {armor['name']} (сила: {armor['strength']})\n"
-                f"Монеты: {player['coins']}\n\n"
-                f"Следующее улучшение:\n"
-                f"{next_a['emoji']} {next_a['name']} (сила: {next_a['strength']}) — {next_a['cost']} монет"
+                f"{E_SHIELD} Твоя БРОНЯ {E_PROFILE}\n\n"
+                f"{E_PIN}{E_YELLOW} Текущая броня: \n"
+                f" ├ {a_rarity} {armor['name']}\n"
+                f" ├ Сила: {armor['strength']} {E_ATK2}{E_ARROW_UP}\n"
+                f"{E_SQ}Монеты: {player['coins']}{E_COINS}\n\n"
+                f"{E_SQ}{E_GREEN} Следующее улучшение:\n"
+                f"{E_STAR} {na_rarity} {next_a['name']}\n"
+                f" ├ Сила: {next_a['strength']} {E_ATK2}{E_ARROW_UP}\n"
+                f"{E_SQ}{E_CART} Цена апгрейда: {next_a['cost']}{E_COINS}"
             )
         await send_image_with_text(message, "images/armor.png", armor_text, reply_markup=get_next_armor_kb(armor_id))
         await state.set_state(ForgeMenu.viewing_armor)
@@ -2598,13 +2713,7 @@ async def handle_weapons_menu(message: types.Message, state: FSMContext):
         armor_id = get_player_armor(user_id)
         weapon = _get_weapon_info(weapon_id)
         armor = _get_armor_info(armor_id)
-        forge_text = (
-            f"{E_FORGE} <b>КУЗНЯ</b>\n\n"
-            f"{E_ATK} Общая сила: {int(player['strength'])}\n\n"
-            f"{E_WEAPON} | Оружие: {weapon['emoji']} {weapon['name']} (сила: {weapon['strength']})\n"
-            f"{E_ARMOR_E} | Броня: {armor['emoji']} {armor['name']} (сила: {armor['strength']})\n\n"
-            "⚙️🔧 | Выбери раздел для улучшения:"
-        )
+        forge_text = _build_forge_main_text(player, weapon, armor)
         await send_image_with_text(message, "images/kusnya.png", forge_text, reply_markup=get_forge_kb())
         await state.set_state(ForgeMenu.viewing_forge)
         return
@@ -2617,7 +2726,7 @@ async def handle_weapons_menu(message: types.Message, state: FSMContext):
 
     chosen_weapon_id = None
     for w_id, w_info in WEAPONS.items():
-        btn = f"{w_info['emoji']} {w_info['name']} (сила: {w_info['strength']}) — {w_info['cost']} монет"
+        btn = _weapon_btn_text(w_info)
         if text == btn:
             chosen_weapon_id = w_id
             break
@@ -2678,13 +2787,7 @@ async def handle_armor_menu(message: types.Message, state: FSMContext):
         armor_id = get_player_armor(user_id)
         weapon = _get_weapon_info(weapon_id)
         armor = _get_armor_info(armor_id)
-        forge_text = (
-            f"{E_FORGE} <b>КУЗНЯ</b>\n\n"
-            f"{E_ATK} Общая сила: {int(player['strength'])}\n\n"
-            f"{E_WEAPON} | Оружие: {weapon['emoji']} {weapon['name']} (сила: {weapon['strength']})\n"
-            f"{E_ARMOR_E} | Броня: {armor['emoji']} {armor['name']} (сила: {armor['strength']})\n\n"
-            "⚙️🔧 | Выбери раздел для улучшения:"
-        )
+        forge_text = _build_forge_main_text(player, weapon, armor)
         await send_image_with_text(message, "images/kusnya.png", forge_text, reply_markup=get_forge_kb())
         await state.set_state(ForgeMenu.viewing_forge)
         return
@@ -2697,7 +2800,7 @@ async def handle_armor_menu(message: types.Message, state: FSMContext):
 
     chosen_armor_id = None
     for a_id, a_info in ARMOR.items():
-        btn = f"{a_info['emoji']} {a_info['name']} (сила: {a_info['strength']}) — {a_info['cost']} монет"
+        btn = _armor_btn_text(a_info)
         if text == btn:
             chosen_armor_id = a_id
             break
@@ -2758,13 +2861,7 @@ async def handle_skills_menu(message: types.Message, state: FSMContext):
         armor_id = get_player_armor(user_id)
         weapon = _get_weapon_info(weapon_id)
         armor = _get_armor_info(armor_id)
-        forge_text = (
-            f"{E_FORGE} <b>КУЗНЯ</b>\n\n"
-            f"{E_ATK} Общая сила: {int(player['strength'])}\n\n"
-            f"{E_WEAPON} | Оружие: {weapon['emoji']} {weapon['name']} (сила: {weapon['strength']})\n"
-            f"{E_ARMOR_E} | Броня: {armor['emoji']} {armor['name']} (сила: {armor['strength']})\n\n"
-            "⚙️🔧 | Выбери раздел для улучшения:"
-        )
+        forge_text = _build_forge_main_text(player, weapon, armor)
         await send_image_with_text(message, "images/kusnya.png", forge_text, reply_markup=get_forge_kb())
         await state.set_state(ForgeMenu.viewing_forge)
         return
@@ -3537,28 +3634,44 @@ async def battle_round(message: types.Message, state: FSMContext):
     new_enemy_health = int(round(new_enemy_health - player_hit))
 
     if new_enemy_health <= 0:
-        if data.get('is_location_battle') and data.get('location_id') == 2:
+        if data.get('is_location_battle') and data.get('location_enemy_cfg'):
             loc_cfg = data['location_enemy_cfg']
             loc_rewards = loc_cfg.get('rewards', {})
             reward_lines = []
             if 'coins' in loc_rewards:
                 coin_earned = random.randint(*loc_rewards['coins'])
                 add_coins_to_player(user_id, coin_earned)
-                reward_lines.append(f"{E_PLUS} {coin_earned} {E_COINS} Монет")
+                reward_lines.append(f"{E_PLUS} {coin_earned} {E_COINS} монет")
+            if 'rating_points' in loc_rewards:
+                rp = loc_rewards['rating_points']
+                update_rating_points(user_id, rp)
+                reward_lines.append(f"{E_PLUS} {rp} 💠 очков рейтинга")
+            if 'food' in loc_rewards:
+                food_chance = loc_rewards.get('food_chance', 1.0)
+                if random.random() < food_chance:
+                    food_earned = random.randint(*loc_rewards['food'])
+                    add_inventory_material(user_id, 'food', food_earned)
+                    reward_lines.append(f"{E_PLUS} {food_earned} {E_FOOD} еды")
             if 'wood' in loc_rewards:
                 wood_earned = random.randint(*loc_rewards['wood'])
                 add_inventory_material(user_id, 'wood', wood_earned)
-                reward_lines.append(f"{E_PLUS} {wood_earned} {E_WOOD} Древесина")
+                reward_lines.append(f"{E_PLUS} {wood_earned} {E_WOOD} древесина")
             if 'experience' in loc_rewards:
                 exp_earned = random.randint(*loc_rewards['experience'])
                 add_experience_to_player(user_id, exp_earned)
-                reward_lines.append(f"{E_PLUS} {exp_earned} {E_EXP} Опыта")
+                reward_lines.append(f"{E_PLUS} {exp_earned} {E_EXP} опыта")
             if 'clan_exp' in loc_rewards:
                 clan_exp_earned = random.randint(*loc_rewards['clan_exp'])
                 player_clan = get_player_clan(user_id)
                 if player_clan:
                     add_clan_exp(player_clan['clan_id'], clan_exp_earned)
-                    reward_lines.append(f"{E_PLUS} {clan_exp_earned} опыта клану")
+                    reward_lines.append(f"{E_PLUS} {clan_exp_earned} {E_CLAN_BOTTLE} опыта клана")
+            if 'crystals' in loc_rewards:
+                cryst_chance = loc_rewards.get('crystals_chance', 1.0)
+                if random.random() < cryst_chance:
+                    cryst_earned = loc_rewards['crystals']
+                    add_crystals_to_player(user_id, cryst_earned)
+                    reward_lines.append(f"{E_PLUS} {cryst_earned} {E_CRYSTALS} кристалл")
             battle_log += _fmt_victory(enemy_info['name'], reward_lines)
             await message.answer(battle_log, reply_markup=get_end_battle_kb())
             await state.clear()
@@ -3649,6 +3762,48 @@ async def open_online(message: types.Message, state: FSMContext):
     player_clan = get_player_clan(user_id)
     clan_level = player_clan['clan_level'] if player_clan else 1
     buffed_strength = apply_clan_strength_buff(player['strength'], clan_level)
+    health = calculate_player_health(buffed_strength)
+    damage = calculate_damage(buffed_strength)
+
+    mana = 100
+
+    online_text = (
+        f'{E_ONLINE} <b>ОНЛАЙН РЕЖИМ:</b>\n'
+        f'Начните подбор игрока, нажав на кнопку.\n'
+        f'{E_SQ} Возможно долгий подбор, не выходите из поиска если хотите найти игрока.\n\n'
+        f'{E_SQ} Характеристики {html.escape(player["nickname"])}:\n\n'
+        f'{E_SQ}{int(buffed_strength)} {E_ATK}\n'
+        f'{E_SQ}{health} {E_HP}\n'
+        f'{E_SQ}{damage} {E_DMG}\n'
+        f'{E_SQ}{E_MANA} {mana} / 100\n'
+    )
+    await send_image_with_text(message, "images/online.png", online_text, reply_markup=get_online_menu_kb())
+    await state.set_state(OnlineState.viewing_menu)
+
+
+@dp.message(OnlineState.viewing_menu, F.text == "❌ Выйти из онлайна")
+async def leave_online_menu(message: types.Message, state: FSMContext):
+    await show_main_menu(message, state)
+
+
+@dp.message(OnlineState.viewing_menu, F.text == "🔍 Поиск игрока")
+async def start_online_search(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    player = get_player(user_id)
+
+    if not player:
+        await message.answer("Сначала зарегистрируйся! /start")
+        return
+
+    if user_id in pvp_queue:
+        await message.answer("Ты уже в очереди поиска!", reply_markup=get_searching_kb())
+        await state.set_state(OnlineState.searching)
+        return
+
+    # Применяем бафф клана
+    player_clan = get_player_clan(user_id)
+    clan_level = player_clan['clan_level'] if player_clan else 1
+    buffed_strength = apply_clan_strength_buff(player['strength'], clan_level)
 
     health = calculate_player_health(buffed_strength)
     damage = calculate_damage(buffed_strength)
@@ -3672,7 +3827,7 @@ async def open_online(message: types.Message, state: FSMContext):
         "chat_id": message.chat.id
     }
 
-    await send_image_with_text(message, "images/online.png", search_text, reply_markup=get_searching_kb())
+    await send_image_with_text(message, "images/search.png", search_text, reply_markup=get_searching_kb())
     await state.set_state(OnlineState.searching)
 
     # Проверяем, есть ли ещё кто-то в очереди
