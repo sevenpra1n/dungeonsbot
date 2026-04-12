@@ -1802,6 +1802,8 @@ async def handle_main_menu_callback(query: types.CallbackQuery, state: FSMContex
 
     if action in actions:
         await query.answer()  # закрыть loading на кнопке
+        # query.message.from_user — это бот, подменяем на реального пользователя
+        query.message.from_user = query.from_user
         # Вызвать соответствующую функцию
         await actions[action](query.message, state)
 
