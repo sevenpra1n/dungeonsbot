@@ -68,7 +68,7 @@ E_CHART    = '<tg-emoji emoji-id="5278778882848220741">📊</tg-emoji>'   # по
 E_CROSS    = '<tg-emoji emoji-id="5019523782004441717">❌</tg-emoji>'   # крестик ошибки
 E_LOCK     = '<tg-emoji emoji-id="6034962180875490251">🔓</tg-emoji>'   # замок
 E_HASHTAG  = '<tg-emoji emoji-id="5354857360844152098">#️⃣</tg-emoji>'  # решётка
-E_DOT      = '<tg-emoji emoji-id="5323718538710847">🔸</tg-emoji>'     # точка
+E_DOT      = '<tg-emoji emoji-id="5323718538710491847">🔸</tg-emoji>'   # точка
 E_CIRCLE   = '<tg-emoji emoji-id="5357471466919056181">🔘</tg-emoji>'   # кружок
 E_SQ       = '<tg-emoji emoji-id="5267324424113124134">▫️</tg-emoji>'   # квадрат
 E_YELLOW   = '<tg-emoji emoji-id="5906800644525660990">🟡</tg-emoji>'   # жёлтый
@@ -2275,7 +2275,11 @@ async def _run_enemy_search(user_id: int, chat_id: int, search_time: int = 10, l
     else:
         enemy_cfg = get_location_enemy_for_player(player['strength'])
     enemy_strength = enemy_cfg['strength']
-    enemy_health = calculate_player_health(enemy_strength)
+    # For forest enemies, use the explicit health value if available
+    if 'health' in enemy_cfg:
+        enemy_health = enemy_cfg['health']
+    else:
+        enemy_health = calculate_player_health(enemy_strength)
     enemy_damage = calculate_damage(enemy_strength)
 
     player_clan = get_player_clan(user_id)
