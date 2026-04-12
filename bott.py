@@ -1331,9 +1331,12 @@ class ProfileMenu(StatesGroup):
     viewing_inventory = State()
 
 class MarketMenu(StatesGroup):
+    viewing_category = State()
     viewing_market = State()
     selling_resource = State()
     buying_ticket = State()
+    viewing_consumables = State()
+    viewing_items = State()
 
 # Словарь для отслеживания cooldown боевых действий (2 сек)
 battle_cooldowns: dict = {}
@@ -1386,14 +1389,31 @@ MARKET_PRICES = {
 }
 MARKET_RAID_TICKET_PRICE = 57  # монет за 1 билет рейда
 
+def get_market_category_kb() -> ReplyKeyboardMarkup:
+    """Клавиатура категорий рынка"""
+    kb = [
+        [KeyboardButton(text="🥕 Продажа ресурсов")],
+        [KeyboardButton(text="📕 Расходники")],
+        [KeyboardButton(text="🎁 Предметы")],
+        [KeyboardButton(text="⬅️ Назад в меню")],
+    ]
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
 def get_market_kb() -> ReplyKeyboardMarkup:
-    """Клавиатура рынка (продажа ресурсов + покупка билета)"""
+    """Клавиатура рынка (продажа ресурсов)"""
     kb = [
         [KeyboardButton(text="Продать еду🥕"),        KeyboardButton(text="Продать древесину🌳")],
         [KeyboardButton(text="Продать камень🪨"),      KeyboardButton(text="Продать железо⛰")],
         [KeyboardButton(text="Продать золото🥇")],
+        [KeyboardButton(text="⬅️ Назад к категориям")],
+    ]
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+def get_consumables_kb() -> ReplyKeyboardMarkup:
+    """Клавиатура расходников"""
+    kb = [
         [KeyboardButton(text=f"Купить билет рейда ({MARKET_RAID_TICKET_PRICE}💰)")],
-        [KeyboardButton(text="❌ Выйти с рынка")],
+        [KeyboardButton(text="⬅️ Назад к категориям")],
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
@@ -1748,6 +1768,9 @@ def roll_miss(extra_miss_chance: float = 0.0) -> bool:
     return random.random() < (0.10 + extra_miss_chance)
 
 
+# Cache for Telegram file_id by image path (avoids re-uploading)
+_image_file_id_cache: dict = {}
+
 async def send_image_with_text(message, image_path: str, text: str, reply_markup=None):
     """Отправить изображение с текстом. Если файл не найден — отправить только текст."""
     try:
@@ -1755,13 +1778,19 @@ async def send_image_with_text(message, image_path: str, text: str, reply_markup
             print(f"⚠️ ФАЙЛ НЕ НАЙДЕН: {image_path}")
             await message.answer(text, reply_markup=reply_markup, parse_mode="HTML")
             return
-        photo = FSInputFile(image_path)
-        await message.answer_photo(
+        cached_id = _image_file_id_cache.get(image_path)
+        if cached_id:
+            photo = cached_id
+        else:
+            photo = FSInputFile(image_path)
+        result = await message.answer_photo(
             photo=photo,
             caption=text,
             reply_markup=reply_markup,
             parse_mode="HTML"
         )
+        if not cached_id and result and result.photo:
+            _image_file_id_cache[image_path] = result.photo[-1].file_id
     except Exception as e:
         print(f"❌ Ошибка при отправке фото: {e}")
         await message.answer(text, reply_markup=reply_markup, parse_mode="HTML")
@@ -2335,7 +2364,7 @@ async def handle_forge_menu(message: types.Message, state: FSMContext):
                 f"Следующее улучшение:\n"
                 f"{next_w['emoji']} {next_w['name']} (сила: {next_w['strength']}) — {next_w['cost']} монет"
             )
-        await message.answer(weapons_text, reply_markup=get_next_weapon_kb(weapon_id))
+        await send_image_with_text(message, "images/weapon.png", weapons_text, reply_markup=get_next_weapon_kb(weapon_id))
         await state.set_state(ForgeMenu.viewing_weapons)
         return
 
@@ -2359,7 +2388,7 @@ async def handle_forge_menu(message: types.Message, state: FSMContext):
                 f"Следующее улучшение:\n"
                 f"{next_a['emoji']} {next_a['name']} (сила: {next_a['strength']}) — {next_a['cost']} монет"
             )
-        await message.answer(armor_text, reply_markup=get_next_armor_kb(armor_id))
+        await send_image_with_text(message, "images/armor.png", armor_text, reply_markup=get_next_armor_kb(armor_id))
         await state.set_state(ForgeMenu.viewing_armor)
         return
 
@@ -4755,8 +4784,17 @@ _MARKET_SELL_BUTTONS = {
     "Продать золото🥇": 'gold',
 }
 
+def _get_market_category_text() -> str:
+    """Сформировать текст категорий рынка"""
+    return (
+        '<tg-emoji emoji-id="5906909964328245730">🗓</tg-emoji> Выбери категорию на рынке:\n\n'
+        '<tg-emoji emoji-id="5267324424113124134">▫️</tg-emoji>Продажа ресурсов <tg-emoji emoji-id="6284888960644682300">🥕</tg-emoji>\n'
+        '<tg-emoji emoji-id="5267324424113124134">▫️</tg-emoji>Расходники <tg-emoji emoji-id="5334859426178313935">📕</tg-emoji>\n'
+        '<tg-emoji emoji-id="5267324424113124134">▫️</tg-emoji>Предметы <tg-emoji emoji-id="5936238625250350064">🎁</tg-emoji>'
+    )
+
 def _get_market_text(player: dict) -> str:
-    """Сформировать текст главной страницы рынка"""
+    """Сформировать текст страницы продажи ресурсов"""
     nickname = html.escape(player['nickname'])
     lines = [
         f"{E_MARKET} <b>РЫНОК</b> | Продажа ресурсов.\n",
@@ -4767,11 +4805,18 @@ def _get_market_text(player: dict) -> str:
         f"{E_STONE} Камень | {MARKET_PRICES['stone']}{E_COINS}",
         f"{E_IRON} Железо | {MARKET_PRICES['iron']}{E_COINS}",
         f"{E_GOLD_M} Золото | {MARKET_PRICES['gold']}{E_COINS}",
-        "",
-        f"{E_CHART} | Покупка:",
-        f"{E_TICKET} Билет рейда | {MARKET_RAID_TICKET_PRICE}{E_COINS}",
     ]
     return "\n".join(lines)
+
+def _get_consumables_text(player: dict) -> str:
+    """Сформировать текст страницы расходников"""
+    nickname = html.escape(player['nickname'])
+    return (
+        f'{E_CHART} <b>РАСХОДНИКИ</b>\n\n'
+        f'{nickname}, доступные расходники:\n\n'
+        f'{E_TICKET} Билет рейда | {MARKET_RAID_TICKET_PRICE}{E_COINS}\n'
+        f'Билетов у тебя: {player["raid_tickets"]} {E_TICKET}'
+    )
 
 @dp.message(F.text == "🛒 Рынок")
 async def open_market(message: types.Message, state: FSMContext):
@@ -4780,8 +4825,39 @@ async def open_market(message: types.Message, state: FSMContext):
     if not player:
         await message.answer("Сначала зарегистрируйся! /start")
         return
-    await state.set_state(MarketMenu.viewing_market)
-    await send_image_with_text(message, "images/rynok.png", _get_market_text(player), reply_markup=get_market_kb())
+    await state.set_state(MarketMenu.viewing_category)
+    await send_image_with_text(message, "images/rynokcategory.png", _get_market_category_text(), reply_markup=get_market_category_kb())
+
+@dp.message(MarketMenu.viewing_category)
+async def handle_market_category(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+    player = get_player(user_id)
+    if not player:
+        await message.answer("Сначала зарегистрируйся! /start")
+        return
+
+    if text == "⬅️ Назад в меню":
+        await show_main_menu(message, state)
+        return
+
+    if text == "🥕 Продажа ресурсов":
+        await state.set_state(MarketMenu.viewing_market)
+        await send_image_with_text(message, "images/rynok.png", _get_market_text(player), reply_markup=get_market_kb())
+        return
+
+    if text == "📕 Расходники":
+        await state.set_state(MarketMenu.viewing_consumables)
+        await message.answer(_get_consumables_text(player), reply_markup=get_consumables_kb(), parse_mode="HTML")
+        return
+
+    if text == "🎁 Предметы":
+        await state.set_state(MarketMenu.viewing_items)
+        await message.answer("🎁 <b>Предметы</b>\n\nВ разработке 🔧", reply_markup=ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="⬅️ Назад к категориям")]], resize_keyboard=True), parse_mode="HTML")
+        return
+
+    # Fallback
+    await send_image_with_text(message, "images/rynokcategory.png", _get_market_category_text(), reply_markup=get_market_category_kb())
 
 @dp.message(MarketMenu.viewing_market)
 async def handle_market(message: types.Message, state: FSMContext):
@@ -4792,8 +4868,9 @@ async def handle_market(message: types.Message, state: FSMContext):
         await message.answer("Сначала зарегистрируйся! /start")
         return
 
-    if text == "❌ Выйти с рынка":
-        await show_main_menu(message, state)
+    if text == "⬅️ Назад к категориям":
+        await state.set_state(MarketMenu.viewing_category)
+        await send_image_with_text(message, "images/rynokcategory.png", _get_market_category_text(), reply_markup=get_market_category_kb())
         return
 
     # Check each sell button (plain emoji buttons)
@@ -4818,28 +4895,6 @@ async def handle_market(message: types.Message, state: FSMContext):
         await state.update_data(sell_material=mat_key)
         await state.set_state(MarketMenu.selling_resource)
         await message.answer(sell_text, reply_markup=get_sell_qty_kb(mat_key, amount))
-        return
-
-    # Buy raid ticket button
-    ticket_btn = f"Купить билет рейда ({MARKET_RAID_TICKET_PRICE}💰)"
-    if text == ticket_btn:
-        if player['coins'] < MARKET_RAID_TICKET_PRICE:
-            await message.answer(
-                f"❌ Недостаточно монет!\n"
-                f"Нужно: {MARKET_RAID_TICKET_PRICE}{E_COINS}\n"
-                f"У тебя: {player['coins']}{E_COINS}",
-                reply_markup=get_market_kb()
-            )
-            return
-        remove_coins_from_player(user_id, MARKET_RAID_TICKET_PRICE)
-        add_raid_tickets_to_player(user_id, 1)
-        updated = get_player(user_id)
-        await message.answer(
-            f"{E_PLUS} Куплен {E_TICKET} Билет рейда!\n\n"
-            f"- {MARKET_RAID_TICKET_PRICE}{E_COINS}\n"
-            f"Теперь билетов: {updated['raid_tickets']} {E_TICKET}",
-            reply_markup=get_market_kb()
-        )
         return
 
     # Fallback: refresh market
@@ -4896,9 +4951,7 @@ async def handle_market_sell(message: types.Message, state: FSMContext):
         return
 
     # Calculate earnings (round to avoid floating point noise)
-    earned = int(qty * price)
-    if earned == 0:
-        earned = 1  # at least 1 coin
+    earned = round(qty * price, 2)
 
     ok = remove_inventory_material(user_id, mat_key, qty)
     if not ok:
@@ -4920,6 +4973,57 @@ async def handle_market_sell(message: types.Message, state: FSMContext):
     )
     # Keep state in selling_resource with updated inventory
     await state.update_data(sell_material=mat_key)
+
+@dp.message(MarketMenu.viewing_consumables)
+async def handle_consumables(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+    player = get_player(user_id)
+    if not player:
+        await message.answer("Сначала зарегистрируйся! /start")
+        return
+
+    if text == "⬅️ Назад к категориям":
+        await state.set_state(MarketMenu.viewing_category)
+        await send_image_with_text(message, "images/rynokcategory.png", _get_market_category_text(), reply_markup=get_market_category_kb())
+        return
+
+    ticket_btn = f"Купить билет рейда ({MARKET_RAID_TICKET_PRICE}💰)"
+    if text == ticket_btn:
+        if player['coins'] < MARKET_RAID_TICKET_PRICE:
+            await message.answer(
+                f"❌ Недостаточно монет!\n"
+                f"Нужно: {MARKET_RAID_TICKET_PRICE}{E_COINS}\n"
+                f"У тебя: {player['coins']}{E_COINS}",
+                reply_markup=get_consumables_kb()
+            )
+            return
+        remove_coins_from_player(user_id, MARKET_RAID_TICKET_PRICE)
+        add_raid_tickets_to_player(user_id, 1)
+        updated = get_player(user_id)
+        await message.answer(
+            f"{E_PLUS} Куплен {E_TICKET} Билет рейда!\n\n"
+            f"- {MARKET_RAID_TICKET_PRICE}{E_COINS}\n"
+            f"Теперь билетов: {updated['raid_tickets']} {E_TICKET}",
+            reply_markup=get_consumables_kb()
+        )
+        return
+
+    # Fallback
+    await message.answer(_get_consumables_text(player), reply_markup=get_consumables_kb(), parse_mode="HTML")
+
+@dp.message(MarketMenu.viewing_items)
+async def handle_items(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+
+    if text == "⬅️ Назад к категориям":
+        player = get_player(user_id)
+        await state.set_state(MarketMenu.viewing_category)
+        await send_image_with_text(message, "images/rynokcategory.png", _get_market_category_text(), reply_markup=get_market_category_kb())
+        return
+
+    await message.answer("🎁 <b>Предметы</b>\n\nВ разработке 🔧", reply_markup=ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="⬅️ Назад к категориям")]], resize_keyboard=True), parse_mode="HTML")
 
 # ============== MAIN ==============
 async def main():
