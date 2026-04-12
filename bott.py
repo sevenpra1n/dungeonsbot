@@ -13,7 +13,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, FSInputFile
 
 # ============== EMOJI CONSTANTS ==============
 # Custom tg-emoji for rich display in messages (used via variables, NOT inline in text)
@@ -1348,7 +1348,7 @@ clan_chat_sessions: dict = {}
 
 # ============== KEYBOARDS ==============
 def get_main_kb():
-    """Главное меню (legacy, не используется напрямую)"""
+    """Главное меню"""
     kb = [
         [KeyboardButton(text="🗺️ Карта"),      KeyboardButton(text="📦 Инвентарь")],
         [KeyboardButton(text="🔨 Кузня"),        KeyboardButton(text="🐉 Рейд")],
@@ -1358,20 +1358,6 @@ def get_main_kb():
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
-def get_main_kb_inline():
-    """Главное меню с inline-кнопками"""
-    kb = [
-        [InlineKeyboardButton(text="🗺️ Карта", callback_data="main_map")],
-        [InlineKeyboardButton(text="📦 Инвентарь", callback_data="main_inventory")],
-        [InlineKeyboardButton(text="🔨 Кузня", callback_data="main_forge")],
-        [InlineKeyboardButton(text="🐉 Рейд", callback_data="main_raid")],
-        [InlineKeyboardButton(text="🌐 Онлайн", callback_data="main_online")],
-        [InlineKeyboardButton(text="🛡️ Кланы", callback_data="main_clans")],
-        [InlineKeyboardButton(text="🏆 Рейтинг", callback_data="main_leaderboard")],
-        [InlineKeyboardButton(text="📖 Профиль", callback_data="main_profile")],
-        [InlineKeyboardButton(text="🛒 Рынок", callback_data="main_market")],
-    ]
-    return InlineKeyboardMarkup(inline_keyboard=kb)
 
 def get_main_menu_text() -> str:
     """Текст главного меню"""
@@ -1385,10 +1371,10 @@ def get_main_menu_text() -> str:
     )
 
 async def show_main_menu(message, state: FSMContext = None):
-    """Показать главное меню с картинкой и inline-кнопками"""
+    """Показать главное меню с картинкой и кнопками"""
     if state:
         await state.clear()
-    await send_image_with_text(message, "images/menu.png", get_main_menu_text(), reply_markup=get_main_kb_inline())
+    await send_image_with_text(message, "images/menu.png", get_main_menu_text(), reply_markup=get_main_kb())
 
 # ============== MARKET CONFIG ==============
 MARKET_PRICES = {
@@ -1789,7 +1775,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
     player = get_player(user_id)
     
     if player:
-        await send_image_with_text(message, "images/menu.png", get_main_menu_text(), reply_markup=get_main_kb_inline())
+        await send_image_with_text(message, "images/menu.png", get_main_menu_text(), reply_markup=get_main_kb())
     else:
         await message.answer("Привет! Давай начнем. Как тебя будут звать в игре? Введи свой никнейм:")
         await state.set_state(Registration.waiting_for_nickname)
@@ -1803,7 +1789,7 @@ async def process_nickname(message: types.Message, state: FSMContext):
     
     await state.clear()
     await message.answer(f"Приятно познакомиться, {nickname}! Теперь ты можешь приступать.")
-    await send_image_with_text(message, "images/menu.png", get_main_menu_text(), reply_markup=get_main_kb_inline())
+    await send_image_with_text(message, "images/menu.png", get_main_menu_text(), reply_markup=get_main_kb())
 
 # ============== PROFILE ==============
 @dp.message(Command("профиль"))
@@ -2682,7 +2668,7 @@ async def show_leaderboard(message: types.Message, state: FSMContext = None):
     leaderboard = get_leaderboard(10)
     
     if not leaderboard:
-        await message.answer("📊 Рейтинг пуст. Прокачайся!", reply_markup=get_main_kb_inline())
+        await message.answer("📊 Рейтинг пуст. Прокачайся!", reply_markup=get_main_kb())
         return
     
     response = "🥇 <b>РЕЙТИНГ ИГРОКОВ</b>\n\n"
@@ -2691,7 +2677,7 @@ async def show_leaderboard(message: types.Message, state: FSMContext = None):
         medal = "🥇" if index == 1 else "🥈" if index == 2 else "🥉" if index == 3 else f"{index}."
         response += f"{medal} {html.escape(nickname)} — | {int(strength)}{E_ATK} | | {wins}{E_TROPHY} | | {rating_pts}💠 |\n"
     
-    await send_image_with_text(message, "images/league.png", response, reply_markup=get_main_kb_inline())
+    await send_image_with_text(message, "images/league.png", response, reply_markup=get_main_kb())
 
 # ============== RAID ==============
 def _get_raid_floor_text(floor_id: int, enemy_info: dict) -> str:
@@ -2719,7 +2705,7 @@ async def open_raid(message: types.Message, state: FSMContext):
             f"🎫 Для входа в рейд нужен билет рейда!\n\n"
             f"У тебя: {player['raid_tickets']} {E_TICKET}\n\n"
             "Билеты можно получить за победы или через события.",
-            reply_markup=get_main_kb_inline()
+            reply_markup=get_main_kb()
         )
         return
 
@@ -2757,7 +2743,7 @@ async def handle_raid_menu(message: types.Message, state: FSMContext):
             f"🎫 Для входа в рейд нужен билет рейда!\n\n"
             f"У тебя: {player['raid_tickets']} {E_TICKET}\n\n"
             "Билеты можно получить за победы или через события.",
-            reply_markup=get_main_kb_inline()
+            reply_markup=get_main_kb()
         )
         return
 
@@ -3472,7 +3458,7 @@ async def stop_searching(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     pvp_queue.pop(user_id, None)
     await state.clear()
-    await message.answer("Поиск отменён.", reply_markup=get_main_kb_inline())
+    await message.answer("Поиск отменён.", reply_markup=get_main_kb())
 
 
 @dp.message(OnlineState.waiting_accept)
@@ -3498,12 +3484,12 @@ async def handle_pvp_accept(message: types.Message, state: FSMContext):
                     await bot.send_message(
                         chat_id=opponent_id,
                         text="❌ Соперник отклонил игру.",
-                        reply_markup=get_main_kb_inline()
+                        reply_markup=get_main_kb()
                     )
                 except Exception:
                     pass
         await state.clear()
-        await message.answer("Вы отклонили игру.", reply_markup=get_main_kb_inline())
+        await message.answer("Вы отклонили игру.", reply_markup=get_main_kb())
         return
 
     if text != "✅ Принять игру":
@@ -3905,7 +3891,7 @@ async def handle_create_clan_confirm(message: types.Message, state: FSMContext):
 
     if text == "✅ Да, создать":
         if player['coins'] < 2000:
-            await message.answer("❌ Недостаточно монет для создания клана!", reply_markup=get_main_kb_inline())
+            await message.answer("❌ Недостаточно монет для создания клана!", reply_markup=get_main_kb())
             await state.clear()
             return
         remove_coins_from_player(user_id, 2000)
@@ -3960,7 +3946,7 @@ async def handle_my_clan(message: types.Message, state: FSMContext):
     clan = get_clan(clan_id) if clan_id else None
     if not clan:
         await state.clear()
-        await message.answer("Клан не найден.", reply_markup=get_main_kb_inline())
+        await message.answer("Клан не найден.", reply_markup=get_main_kb())
         return
 
     is_leader = (clan['leader_id'] == user_id)
@@ -4301,7 +4287,7 @@ async def handle_change_min_power(message: types.Message, state: FSMContext):
 
     if not clan:
         await state.clear()
-        await message.answer("Клан не найден.", reply_markup=get_main_kb_inline())
+        await message.answer("Клан не найден.", reply_markup=get_main_kb())
         return
 
     try:
@@ -4349,7 +4335,7 @@ async def handle_delete_clan_confirm(message: types.Message, state: FSMContext):
             await state.set_state(ClanMenu.viewing_clans)
         else:
             await state.clear()
-            await message.answer("❌ Ошибка при удалении клана.", reply_markup=get_main_kb_inline())
+            await message.answer("❌ Ошибка при удалении клана.", reply_markup=get_main_kb())
         return
 
     await message.answer("Нажмите ✅ Да, удалить или ❌ Нет", reply_markup=get_delete_clan_confirm_kb())
@@ -4934,10 +4920,6 @@ async def handle_market_sell(message: types.Message, state: FSMContext):
     )
     # Keep state in selling_resource with updated inventory
     await state.update_data(sell_material=mat_key)
-
-# ============== CALLBACKS ROUTER ==============
-from callbacks import router
-dp.include_router(router)
 
 # ============== MAIN ==============
 async def main():
