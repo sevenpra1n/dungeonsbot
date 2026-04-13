@@ -33,8 +33,7 @@ E_CURSOR   = '<tg-emoji emoji-id="5438335517735267694">🖱</tg-emoji>'   # тв
 E_MANA     = '<tg-emoji emoji-id="6280806319351927135">💜</tg-emoji>'   # мана
 E_CROWN    = '<tg-emoji emoji-id="5217822164362739968">👑</tg-emoji>'   # ты (PvP)
 E_SKULL    = '<tg-emoji emoji-id="5274108672849491069">💀</tg-emoji>'   # враг (PvP)
-E_ESWORD   = '<tg-emoji emoji-id="5438255528264348146">🗡</tg-emoji>'   # враг меч (PvP)
-E_SQ_B     = '<tg-emoji emoji-id="5438255528264348146">🗡</tg-emoji>'   # здоровье врага (бой)
+E_ESWORD   = '<tg-emoji emoji-id="5438255528264348146">🗡</tg-emoji>'   # враг меч (PvP/бой)
 E_ANGRY    = '😡'   # кик из клана
 
 # Additional emoji
@@ -96,7 +95,6 @@ E_BAN      = '<tg-emoji emoji-id="5278578973595427038">🚫</tg-emoji>'   # за
 # Forge / equipment display emoji
 E_LINK     = '<tg-emoji emoji-id="5201888948091129713">🔗</tg-emoji>'   # ссылка (экипировка)
 E_SHIELD   = '<tg-emoji emoji-id="5251203410396458957">🛡</tg-emoji>'   # щит (броня)
-E_SWORD2   = '<tg-emoji emoji-id="5393607290228067750">🗡</tg-emoji>'   # меч (оружие в кузне)
 E_HAMMER   = '<tg-emoji emoji-id="5276314275994954605">🔨</tg-emoji>'   # молот (кузня выбор)
 E_PIN      = '<tg-emoji emoji-id="5264910987500220457">📌</tg-emoji>'   # закрепить (текущее)
 E_CART     = '<tg-emoji emoji-id="5278613311858959074">🛒</tg-emoji>'   # тележка (покупка)
@@ -3310,7 +3308,7 @@ def _build_forge_main_text(player: dict, weapon: dict, armor: dict) -> str:
     return (
         f"{E_FORGE}{E_YELLOW} КУЗНЯ:\n\n"
         f"{E_SQ}{E_ATK} {total_strength} {E_GREEN} общая сила\n\n"
-        f"{E_SQ}{E_SWORD2}{E_LINK} {w_rarity} {weapon['name']}:\n"
+        f"{E_SQ}{E_SWORD}{E_LINK} {w_rarity} {weapon['name']}:\n"
         f"  ├ Сила: {weapon['strength']} {E_ATK2}\n\n"
         f"{E_SQ}{E_SHIELD}{E_LINK} {a_rarity} {armor['name']}\n"
         f"  ├ Сила: {armor['strength']} {E_ATK2}\n\n"
@@ -3495,7 +3493,7 @@ async def handle_weapons_menu(message: types.Message, state: FSMContext):
     await message.answer(
         f"{E_GIFT_UP} Оружие улучшено!\n\n"
         f"{nw_rarity} {new_weapon['name']}\n\n"
-        f"{E_SQ}{E_SWORD2}{E_LINK} {nw_rarity} {new_weapon['name']}:\n"
+        f"{E_SQ}{E_SWORD}{E_LINK} {nw_rarity} {new_weapon['name']}:\n"
         f"  ├ Сила: {new_weapon_strength} {E_ATK2}\n\n"
         f"{E_SQ}{E_SHIELD}{E_LINK} {a_rarity} {armor['name']}\n"
         f"  ├ Сила: {armor['strength']} {E_ATK2}\n\n"
@@ -3574,7 +3572,7 @@ async def handle_armor_menu(message: types.Message, state: FSMContext):
     await message.answer(
         f"{E_GIFT_UP} Броня улучшена!\n\n"
         f"{na_rarity} {new_armor['name']}\n\n"
-        f"{E_SQ}{E_SWORD2}{E_LINK} {w_rarity} {weapon['name']}:\n"
+        f"{E_SQ}{E_SWORD}{E_LINK} {w_rarity} {weapon['name']}:\n"
         f"  ├ Сила: {weapon['strength']} {E_ATK2}\n\n"
         f"{E_SQ}{E_SHIELD}{E_LINK} {na_rarity} {new_armor['name']}\n"
         f"  ├ Сила: {new_armor_strength} {E_ATK2}\n\n"
@@ -4096,7 +4094,7 @@ async def handle_friend_profile(message: types.Message, state: FSMContext):
         await friend_state.set_state(CoopRaidState.waiting_invite)
         await friend_state.update_data(coop_inviter_id=user_id)
         invite_text = (
-            f'{E_SWORD2} <b>ПРИГЛАШЕНИЕ В CO-OP РЕЙД</b> {E_SWORD2}\n\n'
+            f'{E_SWORD} <b>ПРИГЛАШЕНИЕ В CO-OP РЕЙД</b>\n\n'
             f'{E_CROWN} {html.escape(player["nickname"])} приглашает тебя '
             f'в совместный рейд!\n\n'
             f'{E_SQ}{E_ATK} Сила организатора: {int(player["strength"])}\n'
@@ -4237,7 +4235,7 @@ def _fmt_victory(enemy_name: str, reward_lines: list[str]) -> str:
     """Текст победы"""
     return (
         f"{E_CHART} Результаты боя:\n\n"
-        f"{E_SKULL} {enemy_name} повержен! 🗑\n\n"
+        f"{E_SKULL} {enemy_name} повержен! {E_TRASH}\n\n"
         f"{E_TROPHY}{E_GREEN} ВЫ ПОБЕДИЛИ!\n\n"
         f"{E_GIFT} Получено:\n" + "\n".join(reward_lines) + "\n"
     )
@@ -4280,7 +4278,7 @@ async def open_raid(message: types.Message, state: FSMContext):
         partner_id = coop_raid_pairs[user_id]
         partner = get_player(partner_id)
         p_nick = html.escape(partner['nickname']) if partner else "Партнёр"
-        coop_info = f'\n{E_SWORD2} Партнёр готов: {p_nick} — нажми <b>🤝 Начать совместный рейд</b>!'
+        coop_info = f'\n{E_SWORD} Партнёр готов: {p_nick} — нажми <b>🤝 Начать совместный рейд</b>!'
 
     raid_menu_text = (
         f'<tg-emoji emoji-id="5201888948091129713">🔗</tg-emoji> | Меню рейда {html.escape(player["nickname"])}:\n'
@@ -4429,7 +4427,7 @@ async def handle_raid_menu(message: types.Message, state: FSMContext):
 
         first_nick = p1_nick if p1_goes_first else p2_nick
         start_header = (
-            f"{E_SWORD2}{E_SWORD2} <b>CO-OP РЕЙД НАЧАЛСЯ!</b> {E_SWORD2}{E_SWORD2}\n\n"
+            f"{E_SWORD} <b>CO-OP РЕЙД НАЧАЛСЯ!</b>\n\n"
             f"{E_HASHTAG} Первым ходит: {first_nick}\n\n"
         )
         floor_block = _fmt_coop_floor_info(floor_id, enemy_info, coop_enemy_hp)
@@ -4608,7 +4606,7 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
         await message.answer("⏳ Подожди перед следующим ходом!")
         return
 
-    log = f"🐉 <b>РЕЙД — Этаж {floor_id}/10</b> ⚔️\n\n"
+    log = f"🐉 <b>РЕЙД — Этаж {floor_id}/10</b>\n\n"
     new_enemy_health = data['enemy_health']
     new_player_health = data['player_health']
     new_mana = mana
@@ -4910,7 +4908,7 @@ async def _coop_pass_turn(
 
     enemy_info = RAID_FLOORS[floor_id]
     partner_log = (
-        f"{E_SWORD2}{E_SWORD2} <b>CO-OP РЕЙД — Этаж {floor_id}/10</b>\n\n"
+        f"{E_SWORD} <b>CO-OP РЕЙД — Этаж {floor_id}/10</b>\n\n"
         f"{E_DOT} Партнёр ходил:\n{log}\n\n"
         + _fmt_coop_stats(
             partner_nickname, par_hp_cur, par_dmg, par_mana,
@@ -5053,7 +5051,7 @@ async def _coop_floor_victory(
 
     first_nick = my_nick if i_go_first else par_nick
     next_text = (
-        f"{E_SWORD2}{E_SWORD2} <b>CO-OP РЕЙД — Этаж {next_floor}/10</b>\n\n"
+        f"{E_SWORD} <b>CO-OP РЕЙД — Этаж {next_floor}/10</b>\n\n"
         f"Первым ходит: {first_nick}\n\n"
         + _fmt_coop_floor_info(next_floor, next_enemy, coop_enemy_hp) + "\n"
         + _fmt_coop_stats(my_nick, new_my_hp, new_my_dmg, new_mana,
@@ -5210,7 +5208,7 @@ async def handle_coop_invite_response(message: types.Message, state: FSMContext)
         await state.update_data(coop_partner_id=inviter_id, coop_partner_nickname=inviter_nickname_safe)
 
         lobby_text = (
-            f"{E_SWORD2}{E_SWORD2} <b>CO-OP РЕЙД — ЛОББИ</b> {E_SWORD2}{E_SWORD2}\n\n"
+            f"{E_SWORD} <b>CO-OP РЕЙД — ЛОББИ</b>\n\n"
             f"{E_PROFILE} {inviter_nickname_safe}\n"
             f"{E_PROFILE} {my_nick}\n\n"
             f"{E_HOURGLASS} Ожидаем, пока партнёр начнёт рейд...\n"
@@ -5221,7 +5219,7 @@ async def handle_coop_invite_response(message: types.Message, state: FSMContext)
         # Уведомляем организатора
         notify = (
             f"{E_CHECK} {my_nick} принял приглашение!\n\n"
-            f"{E_SWORD2} Иди в меню {E_TICKET} <b>Рейд</b> и нажми\n"
+            f"{E_SWORD} Иди в меню {E_TICKET} <b>Рейд</b> и нажми\n"
             f"🤝 <b>Начать совместный рейд</b>"
         )
         try:
@@ -5352,7 +5350,7 @@ async def coop_raid_battle_round(message: types.Message, state: FSMContext):
         await message.answer("Выбери действие!", reply_markup=get_battle_action_kb(user_id, my_mana))
         return
 
-    log            = f"{E_SWORD2}{E_SWORD2} <b>CO-OP РЕЙД — Этаж {floor_id}/10</b>\n\n"
+    log            = f"{E_SWORD} <b>CO-OP РЕЙД — Этаж {floor_id}/10</b>\n\n"
     new_enemy_hp   = enemy_health
     new_my_hp      = my_health
     new_mana       = my_mana
@@ -5863,7 +5861,7 @@ async def open_online(message: types.Message, state: FSMContext):
     mana = 100
 
     online_text = (
-        f'{E_ONLINE2}{E_SWORD2} ОНЛАЙН РЕЖИМ:\n'
+        f'{E_ONLINE2}{E_SWORD} ОНЛАЙН РЕЖИМ:\n'
         f'{E_SQ}Начните подбор игрока, нажав на кнопку.\n'
         f'{E_SQ}{E_WARN} Возможно долгий подбор, не выходите из поиска если хотите найти игрока.\n\n'
         f'{E_PROFILE} Характеристики {html.escape(player["nickname"])}:\n\n'
