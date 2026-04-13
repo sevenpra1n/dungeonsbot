@@ -1915,7 +1915,7 @@ WEAPONS = {
 }
 
 ARMOR = {
-    1:  {"name": "Тряпичные обмотки",          "strength": 10,   "cost": 100,    "emoji": "🔹", "rarity": "common"},
+    1:  {"name": "Тряпичные обмотки",          "strength": 15,   "cost": 100,    "emoji": "🔹", "rarity": "common"},
     2:  {"name": "Конопляная рубаха",          "strength": 15,   "cost": 220,    "emoji": "🔹", "rarity": "common"},
     3:  {"name": "Травяные сандалии",          "strength": 31,   "cost": 370,    "emoji": "🔹", "rarity": "common"},
     4:  {"name": "Кожаная куртка",              "strength": 40,   "cost": 500,    "emoji": "🔸", "rarity": "uncommon"},
@@ -2280,12 +2280,16 @@ def get_clan_boss_menu_kb() -> ReplyKeyboardMarkup:
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
-def get_clan_boss_battle_kb() -> ReplyKeyboardMarkup:
-    """Клавиатура боя с клановым боссом"""
+def get_clan_boss_battle_kb(user_id: int = None, mana: int = 100) -> ReplyKeyboardMarkup:
+    """Клавиатура боя с клановым боссом (динамическая: добавляет кнопки скиллов)"""
     kb = [
         [KeyboardButton(text="⚔️ Атаковать")],
-        [KeyboardButton(text="🏃 Отступить")],
     ]
+    if user_id is not None:
+        for skill_id, skill in SKILLS.items():
+            if has_purchased_skill(user_id, skill_id) and mana >= skill['mana_cost']:
+                kb.append([KeyboardButton(text=f"✨ Скилл {skill_id}: {skill['name']}")])
+    kb.append([KeyboardButton(text="🏃 Отступить")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 def get_clan_boss_back_kb() -> ReplyKeyboardMarkup:
@@ -5431,6 +5435,22 @@ async def handle_clans_list(message: types.Message, state: FSMContext):
                                  reply_markup=get_my_clan_kb(False))
             await state.set_state(ClanMenu.viewing_my_clan)
             await state.update_data(clan_id=clan_id)
+            # Уведомить всех членов клана о новом участнике
+            joiner = get_player(user_id)
+            joiner_name = joiner['nickname'] if joiner else "Игрок"
+            join_notify_text = (
+                f"<tg-emoji emoji-id=\"5397916757333654639\">➕</tg-emoji> "
+                f"<tg-emoji emoji-id=\"5275979556308674886\">👤</tg-emoji> в клан {clan_name}, зашёл {joiner_name}\n"
+                f"<tg-emoji emoji-id=\"5267324424113124134\">▫️</tg-emoji>"
+                f"<tg-emoji emoji-id=\"5906800644525660990\">🟡</tg-emoji> Приветствуем в клане! "
+                f"<tg-emoji emoji-id=\"5233638274056083197\">🤩</tg-emoji>"
+            )
+            clan_members_list = get_clan_members(clan_id)
+            for member_uid, _, _, _ in clan_members_list:
+                try:
+                    await bot.send_message(chat_id=member_uid, text=join_notify_text)
+                except Exception:
+                    pass
             return
 
     await message.answer("Выбери клан из списка или создай новый!", reply_markup=get_clans_list_kb(clans))
@@ -6774,16 +6794,20 @@ async def handle_clan_boss_menu(message: types.Message, state: FSMContext):
             cb_boss_health=boss_data['current_health'],
             cb_boss_damage=boss_cfg['damage'],
             cb_damage_dealt=0,
+            cb_player_mana=100,
+            cb_boss_skip_turn=False,
+            cb_boss_blind_turns=0,
         )
 
         battle_info = (
             f"{E_CB_SKULL} БОЙ С {boss_cfg['name'].upper()}!\n\n"
             f"{E_SQ}{E_YELLOW} Здоровье босса: {boss_data['current_health']} {E_ESWORD}\n"
             f"{E_SQ}{E_HP} Твоё здоровье: {player_health}\n"
-            f"{E_SQ}{E_ATK} Твой урон: {player_damage}\n\n"
+            f"{E_SQ}{E_ATK} Твой урон: {player_damage}\n"
+            f"{E_SQ}{E_MANA} Мана: 100/100\n\n"
             f"{E_HASHTAG} Атакуй!"
         )
-        await message.answer(battle_info, reply_markup=get_clan_boss_battle_kb())
+        await message.answer(battle_info, reply_markup=get_clan_boss_battle_kb(user_id, 100))
         return
 
     clan = get_player_clan(user_id)
@@ -6803,6 +6827,9 @@ async def handle_clan_boss_battle(message: types.Message, state: FSMContext):
     boss_health = data.get('cb_boss_health', 1)
     boss_damage = data.get('cb_boss_damage', 1)
     damage_dealt_total = data.get('cb_damage_dealt', 0)
+    mana = data.get('cb_player_mana', 100)
+    boss_skip_turn = data.get('cb_boss_skip_turn', False)
+    boss_blind_turns = data.get('cb_boss_blind_turns', 0)
 
     if text == "🏃 Отступить":
         # Записать нанесённый урон в DB
@@ -6830,8 +6857,14 @@ async def handle_clan_boss_battle(message: types.Message, state: FSMContext):
         await state.update_data(clan_boss_clan_id=clan_id)
         return
 
-    if text != "⚔️ Атаковать":
-        await message.answer("Используй кнопки!", reply_markup=get_clan_boss_battle_kb())
+    # Определить допустимые действия (атака + скиллы)
+    valid_actions = {"⚔️ Атаковать"}
+    for sk_id, sk in SKILLS.items():
+        if has_purchased_skill(user_id, sk_id):
+            valid_actions.add(f"✨ Скилл {sk_id}: {sk['name']}")
+
+    if text not in valid_actions:
+        await message.answer("Используй кнопки!", reply_markup=get_clan_boss_battle_kb(user_id, mana))
         return
 
     # Cooldown check
@@ -6841,17 +6874,64 @@ async def handle_clan_boss_battle(message: types.Message, state: FSMContext):
 
     boss_cfg = CLAN_BOSSES_CONFIG.get(boss_num, CLAN_BOSSES_CONFIG[1])
     player = get_player(user_id)
+    new_mana = mana
+    new_boss_skip = False
+    new_boss_blind = max(0, boss_blind_turns - 1) if boss_blind_turns > 0 else 0
+    new_player_health = player_health
+    battle_log = ""
 
-    # Атака игрока
-    if roll_miss():
-        player_hit = 0
-        battle_log = f"{E_CROSS}{E_ATK} Промах! Босс уклонился\n\n"
+    # ---- Обработка действия игрока ----
+    skill_used = None
+    for sk_id, sk in SKILLS.items():
+        if text == f"✨ Скилл {sk_id}: {sk['name']}":
+            skill_used = (sk_id, sk)
+            break
+
+    if skill_used:
+        sk_id, sk = skill_used
+        if mana < sk['mana_cost']:
+            await message.answer(
+                f"{E_CROSS} Недостаточно маны! Требуется {sk['mana_cost']}{E_MANA}",
+                reply_markup=get_clan_boss_battle_kb(user_id, mana)
+            )
+            return
+        new_mana -= sk['mana_cost']
+        battle_log += f"✨ {sk['name']}!\n"
+
+        if roll_miss():
+            battle_log += f"{E_CROSS}{E_ATK} Промах! Босс уклонился\n\n"
+            player_hit = 0
+        elif sk_id == 1:  # Мега-молот: урон + стан
+            player_hit = int(round(player_damage * sk['damage_mult'] * random.uniform(0.8, 1.2)))
+            battle_log += f"{E_BELL}{E_DMG} Ты наносишь {player_hit} урона! {E_ARROW_UP}\n"
+            if random.random() < sk['stun_chance']:
+                new_boss_skip = True
+                battle_log += "😵 Босс оглушён и пропустит следующий ход!\n"
+        elif sk_id == 2:  # Кровавое неистовство: 2x урон, -15% HP
+            player_hit = int(round(player_damage * sk['damage_mult'] * random.uniform(0.8, 1.2)))
+            hp_loss = max(1, int(round(calculate_player_health(player['strength']) * sk['hp_loss_pct'])))
+            new_player_health = max(1, new_player_health - hp_loss)
+            battle_log += f"🩸 Вы теряете {hp_loss} HP!\n"
+            battle_log += f"{E_BELL}{E_DMG} Ты наносишь {player_hit} урона! {E_ARROW_UP}\n"
+        elif sk_id == 3:  # Ослепляющая вспышка: ослепление на 2 хода
+            player_hit = 0
+            new_boss_blind = sk['blind_turns']
+            battle_log += f"🔦 Босс ослеплён на {sk['blind_turns']} хода! (-50% точности)\n"
+        else:
+            player_hit = int(round(player_damage * random.uniform(0.8, 1.2)))
+            battle_log += f"{E_BELL}{E_DMG} Ты наносишь {player_hit} урона! {E_ARROW_UP}\n"
+        battle_log += "\n"
     else:
-        player_hit = int(round(player_damage * random.uniform(0.8, 1.2)))
-        battle_log = (
-            f"{E_BELL}{E_DMG} Ты ударяешь!\n"
-            f"{E_ARROW_UP}{E_ATK} Урон боссу: {player_hit}\n\n"
-        )
+        # Обычная атака
+        if roll_miss():
+            player_hit = 0
+            battle_log = f"{E_CROSS}{E_ATK} Промах! Босс уклонился\n\n"
+        else:
+            player_hit = int(round(player_damage * random.uniform(0.8, 1.2)))
+            battle_log = (
+                f"{E_BELL}{E_DMG} Ты ударяешь!\n"
+                f"{E_ARROW_UP}{E_ATK} Урон боссу: {player_hit}\n\n"
+            )
 
     new_boss_health = max(0, boss_health - player_hit)
     new_damage_dealt = damage_dealt_total + player_hit
@@ -6882,20 +6962,29 @@ async def handle_clan_boss_battle(message: types.Message, state: FSMContext):
         return
 
     # Босс атакует игрока
-    if roll_miss():
+    if boss_skip_turn:
+        battle_log += f"😵 {boss_cfg['name']} оглушён, пропускает ход!\n\n"
         boss_hit = 0
-        battle_log += f"{E_CROSS}{E_ATK} {boss_cfg['name']} промахивается!\n\n"
     else:
-        boss_hit = int(round(boss_damage * random.uniform(0.8, 1.2)))
-        battle_log += (
-            f"{E_ARROW_DN}{E_ESWORD} {boss_cfg['name']} атакует!\n"
-            f"{E_HEART_B} Урон тебе: {boss_hit}\n\n"
-        )
+        # Учитываем ослепление босса
+        miss_chance = 0.1
+        if boss_blind_turns > 0:
+            miss_chance += SKILLS[3]['miss_chance_add']
+        if random.random() < miss_chance:
+            boss_hit = 0
+            battle_log += f"{E_CROSS}{E_ATK} {boss_cfg['name']} промахивается!\n\n"
+        else:
+            boss_hit = int(round(boss_damage * random.uniform(0.8, 1.2)))
+            battle_log += (
+                f"{E_ARROW_DN}{E_ESWORD} {boss_cfg['name']} атакует!\n"
+                f"{E_HEART_B} Урон тебе: {boss_hit}\n\n"
+            )
 
-    new_player_health = max(0, player_health - boss_hit)
+    new_player_health = max(0, new_player_health - boss_hit)
 
     battle_log += (
         f"{E_HP} Твоё здоровье: {new_player_health}\n"
+        f"{E_MANA} Мана: {new_mana}/100\n"
         f"{E_ESWORD} Здоровье босса: {new_boss_health}\n"
     )
 
@@ -6927,8 +7016,11 @@ async def handle_clan_boss_battle(message: types.Message, state: FSMContext):
         cb_player_health=new_player_health,
         cb_boss_health=new_boss_health,
         cb_damage_dealt=new_damage_dealt,
+        cb_player_mana=new_mana,
+        cb_boss_skip_turn=new_boss_skip,
+        cb_boss_blind_turns=new_boss_blind,
     )
-    await message.answer(battle_log, reply_markup=get_clan_boss_battle_kb())
+    await message.answer(battle_log, reply_markup=get_clan_boss_battle_kb(user_id, new_mana))
 
 
 async def _handle_clan_boss_victory(message, state: FSMContext, clan_id: int, boss_num: int,
@@ -6936,52 +7028,60 @@ async def _handle_clan_boss_victory(message, state: FSMContext, clan_id: int, bo
     """Обработать победу над клановым боссом"""
     defeat_clan_boss(clan_id, boss_num)
 
-    # Начислить награды
-    crystals = boss_cfg['rewards']['crystals_base']
-    if random.random() < boss_cfg['rewards']['crystals_bonus_chance']:
-        crystals += boss_cfg['rewards']['crystals_bonus']
-    coins = _get_boss_coins_reward(player['strength'], boss_cfg)
-    exp_profile = random.randint(*boss_cfg['rewards']['exp_profile'])
-    exp_clan = boss_cfg['rewards']['exp_clan']
-    rating = boss_cfg['rewards']['rating']
-
-    add_crystals_to_player(user_id, crystals)
-    add_coins_to_player(user_id, coins)
-    add_experience_to_player(user_id, exp_profile)
-    add_clan_exp(clan_id, exp_clan)
-    update_rating_points(user_id, rating)
-
     # Время до следующего босса
     next_boss_num = 2 if boss_num == 1 else 1
     next_cfg = CLAN_BOSSES_CONFIG.get(next_boss_num, CLAN_BOSSES_CONFIG[1])
     cooldown_text = f"{next_cfg['cooldown_minutes']} мин"
 
-    victory_text = (
-        f"{E_SQ}{E_CB_CROWN} БОСС КЛАНА ПОВЕРЖЕН!\n\n"
-        f"{E_CB_SKULL} {boss_cfg['name']} был убит! {E_CB_DOWN}\n\n"
-        f"{E_GIFT} Награда получена:\n"
-        f"{E_PLUS} {crystals} {E_CRYSTALS} кристаллов\n"
-        f"{E_PLUS} {coins} {E_COINS} монет\n"
-        f"{E_PLUS} {exp_profile} {E_EXP} опыта профиля\n"
-        f"{E_PLUS} {exp_clan} {E_CLAN_BOTTLE} опыта клана\n"
-        f"{E_PLUS} {rating} 💠 очков рейтинга\n\n"
-        f"{E_SQ}{E_WARN} Новый босс появится через {E_HOURGLASS}{cooldown_text}\n"
-        f"{E_ONLINE2} Благодарность всем игрокам за помощь!"
-    )
+    # Начислить опыт клану один раз
+    exp_clan = boss_cfg['rewards']['exp_clan']
+    add_clan_exp(clan_id, exp_clan)
 
-    await message.answer(victory_text, reply_markup=get_clan_boss_back_kb())
-    await state.set_state(ClanBossState.viewing_menu)
-    await state.update_data(clan_boss_clan_id=clan_id)
+    # Получить всех участников, нанёсших хоть 1 урон
+    participants = get_clan_boss_participants(clan_id)
 
-    # Уведомить всех членов клана
-    clan_members = get_clan_members(clan_id)
-    for member_uid, _, _, _ in clan_members:
-        if member_uid != user_id:
+    # Если убийца не попал в список участников (маловероятно, но на всякий случай)
+    if user_id not in participants:
+        participants.append(user_id)
+
+    # Начислить и уведомить каждого участника
+    for participant_uid in participants:
+        p = get_player(participant_uid)
+        if not p:
+            continue
+
+        p_crystals = boss_cfg['rewards']['crystals_base']
+        if random.random() < boss_cfg['rewards']['crystals_bonus_chance']:
+            p_crystals += boss_cfg['rewards']['crystals_bonus']
+        p_coins = _get_boss_coins_reward(p['strength'], boss_cfg)
+        p_exp_profile = random.randint(*boss_cfg['rewards']['exp_profile'])
+        p_rating = boss_cfg['rewards']['rating']
+
+        add_crystals_to_player(participant_uid, p_crystals)
+        add_coins_to_player(participant_uid, p_coins)
+        add_experience_to_player(participant_uid, p_exp_profile)
+        update_rating_points(participant_uid, p_rating)
+
+        p_victory_text = (
+            f"{E_SQ}{E_CB_CROWN} БОСС КЛАНА ПОВЕРЖЕН!\n\n"
+            f"{E_CB_SKULL} {boss_cfg['name']} был убит! {E_CB_DOWN}\n\n"
+            f"{E_GIFT}  Награда получена:\n"
+            f"{E_PLUS} {p_crystals} {E_CRYSTALS} кристаллов\n"
+            f"{E_PLUS} {p_coins} {E_COINS} монет\n"
+            f"{E_PLUS} {p_exp_profile} {E_EXP} опыта профиля\n"
+            f"{E_PLUS} {exp_clan} {E_CLAN_BOTTLE} опыта клана\n"
+            f"{E_PLUS} {p_rating} 💠 очков рейтинга\n\n"
+            f"{E_SQ}{E_WARN} Новый босс появится через {E_HOURGLASS}{cooldown_text}\n"
+            f"{E_ONLINE2} Благодарность всем игрокам за помощь!"
+        )
+
+        if participant_uid == user_id:
+            await message.answer(p_victory_text, reply_markup=get_clan_boss_back_kb())
+            await state.set_state(ClanBossState.viewing_menu)
+            await state.update_data(clan_boss_clan_id=clan_id)
+        else:
             try:
-                await bot.send_message(
-                    chat_id=member_uid,
-                    text=victory_text
-                )
+                await bot.send_message(chat_id=participant_uid, text=p_victory_text)
             except Exception:
                 pass
 
