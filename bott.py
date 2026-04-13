@@ -1474,6 +1474,15 @@ def _activate_clan_boss(clan_id: int, boss_num: int):
     conn.commit()
     conn.close()
 
+def skip_clan_boss_cooldown(clan_id: int) -> bool:
+    """Пропустить cooldown кланового босса и немедленно активировать следующего.
+    Возвращает True если был cooldown и он успешно сброшен, False если босс уже активен."""
+    boss = get_clan_boss(clan_id)
+    if boss['status'] == 'active':
+        return False
+    _activate_clan_boss(clan_id, boss['boss_num'])
+    return True
+
 def get_clan_boss_remaining_cooldown(clan_id: int) -> str:
     """Получить оставшееся время cooldown в виде строки"""
     boss = get_clan_boss(clan_id)
@@ -2490,6 +2499,7 @@ def get_admin_kb() -> ReplyKeyboardMarkup:
         [KeyboardButton(text="📕 Накрутить билеты рейда")],
         [KeyboardButton(text="🎟️ Накрутить билеты босса")],
         [KeyboardButton(text="🥕 Накрутить материалы")],
+        [KeyboardButton(text="⏩ Пропустить кд босса")],
         [KeyboardButton(text="❌ Выход")],
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
@@ -6207,6 +6217,24 @@ async def admin_menu_handler(message: types.Message, state: FSMContext):
         await message.answer("Введите никнейм игрока:",
                              reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
         await state.set_state(AdminPanel.adding_materials_nickname)
+        return
+    if text == "⏩ Пропустить кд босса":
+        admin_clan = get_player_clan(message.from_user.id)
+        if not admin_clan:
+            await message.answer(f"{E_CROSS} Вы не состоите ни в одном клане!", reply_markup=get_admin_kb())
+            return
+        skipped = skip_clan_boss_cooldown(admin_clan['clan_id'])
+        if skipped:
+            await message.answer(
+                f"✅ Cooldown кланового босса в клане «{admin_clan['clan_name']}» сброшен!\n"
+                f"Новый босс активен прямо сейчас.",
+                reply_markup=get_admin_kb()
+            )
+        else:
+            await message.answer(
+                f"{E_CROSS} Босс в клане «{admin_clan['clan_name']}» уже активен, cooldown не требуется.",
+                reply_markup=get_admin_kb()
+            )
         return
     await message.answer("Выберите действие!", reply_markup=get_admin_kb())
 
