@@ -4085,10 +4085,10 @@ async def handle_friend_profile(message: types.Message, state: FSMContext):
         if not friend:
             await message.answer(f"{E_CROSS} Игрок не найден.")
             return
-        # Сохраняем приглашение
+        # Сохраняем приглашение (nickname хранится raw, эскейп при отображении)
         coop_raid_invites[friend_id] = {
             'inviter_id': user_id,
-            'inviter_nickname': html.escape(player['nickname']),
+            'inviter_nickname': player['nickname'],
             'inviter_chat_id': message.chat.id,
         }
         # Устанавливаем состояние приглашённому
@@ -4997,10 +4997,17 @@ async def _coop_floor_victory(
     partner_data  = await partner_state.get_data()
     partner       = get_player(partner_id)
 
-    new_my_hp  = calculate_player_health(player['strength'])
-    new_my_dmg = calculate_damage(player['strength'])
-    new_par_hp  = calculate_player_health(partner['strength']) if partner else partner_data.get('coop_my_health', 0)
-    new_par_dmg = calculate_damage(partner['strength']) if partner else partner_data.get('coop_my_damage', 0)
+    new_my_hp  = calculate_player_health(apply_clan_strength_buff(
+        player['strength'], get_player_clan(my_id)['clan_level'] if get_player_clan(my_id) else 1))
+    new_my_dmg = calculate_damage(apply_clan_strength_buff(
+        player['strength'], get_player_clan(my_id)['clan_level'] if get_player_clan(my_id) else 1))
+    if partner:
+        p2_clan_lvl = get_player_clan(partner_id)['clan_level'] if get_player_clan(partner_id) else 1
+        new_par_hp  = calculate_player_health(apply_clan_strength_buff(partner['strength'], p2_clan_lvl))
+        new_par_dmg = calculate_damage(apply_clan_strength_buff(partner['strength'], p2_clan_lvl))
+    else:
+        new_par_hp  = partner_data.get('coop_my_health', 0)
+        new_par_dmg = partner_data.get('coop_my_damage', 0)
     new_mana   = 100
 
     i_go_first = random.random() < 0.5
@@ -5173,7 +5180,8 @@ async def handle_coop_invite_response(message: types.Message, state: FSMContext)
             return
 
         inviter_id       = invite['inviter_id']
-        inviter_nickname = invite['inviter_nickname']
+        inviter_nickname = invite['inviter_nickname']          # raw, escape при отображении
+        inviter_nickname_safe = html.escape(inviter_nickname)
         inviter_chat_id  = invite['inviter_chat_id']
 
         player = get_player(user_id)
@@ -5197,13 +5205,13 @@ async def handle_coop_invite_response(message: types.Message, state: FSMContext)
 
         my_nick = html.escape(player['nickname'])
 
-        # Переводим себя в лобби
+        # Переводим себя в лобби (храним уже escaped nickname партнёра для боевых сообщений)
         await state.set_state(CoopRaidState.in_lobby)
-        await state.update_data(coop_partner_id=inviter_id, coop_partner_nickname=inviter_nickname)
+        await state.update_data(coop_partner_id=inviter_id, coop_partner_nickname=inviter_nickname_safe)
 
         lobby_text = (
             f"{E_SWORD2}{E_SWORD2} <b>CO-OP РЕЙД — ЛОББИ</b> {E_SWORD2}{E_SWORD2}\n\n"
-            f"{E_PROFILE} {inviter_nickname}\n"
+            f"{E_PROFILE} {inviter_nickname_safe}\n"
             f"{E_PROFILE} {my_nick}\n\n"
             f"{E_HOURGLASS} Ожидаем, пока партнёр начнёт рейд...\n"
             f"Нажми ❌ Отменить рейд, если передумал."
