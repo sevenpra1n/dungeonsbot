@@ -1347,11 +1347,15 @@ CLAN_LEVEL_EXP = {1: 100, 2: 250, 3: 500, 4: 950, 5: 1500}
 MAX_CLAN_LEVEL = 5
 
 # ============== CLAN BOSS CONFIG ==============
+BOSS_HEALTH_MULTIPLIER = 0.9   # Здоровье босса = сила * BOSS_HEALTH_MULTIPLIER
+MAX_CLAN_BOSS_TICKETS = 3       # Максимум билетов кланового босса на игрока
+TICKET_REFRESH_INTERVAL_SECONDS = 3600  # Интервал обновления билетов (1 час)
+
 CLAN_BOSSES_CONFIG = {
     1: {
         "name": "Подземельный мастер",
         "strength": 75000,
-        "health": int(75000 * 0.9),   # 67500
+        "health": int(75000 * BOSS_HEALTH_MULTIPLIER),   # 67500
         "damage": 175,
         "rewards": {
             "crystals_base": 10,
@@ -1367,7 +1371,7 @@ CLAN_BOSSES_CONFIG = {
     2: {
         "name": "Заклятый дух клана",
         "strength": 290000,
-        "health": int(290000 * 0.9),  # 261000
+        "health": int(290000 * BOSS_HEALTH_MULTIPLIER),  # 261000
         "damage": 460,
         "rewards": {
             "crystals_base": 50,
@@ -1505,7 +1509,7 @@ def get_clan_boss_tickets(user_id: int, clan_id: int) -> int:
     # Создать запись
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute('INSERT OR IGNORE INTO clan_boss_tickets (user_id, clan_id, tickets) VALUES (?, ?, 3)', (user_id, clan_id))
+    cursor.execute('INSERT OR IGNORE INTO clan_boss_tickets (user_id, clan_id, tickets) VALUES (?, ?, ?)', (user_id, clan_id, MAX_CLAN_BOSS_TICKETS))
     conn.commit()
     conn.close()
     return 3
@@ -6691,7 +6695,7 @@ async def _open_clan_boss_menu(message, state: FSMContext, clan: dict, user_id: 
         f"{E_SQ}{E_YELLOW} Сила: {boss_cfg['strength']} {E_ATK}\n"
         f"{E_SQ}{E_YELLOW} Здоровье: {boss_data['current_health']} {E_ESWORD}\n"
         f"{E_SQ}{E_YELLOW} Урон: {boss_cfg['damage']} {E_DMG}\n\n"
-        f"{E_CB_CROWN}{E_CB_TICKET} Твои билеты: {tickets} / 3"
+        f"{E_CB_CROWN}{E_CB_TICKET} Твои билеты: {tickets} / {MAX_CLAN_BOSS_TICKETS}"
     )
     try:
         photo = FSInputFile("images/clanboss.png")
@@ -6985,7 +6989,7 @@ async def _handle_clan_boss_victory(message, state: FSMContext, clan_id: int, bo
 async def clan_boss_ticket_refresh_loop():
     """Фоновая задача: каждый час обновляет билеты кланового босса"""
     while True:
-        await asyncio.sleep(3600)
+        await asyncio.sleep(TICKET_REFRESH_INTERVAL_SECONDS)
         try:
             conn = sqlite3.connect(DB_NAME)
             cursor = conn.cursor()
@@ -6999,8 +7003,8 @@ async def clan_boss_ticket_refresh_loop():
                 conn = sqlite3.connect(DB_NAME)
                 cursor = conn.cursor()
                 cursor.execute(
-                    'UPDATE clan_boss_tickets SET tickets = 3, last_refresh = CURRENT_TIMESTAMP WHERE user_id = ? AND clan_id = ?',
-                    (uid, cid)
+                    'UPDATE clan_boss_tickets SET tickets = ?, last_refresh = CURRENT_TIMESTAMP WHERE user_id = ? AND clan_id = ?',
+                    (MAX_CLAN_BOSS_TICKETS, uid, cid)
                 )
                 conn.commit()
                 conn.close()
