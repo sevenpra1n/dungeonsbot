@@ -144,6 +144,9 @@ PROXY_URL = None
 # ID администраторов (Telegram user_id). Добавьте нужные ID в список для доступа к /67
 ADMIN_IDS = [0]
 
+# ID игрока, который получает статус "багоюзер 777" (замените на нужный Telegram user_id)
+BAGOUSER_ID = 0
+
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
 
@@ -367,6 +370,43 @@ def init_database():
             PRIMARY KEY (user_id, friend_id),
             FOREIGN KEY (user_id) REFERENCES players(user_id),
             FOREIGN KEY (friend_id) REFERENCES players(user_id)
+        )
+    ''')
+
+    # Таблица кланового босса
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS clan_bosses (
+            clan_id INTEGER PRIMARY KEY,
+            boss_num INTEGER DEFAULT 1,
+            current_health INTEGER DEFAULT 0,
+            last_defeated_at TIMESTAMP DEFAULT NULL,
+            status TEXT DEFAULT 'active' CHECK(status IN ('active', 'cooldown')),
+            FOREIGN KEY (clan_id) REFERENCES clans(clan_id)
+        )
+    ''')
+
+    # Таблица билетов кланового босса
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS clan_boss_tickets (
+            user_id INTEGER NOT NULL,
+            clan_id INTEGER NOT NULL,
+            tickets INTEGER DEFAULT 3,
+            last_refresh TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, clan_id),
+            FOREIGN KEY (user_id) REFERENCES players(user_id),
+            FOREIGN KEY (clan_id) REFERENCES clans(clan_id)
+        )
+    ''')
+
+    # Таблица урона кланового босса (для отслеживания кто участвовал)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS clan_boss_damage (
+            user_id INTEGER NOT NULL,
+            clan_id INTEGER NOT NULL,
+            total_damage INTEGER DEFAULT 0,
+            PRIMARY KEY (user_id, clan_id),
+            FOREIGN KEY (user_id) REFERENCES players(user_id),
+            FOREIGN KEY (clan_id) REFERENCES clans(clan_id)
         )
     ''')
 
@@ -685,6 +725,7 @@ STATUSES = {
     13: {"name": "Творчество",   "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="6021462012037437193">🎁</tg-emoji>', "required_level": 1, "type": "unlock_clan_image"},
     14: {"name": "Пример для подражания", "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="6021486768228940485">🎁</tg-emoji>', "required_level": 1, "type": "unlock_strength", "required_strength": 2000},
     15: {"name": "Какашка",      "emoji": "💩", "custom_emoji": '<tg-emoji emoji-id="6005662304824203821">💩</tg-emoji>', "required_level": 1, "type": "unlock_spam"},
+    16: {"name": "багоюзер 777", "emoji": "💎", "custom_emoji": '<tg-emoji emoji-id="5354902509540370798">💎</tg-emoji>', "required_level": 1, "type": "unlock_bagouser"},
 }
 
 def get_player_status_emoji(player: dict) -> str:
@@ -741,6 +782,9 @@ def get_available_statuses(user_id: int) -> dict:
                 is_available = True
         elif status_info["type"] == "unlock_spam":
             if player.get('is_spammer', 0) >= 1:
+                is_available = True
+        elif status_info["type"] == "unlock_bagouser":
+            if player.get('user_id') == BAGOUSER_ID:
                 is_available = True
         if is_available:
             available[status_id] = status_info
@@ -1121,7 +1165,6 @@ FOREST_ENEMIES = {
         "name": "Ящерица",
         "emoji": "🦎",
         "strength": 80,
-        "health": 80,
         "min_player_strength": 0,
         "max_player_strength": 89,
         "rewards": {
@@ -1134,7 +1177,6 @@ FOREST_ENEMIES = {
         "name": "Лесной лучник",
         "emoji": "🏹",
         "strength": 135,
-        "health": 135,
         "min_player_strength": 90,
         "max_player_strength": 199,
         "rewards": {
@@ -1148,7 +1190,6 @@ FOREST_ENEMIES = {
         "name": "Лесной громила",
         "emoji": "👹",
         "strength": 475,
-        "health": 475,
         "min_player_strength": 200,
         "max_player_strength": 999999,
         "rewards": {
@@ -1304,6 +1345,210 @@ def get_leaderboard_page(page: int = 0, per_page: int = 5):
 # ============== CLAN DB FUNCTIONS ==============
 CLAN_LEVEL_EXP = {1: 100, 2: 250, 3: 500, 4: 950, 5: 1500}
 MAX_CLAN_LEVEL = 5
+
+# ============== CLAN BOSS CONFIG ==============
+CLAN_BOSSES_CONFIG = {
+    1: {
+        "name": "Подземельный мастер",
+        "strength": 75000,
+        "health": int(75000 * 0.9),   # 67500
+        "damage": 175,
+        "rewards": {
+            "crystals_base": 10,
+            "crystals_bonus": 5,
+            "crystals_bonus_chance": 0.20,
+            "coins_by_strength": [(200, 1200), (800, 2500), (None, 8500)],
+            "exp_profile": (220, 300),
+            "exp_clan": 120,
+            "rating": 50,
+        },
+        "cooldown_minutes": 30,
+    },
+    2: {
+        "name": "Заклятый дух клана",
+        "strength": 290000,
+        "health": int(290000 * 0.9),  # 261000
+        "damage": 460,
+        "rewards": {
+            "crystals_base": 50,
+            "crystals_bonus": 100,
+            "crystals_bonus_chance": 0.20,
+            "coins_by_strength": [(200, 5600), (800, 8900), (None, 15000)],
+            "exp_profile": (1250, 1250),
+            "exp_clan": 450,
+            "rating": 100,
+        },
+        "cooldown_minutes": 30,
+    },
+}
+
+# Кастомные эмодзи для кланового босса
+E_CB_SKULL  = '<tg-emoji emoji-id="5298899451715275167">💀</tg-emoji>'
+E_CB_CROWN  = '<tg-emoji emoji-id="5357553616758528519">👑</tg-emoji>'
+E_CB_TICKET = '<tg-emoji emoji-id="5334666264319141034">📕</tg-emoji>'
+E_CB_DOWN   = '<tg-emoji emoji-id="5206510891247371052">🔽</tg-emoji>'
+E_CB_STAR   = '<tg-emoji emoji-id="5206476089127372379">⭐️</tg-emoji>'
+
+def get_clan_boss(clan_id: int) -> dict:
+    """Получить текущего кланового босса из БД. Создаёт запись если нет."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('SELECT boss_num, current_health, last_defeated_at, status FROM clan_bosses WHERE clan_id = ?', (clan_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return {"boss_num": row[0], "current_health": row[1], "last_defeated_at": row[2], "status": row[3]}
+    # Создать запись для нового клана
+    boss_cfg = CLAN_BOSSES_CONFIG[1]
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT OR IGNORE INTO clan_bosses (clan_id, boss_num, current_health, status)
+        VALUES (?, 1, ?, 'active')
+    ''', (clan_id, boss_cfg['health']))
+    conn.commit()
+    conn.close()
+    return {"boss_num": 1, "current_health": boss_cfg['health'], "last_defeated_at": None, "status": "active"}
+
+def update_clan_boss_health(clan_id: int, new_health: int):
+    """Обновить здоровье кланового босса"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('UPDATE clan_bosses SET current_health = ? WHERE clan_id = ?', (new_health, clan_id))
+    conn.commit()
+    conn.close()
+
+def defeat_clan_boss(clan_id: int, current_boss_num: int):
+    """Отметить босса как побеждённого и поставить следующего на cooldown"""
+    next_boss = 2 if current_boss_num == 1 else 1
+    now = datetime.now(timezone.utc).isoformat()
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE clan_bosses
+        SET status = 'cooldown', last_defeated_at = ?, boss_num = ?
+        WHERE clan_id = ?
+    ''', (now, next_boss, clan_id))
+    # Сбросить урон участников
+    cursor.execute('DELETE FROM clan_boss_damage WHERE clan_id = ?', (clan_id,))
+    conn.commit()
+    conn.close()
+
+def check_and_respawn_clan_boss(clan_id: int) -> bool:
+    """Проверить cooldown и возродить босса если время прошло. Возвращает True если босс активен."""
+    boss = get_clan_boss(clan_id)
+    if boss['status'] == 'active':
+        return True
+    if not boss['last_defeated_at']:
+        # Нет данных - активировать босса
+        _activate_clan_boss(clan_id, boss['boss_num'])
+        return True
+    try:
+        defeated_at = datetime.fromisoformat(boss['last_defeated_at'])
+        if defeated_at.tzinfo is None:
+            defeated_at = defeated_at.replace(tzinfo=timezone.utc)
+    except (ValueError, TypeError):
+        _activate_clan_boss(clan_id, boss['boss_num'])
+        return True
+    now = datetime.now(timezone.utc)
+    boss_cfg = CLAN_BOSSES_CONFIG.get(boss['boss_num'], CLAN_BOSSES_CONFIG[1])
+    cooldown = boss_cfg['cooldown_minutes'] * 60
+    if (now - defeated_at).total_seconds() >= cooldown:
+        _activate_clan_boss(clan_id, boss['boss_num'])
+        return True
+    return False
+
+def _activate_clan_boss(clan_id: int, boss_num: int):
+    """Активировать нового босса"""
+    boss_cfg = CLAN_BOSSES_CONFIG.get(boss_num, CLAN_BOSSES_CONFIG[1])
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT OR REPLACE INTO clan_bosses (clan_id, boss_num, current_health, status)
+        VALUES (?, ?, ?, 'active')
+    ''', (clan_id, boss_num, boss_cfg['health']))
+    conn.commit()
+    conn.close()
+
+def get_clan_boss_remaining_cooldown(clan_id: int) -> str:
+    """Получить оставшееся время cooldown в виде строки"""
+    boss = get_clan_boss(clan_id)
+    if boss['status'] == 'active':
+        return "0 мин"
+    if not boss['last_defeated_at']:
+        return "0 мин"
+    try:
+        defeated_at = datetime.fromisoformat(boss['last_defeated_at'])
+        if defeated_at.tzinfo is None:
+            defeated_at = defeated_at.replace(tzinfo=timezone.utc)
+    except (ValueError, TypeError):
+        return "0 мин"
+    boss_cfg = CLAN_BOSSES_CONFIG.get(boss['boss_num'], CLAN_BOSSES_CONFIG[1])
+    cooldown = boss_cfg['cooldown_minutes'] * 60
+    elapsed = (datetime.now(timezone.utc) - defeated_at).total_seconds()
+    remaining = max(0, int(cooldown - elapsed))
+    mins = remaining // 60
+    secs = remaining % 60
+    if mins > 0:
+        return f"{mins} мин {secs} сек"
+    return f"{secs} сек"
+
+def get_clan_boss_tickets(user_id: int, clan_id: int) -> int:
+    """Получить количество билетов кланового босса"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('SELECT tickets FROM clan_boss_tickets WHERE user_id = ? AND clan_id = ?', (user_id, clan_id))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return row[0]
+    # Создать запись
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('INSERT OR IGNORE INTO clan_boss_tickets (user_id, clan_id, tickets) VALUES (?, ?, 3)', (user_id, clan_id))
+    conn.commit()
+    conn.close()
+    return 3
+
+def use_clan_boss_ticket(user_id: int, clan_id: int) -> bool:
+    """Потратить 1 билет кланового босса. Возвращает True если успешно."""
+    tickets = get_clan_boss_tickets(user_id, clan_id)
+    if tickets <= 0:
+        return False
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('UPDATE clan_boss_tickets SET tickets = tickets - 1 WHERE user_id = ? AND clan_id = ?', (user_id, clan_id))
+    conn.commit()
+    conn.close()
+    return True
+
+def add_clan_boss_damage(user_id: int, clan_id: int, damage: int):
+    """Добавить урон игрока по клановому боссу"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO clan_boss_damage (user_id, clan_id, total_damage)
+        VALUES (?, ?, ?)
+        ON CONFLICT(user_id, clan_id) DO UPDATE SET total_damage = total_damage + excluded.total_damage
+    ''', (user_id, clan_id, damage))
+    conn.commit()
+    conn.close()
+
+def get_clan_boss_participants(clan_id: int) -> list:
+    """Получить список участников боя с клановым боссом (кто нанёс урон)"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('SELECT user_id FROM clan_boss_damage WHERE clan_id = ? AND total_damage > 0', (clan_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [row[0] for row in rows]
+
+def _get_boss_coins_reward(player_strength: float, boss_cfg: dict) -> int:
+    """Получить монеты за победу над клановым боссом в зависимости от силы игрока"""
+    for threshold, coins in boss_cfg['rewards']['coins_by_strength']:
+        if threshold is None or player_strength < threshold:
+            return coins
+    return boss_cfg['rewards']['coins_by_strength'][-1][1]
 
 # ============== SKILLS ==============
 SKILLS = {
@@ -1667,7 +1912,7 @@ WEAPONS = {
 
 ARMOR = {
     1:  {"name": "Тряпичные обмотки",          "strength": 10,   "cost": 100,    "emoji": "🔹", "rarity": "common"},
-    2:  {"name": "Конопляная рубаха",          "strength": 22,   "cost": 220,    "emoji": "🔹", "rarity": "common"},
+    2:  {"name": "Конопляная рубаха",          "strength": 15,   "cost": 220,    "emoji": "🔹", "rarity": "common"},
     3:  {"name": "Травяные сандалии",          "strength": 31,   "cost": 370,    "emoji": "🔹", "rarity": "common"},
     4:  {"name": "Кожаная куртка",              "strength": 40,   "cost": 500,    "emoji": "🔸", "rarity": "uncommon"},
     5:  {"name": "Капюшон следопыта",          "strength": 55,   "cost": 820,    "emoji": "🔸", "rarity": "uncommon"},
@@ -1798,6 +2043,11 @@ class FriendsMenu(StatesGroup):
     viewing_friends = State()
     viewing_requests = State()
     viewing_friend_profile = State()
+
+class ClanBossState(StatesGroup):
+    viewing_menu = State()
+    in_battle = State()
+    battle_round = State()
 
 # Словарь для отслеживания cooldown боевых действий (2 сек)
 battle_cooldowns: dict = {}
@@ -2018,6 +2268,29 @@ def get_online_menu_kb():
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
+def get_clan_boss_menu_kb() -> ReplyKeyboardMarkup:
+    """Клавиатура меню кланового босса"""
+    kb = [
+        [KeyboardButton(text="⚔️ помочь одолеть босса")],
+        [KeyboardButton(text="🔙 Назад")],
+    ]
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+def get_clan_boss_battle_kb() -> ReplyKeyboardMarkup:
+    """Клавиатура боя с клановым боссом"""
+    kb = [
+        [KeyboardButton(text="⚔️ Атаковать")],
+        [KeyboardButton(text="🏃 Отступить")],
+    ]
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+def get_clan_boss_back_kb() -> ReplyKeyboardMarkup:
+    """Клавиатура возврата из кланового босса"""
+    kb = [
+        [KeyboardButton(text="🔙 Назад")],
+    ]
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
 def get_rating_kb(leaderboard, page: int, total_pages: int):
     """Меню рейтинга с кнопками игроков и пагинацией"""
     kb = []
@@ -2135,6 +2408,7 @@ def get_my_clan_kb(is_leader: bool, is_co_leader: bool = False) -> ReplyKeyboard
         kb.append([KeyboardButton(text="🚪 Выйти из клана")])
     else:
         kb.append([KeyboardButton(text="🚪 Выйти из клана")])
+    kb.append([KeyboardButton(text="🏰 Клановый босс")])
     kb.append([KeyboardButton(text="💬 Чат клана")])
     kb.append([KeyboardButton(text="🔙 Вернуться")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
@@ -2252,6 +2526,8 @@ def is_status_available(player: dict, status_info: dict) -> bool:
         return player.get('has_set_clan_image', 0) >= 1
     if s_type == "unlock_spam":
         return player.get('is_spammer', 0) >= 1
+    if s_type == "unlock_bagouser":
+        return player.get('user_id') == BAGOUSER_ID
     return False
 
 def _get_status_requirement_text(status_info: dict) -> str:
@@ -2273,6 +2549,8 @@ def _get_status_requirement_text(status_info: dict) -> str:
         return "🔒 Картина в клане"
     if s_type == "unlock_spam":
         return "🔒 Спам в чате клана"
+    if s_type == "unlock_bagouser":
+        return "🔒 Особый"
     return "🔒"
 
 def get_statuses_kb(player: dict, page: int = 0) -> ReplyKeyboardMarkup:
@@ -2441,8 +2719,11 @@ async def show_profile(message: types.Message, state: FSMContext):
 
 async def _send_profile(message, player: dict):
     """Отправить сообщение профиля"""
-    health = calculate_player_health(player['strength'])
-    damage = calculate_damage(player['strength'])
+    player_clan = get_player_clan(player['user_id'])
+    clan_level = player_clan['clan_level'] if player_clan else 1
+    display_strength = apply_clan_strength_buff(player['strength'], clan_level)
+    health = calculate_player_health(display_strength)
+    damage = calculate_damage(display_strength)
     exp_info = get_experience_progress(player['user_id'])
     status_emoji = get_player_status_emoji(player)
 
@@ -2455,7 +2736,7 @@ async def _send_profile(message, player: dict):
         f'Уровень {E_CIRCLE} {player["player_level"]}{E_STAR}\n'
         f'{E_SQ}{exp_info["current_exp"]} / {exp_info["needed_exp"]}{E_EXP_DOT}{E_EXP} Опыта\n\n\n'
         f'{E_SQ}{player["wins"]} - {E_TROPHY} {E_YELLOW} Победы\n'
-        f'{E_SQ}{int(player["strength"])} - {E_ATK} {E_YELLOW} Сила\n'
+        f'{E_SQ}{int(display_strength)} - {E_ATK} {E_YELLOW} Сила\n'
         f'{E_SQ}{health} - {E_HP} {E_YELLOW} Здоровье\n\n'
         f'{E_SQ}{player["coins"]} - {E_COINS}{E_GREEN} Монеты  \n'
         f'{E_SQ}{player["crystals"]} - {E_CRYSTALS}{E_GREEN} Кристаллы  \n'
@@ -5322,6 +5603,10 @@ async def handle_my_clan(message: types.Message, state: FSMContext):
         await state.set_state(ClanMenu.in_clan_chat)
         return
 
+    if text == "🏰 Клановый босс":
+        await _open_clan_boss_menu(message, state, clan, user_id)
+        return
+
     # Обновить и показать информацию о клане
     await _show_clan_info(message, clan, is_leader, is_co_leader)
 
@@ -6340,10 +6625,407 @@ def _get_items_kb(user_id: int) -> ReplyKeyboardMarkup:
     kb.append([KeyboardButton(text="⬅️ Назад к категориям")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
+# ============== CLAN BOSS HANDLERS ==============
+
+async def _open_clan_boss_menu(message, state: FSMContext, clan: dict, user_id: int):
+    """Показать меню кланового босса"""
+    clan_id = clan['clan_id']
+
+    # Проверка уровня клана
+    if clan['clan_level'] < 3:
+        text = (
+            f"{E_WARN} Клановый босс доступен с уровня 3!\n"
+            f"{E_YELLOW} Повышать уровень клана может каждый игрок, находящийся в данном клане за почти любые действия."
+        )
+        await message.answer(text, reply_markup=get_clan_boss_back_kb())
+        await state.set_state(ClanBossState.viewing_menu)
+        await state.update_data(clan_boss_clan_id=clan_id)
+        return
+
+    # Проверить cooldown и возможно возродить босса
+    check_and_respawn_clan_boss(clan_id)
+    boss_data = get_clan_boss(clan_id)
+    boss_cfg = CLAN_BOSSES_CONFIG.get(boss_data['boss_num'], CLAN_BOSSES_CONFIG[1])
+
+    if boss_data['status'] == 'cooldown':
+        remaining = get_clan_boss_remaining_cooldown(clan_id)
+        text = (
+            f"{E_BAN} Босс уже был побежден недавно!\n"
+            f"{E_SQ}{E_WARN} Новый босс появится через {E_HOURGLASS}{remaining}\n\n"
+            f"{E_GREEN} Пока идёт обновление босса, можете отдохнуть от процесса!"
+        )
+        try:
+            photo = FSInputFile("images/clanboss.png")
+            await message.answer_photo(photo, caption=text, reply_markup=get_clan_boss_back_kb())
+        except Exception:
+            await message.answer(text, reply_markup=get_clan_boss_back_kb())
+        await state.set_state(ClanBossState.viewing_menu)
+        await state.update_data(clan_boss_clan_id=clan_id)
+        return
+
+    # Проверить билеты
+    tickets = get_clan_boss_tickets(user_id, clan_id)
+
+    if tickets <= 0:
+        text = (
+            f"{E_CB_SKULL} КЛАНОВЫЙ БОСС:\n\n"
+            f"{E_SQ}{E_CB_CROWN} Босс: {boss_cfg['name']}\n"
+            f"{E_SQ}{E_YELLOW} Сила: {boss_cfg['strength']} {E_ATK}\n"
+            f"{E_SQ}{E_YELLOW} Здоровье: {boss_data['current_health']} {E_ESWORD}\n"
+            f"{E_SQ}{E_YELLOW} Урон: {boss_cfg['damage']} {E_DMG}\n\n"
+            f"{E_CB_TICKET}{E_BAN} У тебя закончились билеты!\n"
+            f"{E_YELLOW} Они обновляются каждый час (по +3 билета)"
+        )
+        try:
+            photo = FSInputFile("images/clanboss.png")
+            await message.answer_photo(photo, caption=text, reply_markup=get_clan_boss_back_kb())
+        except Exception:
+            await message.answer(text, reply_markup=get_clan_boss_back_kb())
+        await state.set_state(ClanBossState.viewing_menu)
+        await state.update_data(clan_boss_clan_id=clan_id)
+        return
+
+    text = (
+        f"{E_CB_SKULL} КЛАНОВЫЙ БОСС:\n\n"
+        f"{E_SQ}{E_CB_CROWN} Босс: {boss_cfg['name']}\n"
+        f"{E_SQ}{E_YELLOW} Сила: {boss_cfg['strength']} {E_ATK}\n"
+        f"{E_SQ}{E_YELLOW} Здоровье: {boss_data['current_health']} {E_ESWORD}\n"
+        f"{E_SQ}{E_YELLOW} Урон: {boss_cfg['damage']} {E_DMG}\n\n"
+        f"{E_CB_CROWN}{E_CB_TICKET} Твои билеты: {tickets} / 3"
+    )
+    try:
+        photo = FSInputFile("images/clanboss.png")
+        await message.answer_photo(photo, caption=text, reply_markup=get_clan_boss_menu_kb())
+    except Exception:
+        await message.answer(text, reply_markup=get_clan_boss_menu_kb())
+    await state.set_state(ClanBossState.viewing_menu)
+    await state.update_data(clan_boss_clan_id=clan_id)
+
+
+@dp.message(ClanBossState.viewing_menu)
+async def handle_clan_boss_menu(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+    data = await state.get_data()
+    clan_id = data.get('clan_boss_clan_id')
+
+    if text == "🔙 Назад":
+        clan = get_player_clan(user_id)
+        if clan:
+            is_leader = (clan['leader_id'] == user_id)
+            is_co_leader = not is_leader and get_clan_member_role(user_id, clan['clan_id']) == 'co_leader'
+            await _show_clan_info(message, clan, is_leader, is_co_leader)
+            await state.set_state(ClanMenu.viewing_my_clan)
+            await state.update_data(clan_id=clan['clan_id'])
+        else:
+            await show_main_menu(message, state)
+        return
+
+    if text == "⚔️ помочь одолеть босса":
+        if not clan_id:
+            await show_main_menu(message, state)
+            return
+
+        # Проверить cooldown
+        check_and_respawn_clan_boss(clan_id)
+        boss_data = get_clan_boss(clan_id)
+        if boss_data['status'] == 'cooldown':
+            remaining = get_clan_boss_remaining_cooldown(clan_id)
+            await message.answer(
+                f"{E_BAN} Босс уже был побежден недавно!\n"
+                f"{E_SQ}{E_WARN} Новый босс появится через {E_HOURGLASS}{remaining}"
+            )
+            return
+
+        # Проверить билеты
+        tickets = get_clan_boss_tickets(user_id, clan_id)
+        if tickets <= 0:
+            await message.answer(
+                f"{E_CB_TICKET}{E_BAN} У тебя закончились билеты!\n"
+                f"{E_YELLOW} Они обновляются каждый час (по +3 билета)"
+            )
+            return
+
+        # Начать бой
+        player = get_player(user_id)
+        if not player:
+            await show_main_menu(message, state)
+            return
+
+        boss_cfg = CLAN_BOSSES_CONFIG.get(boss_data['boss_num'], CLAN_BOSSES_CONFIG[1])
+        clan = get_player_clan(user_id)
+        clan_level = clan['clan_level'] if clan else 1
+        buffed_strength = apply_clan_strength_buff(player['strength'], clan_level)
+        player_health = calculate_player_health(buffed_strength)
+        player_damage = calculate_damage(buffed_strength)
+
+        reset_battle_cooldown(user_id)
+
+        await state.set_state(ClanBossState.battle_round)
+        await state.update_data(
+            clan_boss_clan_id=clan_id,
+            clan_boss_num=boss_data['boss_num'],
+            cb_player_health=player_health,
+            cb_player_damage=player_damage,
+            cb_boss_health=boss_data['current_health'],
+            cb_boss_damage=boss_cfg['damage'],
+            cb_damage_dealt=0,
+        )
+
+        battle_info = (
+            f"{E_CB_SKULL} БОЙ С {boss_cfg['name'].upper()}!\n\n"
+            f"{E_SQ}{E_YELLOW} Здоровье босса: {boss_data['current_health']} {E_ESWORD}\n"
+            f"{E_SQ}{E_HP} Твоё здоровье: {player_health}\n"
+            f"{E_SQ}{E_ATK} Твой урон: {player_damage}\n\n"
+            f"{E_HASHTAG} Атакуй!"
+        )
+        await message.answer(battle_info, reply_markup=get_clan_boss_battle_kb())
+        return
+
+    clan = get_player_clan(user_id)
+    if clan:
+        await _open_clan_boss_menu(message, state, clan, user_id)
+
+
+@dp.message(ClanBossState.battle_round)
+async def handle_clan_boss_battle(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+    data = await state.get_data()
+    clan_id = data.get('clan_boss_clan_id')
+    boss_num = data.get('clan_boss_num', 1)
+    player_health = data.get('cb_player_health', 1)
+    player_damage = data.get('cb_player_damage', 1)
+    boss_health = data.get('cb_boss_health', 1)
+    boss_damage = data.get('cb_boss_damage', 1)
+    damage_dealt_total = data.get('cb_damage_dealt', 0)
+
+    if text == "🏃 Отступить":
+        # Записать нанесённый урон в DB
+        if damage_dealt_total > 0:
+            add_clan_boss_damage(user_id, clan_id, damage_dealt_total)
+            # Обновить здоровье босса в DB
+            boss_data = get_clan_boss(clan_id)
+            if boss_data['status'] == 'active':
+                new_db_health = max(0, boss_data['current_health'] - damage_dealt_total)
+                update_clan_boss_health(clan_id, new_db_health)
+
+        player = get_player(user_id)
+        boss_cfg = CLAN_BOSSES_CONFIG.get(boss_num, CLAN_BOSSES_CONFIG[1])
+        await message.answer(
+            f"{E_CB_DOWN} ВЫ ОТСТУПИЛИ!\n"
+            f"{E_SQ}{E_CB_STAR} Но вы внесли свой урон в босса!\n\n"
+            f"{E_SQ}Вы нанесли в целом урона: {damage_dealt_total} {E_DMG}\n\n"
+            f"{E_CB_CROWN}{E_CB_SKULL} Ты отступил от {boss_cfg['name']}...\n\n"
+            f"{E_CROSS} -1 {E_CB_TICKET} билет потрачен",
+            reply_markup=get_clan_boss_back_kb()
+        )
+        # Снять билет
+        use_clan_boss_ticket(user_id, clan_id)
+        await state.set_state(ClanBossState.viewing_menu)
+        await state.update_data(clan_boss_clan_id=clan_id)
+        return
+
+    if text != "⚔️ Атаковать":
+        await message.answer("Используй кнопки!", reply_markup=get_clan_boss_battle_kb())
+        return
+
+    # Cooldown check
+    if not can_battle_action(user_id):
+        await message.answer("⏳ Подожди перед следующим ходом!")
+        return
+
+    boss_cfg = CLAN_BOSSES_CONFIG.get(boss_num, CLAN_BOSSES_CONFIG[1])
+    player = get_player(user_id)
+
+    # Атака игрока
+    if roll_miss():
+        player_hit = 0
+        battle_log = f"{E_CROSS}{E_ATK} Промах! Босс уклонился\n\n"
+    else:
+        player_hit = int(round(player_damage * random.uniform(0.8, 1.2)))
+        battle_log = (
+            f"{E_BELL}{E_DMG} Ты ударяешь!\n"
+            f"{E_ARROW_UP}{E_ATK} Урон боссу: {player_hit}\n\n"
+        )
+
+    new_boss_health = max(0, boss_health - player_hit)
+    new_damage_dealt = damage_dealt_total + player_hit
+
+    # Проверка победы над боссом
+    if new_boss_health <= 0:
+        # Записать урон
+        add_clan_boss_damage(user_id, clan_id, new_damage_dealt)
+        # Обновить здоровье босса в DB
+        boss_data_db = get_clan_boss(clan_id)
+        if boss_data_db['status'] == 'active':
+            final_health = max(0, boss_data_db['current_health'] - new_damage_dealt)
+            if final_health <= 0:
+                # Босс побеждён!
+                use_clan_boss_ticket(user_id, clan_id)
+                await _handle_clan_boss_victory(message, state, clan_id, boss_num, boss_cfg, player, user_id)
+                return
+            else:
+                update_clan_boss_health(clan_id, final_health)
+
+        # Другой игрок уже убил босса, пока мы воевали
+        use_clan_boss_ticket(user_id, clan_id)
+        await message.answer(
+            f"{E_BAN} Босс уже был побеждён другим игроком клана!",
+            reply_markup=get_clan_boss_back_kb()
+        )
+        await state.set_state(ClanBossState.viewing_menu)
+        return
+
+    # Босс атакует игрока
+    if roll_miss():
+        boss_hit = 0
+        battle_log += f"{E_CROSS}{E_ATK} {boss_cfg['name']} промахивается!\n\n"
+    else:
+        boss_hit = int(round(boss_damage * random.uniform(0.8, 1.2)))
+        battle_log += (
+            f"{E_ARROW_DN}{E_ESWORD} {boss_cfg['name']} атакует!\n"
+            f"{E_HEART_B} Урон тебе: {boss_hit}\n\n"
+        )
+
+    new_player_health = max(0, player_health - boss_hit)
+
+    battle_log += (
+        f"{E_HP} Твоё здоровье: {new_player_health}\n"
+        f"{E_ESWORD} Здоровье босса: {new_boss_health}\n"
+    )
+
+    # Проверка поражения игрока
+    if new_player_health <= 0:
+        # Записать урон
+        if new_damage_dealt > 0:
+            add_clan_boss_damage(user_id, clan_id, new_damage_dealt)
+            boss_data_db = get_clan_boss(clan_id)
+            if boss_data_db['status'] == 'active':
+                final_health = max(0, boss_data_db['current_health'] - new_damage_dealt)
+                update_clan_boss_health(clan_id, final_health)
+
+        use_clan_boss_ticket(user_id, clan_id)
+        defeat_text = (
+            f"{E_CB_DOWN} ВЫ ПРОИГРАЛИ!\n"
+            f"{E_SQ}{E_CB_STAR} Но вы внесли свой урон в босса!\n\n"
+            f"{E_SQ}Вы нанесли в целом урона: {new_damage_dealt} {E_DMG}\n\n"
+            f"{E_CB_CROWN}{E_CB_SKULL} Ты был повержен {boss_cfg['name']}...\n\n"
+            f"{E_CROSS} -1 {E_CB_TICKET} билет потрачен"
+        )
+        await message.answer(battle_log + "\n" + defeat_text, reply_markup=get_clan_boss_back_kb())
+        await state.set_state(ClanBossState.viewing_menu)
+        await state.update_data(clan_boss_clan_id=clan_id)
+        return
+
+    # Продолжение боя
+    await state.update_data(
+        cb_player_health=new_player_health,
+        cb_boss_health=new_boss_health,
+        cb_damage_dealt=new_damage_dealt,
+    )
+    await message.answer(battle_log, reply_markup=get_clan_boss_battle_kb())
+
+
+async def _handle_clan_boss_victory(message, state: FSMContext, clan_id: int, boss_num: int,
+                                    boss_cfg: dict, player: dict, user_id: int):
+    """Обработать победу над клановым боссом"""
+    defeat_clan_boss(clan_id, boss_num)
+
+    # Начислить награды
+    crystals = boss_cfg['rewards']['crystals_base']
+    if random.random() < boss_cfg['rewards']['crystals_bonus_chance']:
+        crystals += boss_cfg['rewards']['crystals_bonus']
+    coins = _get_boss_coins_reward(player['strength'], boss_cfg)
+    exp_profile = random.randint(*boss_cfg['rewards']['exp_profile'])
+    exp_clan = boss_cfg['rewards']['exp_clan']
+    rating = boss_cfg['rewards']['rating']
+
+    add_crystals_to_player(user_id, crystals)
+    add_coins_to_player(user_id, coins)
+    add_experience_to_player(user_id, exp_profile)
+    add_clan_exp(clan_id, exp_clan)
+    update_rating_points(user_id, rating)
+
+    # Время до следующего босса
+    next_boss_num = 2 if boss_num == 1 else 1
+    next_cfg = CLAN_BOSSES_CONFIG.get(next_boss_num, CLAN_BOSSES_CONFIG[1])
+    cooldown_text = f"{next_cfg['cooldown_minutes']} мин"
+
+    victory_text = (
+        f"{E_SQ}{E_CB_CROWN} БОСС КЛАНА ПОВЕРЖЕН!\n\n"
+        f"{E_CB_SKULL} {boss_cfg['name']} был убит! {E_CB_DOWN}\n\n"
+        f"{E_GIFT} Награда получена:\n"
+        f"{E_PLUS} {crystals} {E_CRYSTALS} кристаллов\n"
+        f"{E_PLUS} {coins} {E_COINS} монет\n"
+        f"{E_PLUS} {exp_profile} {E_EXP} опыта профиля\n"
+        f"{E_PLUS} {exp_clan} {E_CLAN_BOTTLE} опыта клана\n"
+        f"{E_PLUS} {rating} 💠 очков рейтинга\n\n"
+        f"{E_SQ}{E_WARN} Новый босс появится через {E_HOURGLASS}{cooldown_text}\n"
+        f"{E_ONLINE2} Благодарность всем игрокам за помощь!"
+    )
+
+    await message.answer(victory_text, reply_markup=get_clan_boss_back_kb())
+    await state.set_state(ClanBossState.viewing_menu)
+    await state.update_data(clan_boss_clan_id=clan_id)
+
+    # Уведомить всех членов клана
+    clan_members = get_clan_members(clan_id)
+    for member_uid, _, _, _ in clan_members:
+        if member_uid != user_id:
+            try:
+                await bot.send_message(
+                    chat_id=member_uid,
+                    text=victory_text
+                )
+            except Exception:
+                pass
+
+
+async def clan_boss_ticket_refresh_loop():
+    """Фоновая задача: каждый час обновляет билеты кланового босса"""
+    while True:
+        await asyncio.sleep(3600)
+        try:
+            conn = sqlite3.connect(DB_NAME)
+            cursor = conn.cursor()
+            # Найти всех игроков с меньше 3 билетами
+            cursor.execute('SELECT user_id, clan_id, tickets FROM clan_boss_tickets WHERE tickets < 3')
+            rows = cursor.fetchall()
+            conn.close()
+
+            for uid, cid, current_tickets in rows:
+                # Восстановить до 3 билетов
+                conn = sqlite3.connect(DB_NAME)
+                cursor = conn.cursor()
+                cursor.execute(
+                    'UPDATE clan_boss_tickets SET tickets = 3, last_refresh = CURRENT_TIMESTAMP WHERE user_id = ? AND clan_id = ?',
+                    (uid, cid)
+                )
+                conn.commit()
+                conn.close()
+
+                # Уведомить игрока
+                try:
+                    await bot.send_message(
+                        chat_id=uid,
+                        text=(
+                            f"{E_SQ}{E_ARROW_UP} Билеты для атаки босса обновились!\n\n"
+                            f"{E_GIFT} Получено:\n"
+                            f"{E_PLUS} 3 {E_CB_TICKET} билета"
+                        )
+                    )
+                except Exception:
+                    pass
+        except Exception as e:
+            logging.warning(f"clan_boss_ticket_refresh_loop error: {e}")
+
+
 # ============== MAIN ==============
 async def main():
     init_database()
     asyncio.create_task(activity_monitor_loop())
+    asyncio.create_task(clan_boss_ticket_refresh_loop())
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
