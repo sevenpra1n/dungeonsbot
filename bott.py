@@ -1474,6 +1474,15 @@ def _activate_clan_boss(clan_id: int, boss_num: int):
     conn.commit()
     conn.close()
 
+def skip_clan_boss_cooldown(clan_id: int) -> bool:
+    """Пропустить cooldown кланового босса и немедленно активировать следующего.
+    Возвращает True если был cooldown и он успешно сброшен, False если босс уже активен."""
+    boss = get_clan_boss(clan_id)
+    if boss['status'] == 'active':
+        return False
+    _activate_clan_boss(clan_id, boss['boss_num'])
+    return True
+
 def get_clan_boss_remaining_cooldown(clan_id: int) -> str:
     """Получить оставшееся время cooldown в виде строки"""
     boss = get_clan_boss(clan_id)
@@ -1525,6 +1534,21 @@ def use_clan_boss_ticket(user_id: int, clan_id: int) -> bool:
     conn.commit()
     conn.close()
     return True
+
+def add_clan_boss_tickets(user_id: int, clan_id: int, amount: int) -> int:
+    """Добавить билеты кланового босса игроку (не больше MAX_CLAN_BOSS_TICKETS). Возвращает новое кол-во билетов."""
+    current = get_clan_boss_tickets(user_id, clan_id)
+    new_tickets = min(current + amount, MAX_CLAN_BOSS_TICKETS)
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(
+        'INSERT INTO clan_boss_tickets (user_id, clan_id, tickets) VALUES (?, ?, ?) '
+        'ON CONFLICT(user_id, clan_id) DO UPDATE SET tickets = ?',
+        (user_id, clan_id, new_tickets, new_tickets)
+    )
+    conn.commit()
+    conn.close()
+    return new_tickets
 
 def add_clan_boss_damage(user_id: int, clan_id: int, damage: int):
     """Добавить урон игрока по клановому боссу"""
@@ -1916,7 +1940,7 @@ WEAPONS = {
 
 ARMOR = {
     1:  {"name": "Тряпичные обмотки",          "strength": 15,   "cost": 100,    "emoji": "🔹", "rarity": "common"},
-    2:  {"name": "Конопляная рубаха",          "strength": 15,   "cost": 220,    "emoji": "🔹", "rarity": "common"},
+    2:  {"name": "Конопляная рубаха",          "strength": 17,   "cost": 220,    "emoji": "🔹", "rarity": "common"},
     3:  {"name": "Травяные сандалии",          "strength": 31,   "cost": 370,    "emoji": "🔹", "rarity": "common"},
     4:  {"name": "Кожаная куртка",              "strength": 40,   "cost": 500,    "emoji": "🔸", "rarity": "uncommon"},
     5:  {"name": "Капюшон следопыта",          "strength": 55,   "cost": 820,    "emoji": "🔸", "rarity": "uncommon"},
@@ -2020,6 +2044,8 @@ class AdminPanel(StatesGroup):
     adding_raid_tickets_amount = State()
     adding_materials_nickname = State()
     adding_materials_amount = State()
+    adding_boss_tickets_nickname = State()
+    adding_boss_tickets_amount = State()
 
 class LocationMenu(StatesGroup):
     viewing_map = State()
@@ -2289,7 +2315,6 @@ def get_clan_boss_battle_kb(user_id: int = None, mana: int = 100) -> ReplyKeyboa
         for skill_id, skill in SKILLS.items():
             if has_purchased_skill(user_id, skill_id) and mana >= skill['mana_cost']:
                 kb.append([KeyboardButton(text=f"✨ Скилл {skill_id}: {skill['name']}")])
-    kb.append([KeyboardButton(text="🏃 Отступить")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 def get_clan_boss_back_kb() -> ReplyKeyboardMarkup:
@@ -2472,7 +2497,9 @@ def get_admin_kb() -> ReplyKeyboardMarkup:
         [KeyboardButton(text="⭐️ Накрутить опыт")],
         [KeyboardButton(text="💎 Накрутить кристаллы")],
         [KeyboardButton(text="📕 Накрутить билеты рейда")],
+        [KeyboardButton(text="🎟️ Накрутить билеты босса")],
         [KeyboardButton(text="🥕 Накрутить материалы")],
+        [KeyboardButton(text="⏩ Пропустить кд босса")],
         [KeyboardButton(text="❌ Выход")],
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
@@ -5532,11 +5559,28 @@ async def handle_my_clan(message: types.Message, state: FSMContext):
     is_co_leader = not is_leader and role == 'co_leader'
 
     if text == "🚪 Выйти из клана" and not is_leader:
+        leaver = get_player(user_id)
+        leaver_name = leaver['nickname'] if leaver else "Игрок"
+        clan_name = clan['clan_name']
+        # Получить список членов ДО выхода
+        members_before = get_clan_members(clan_id)
         leave_clan(user_id, clan_id)
         await state.clear()
         clans = get_all_clans()
         await message.answer("Вы вышли из клана.", reply_markup=get_clans_list_kb(clans))
         await state.set_state(ClanMenu.viewing_clans)
+        # Уведомить оставшихся членов клана
+        leave_notify_text = (
+            f"❌👤 из клана {clan_name}, вышел {leaver_name}\n"
+            f"▫️🔴 Прощаемся с тобой. ☹️"
+        )
+        for member_uid, _, _, _ in members_before:
+            if member_uid == user_id:
+                continue
+            try:
+                await bot.send_message(chat_id=member_uid, text=leave_notify_text)
+            except Exception:
+                pass
         return
 
     if text == "👢 Кикнуть игрока" and (is_leader or is_co_leader):
@@ -5681,6 +5725,19 @@ async def handle_kick_member(message: types.Message, state: FSMContext):
                 )
             except Exception:
                 pass
+
+            # Уведомить оставшихся членов клана о выходе
+            leave_notify_text = (
+                f"❌👤 из клана {clan_name}, вышел {nickname}\n"
+                f"▫️🔴 Прощаемся с тобой. ☹️"
+            )
+            for m_uid, _, _, _ in members:
+                if m_uid == member_id:
+                    continue
+                try:
+                    await bot.send_message(chat_id=m_uid, text=leave_notify_text)
+                except Exception:
+                    pass
 
             break
 
@@ -6151,10 +6208,33 @@ async def admin_menu_handler(message: types.Message, state: FSMContext):
                              reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
         await state.set_state(AdminPanel.adding_raid_tickets_nickname)
         return
+    if text == "🎟️ Накрутить билеты босса":
+        await message.answer("Введите никнейм игрока:",
+                             reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
+        await state.set_state(AdminPanel.adding_boss_tickets_nickname)
+        return
     if text == "🥕 Накрутить материалы":
         await message.answer("Введите никнейм игрока:",
                              reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
         await state.set_state(AdminPanel.adding_materials_nickname)
+        return
+    if text == "⏩ Пропустить кд босса":
+        admin_clan = get_player_clan(message.from_user.id)
+        if not admin_clan:
+            await message.answer(f"{E_CROSS} Вы не состоите ни в одном клане!", reply_markup=get_admin_kb())
+            return
+        skipped = skip_clan_boss_cooldown(admin_clan['clan_id'])
+        if skipped:
+            await message.answer(
+                f"✅ Cooldown кланового босса в клане «{admin_clan['clan_name']}» сброшен!\n"
+                f"Новый босс активен прямо сейчас.",
+                reply_markup=get_admin_kb()
+            )
+        else:
+            await message.answer(
+                f"{E_CROSS} Босс в клане «{admin_clan['clan_name']}» уже активен, cooldown не требуется.",
+                reply_markup=get_admin_kb()
+            )
         return
     await message.answer("Выберите действие!", reply_markup=get_admin_kb())
 
@@ -6300,6 +6380,57 @@ async def admin_materials_amount(message: types.Message, state: FSMContext):
     data = await state.get_data()
     add_admin_materials_to_player(data['target_user_id'], amount)
     await message.answer(f"✅ {amount} каждого материала добавлено игроку {html.escape(data['target_nickname'])}")
+    await state.set_state(AdminPanel.main_menu)
+    await message.answer("🔐 Админ панель", reply_markup=get_admin_kb())
+
+@dp.message(AdminPanel.adding_boss_tickets_nickname)
+async def admin_boss_tickets_nickname(message: types.Message, state: FSMContext):
+    nickname = message.text.strip()
+    target = get_player_by_nickname(nickname)
+    if not target:
+        await message.answer(f"{E_CROSS} Игрок «{nickname}» не найден. Введите никнейм ещё раз:")
+        return
+    clan_info = get_player_clan(target['user_id'])
+    if not clan_info:
+        await message.answer(f"{E_CROSS} Игрок «{nickname}» не состоит в клане. Билеты босса привязаны к клану.")
+        await state.set_state(AdminPanel.main_menu)
+        await message.answer("🔐 Админ панель", reply_markup=get_admin_kb())
+        return
+    await state.update_data(target_user_id=target['user_id'], target_nickname=target['nickname'],
+                            target_clan_id=clan_info['clan_id'])
+    current = get_clan_boss_tickets(target['user_id'], clan_info['clan_id'])
+    await message.answer(
+        f"Игрок: {html.escape(target['nickname'])}\n"
+        f"Текущие билеты босса: {current}/{MAX_CLAN_BOSS_TICKETS}\n\n"
+        f"Введите количество билетов для добавления (макс. {MAX_CLAN_BOSS_TICKETS}):"
+    )
+    await state.set_state(AdminPanel.adding_boss_tickets_amount)
+
+@dp.message(AdminPanel.adding_boss_tickets_amount)
+async def admin_boss_tickets_amount(message: types.Message, state: FSMContext):
+    try:
+        amount = int(message.text.strip())
+        if amount <= 0:
+            raise ValueError
+    except ValueError:
+        await message.answer(f"{E_CROSS} Введите корректное положительное число:")
+        return
+    data = await state.get_data()
+    target_uid = data['target_user_id']
+    target_nick = data['target_nickname']
+    clan_id = data['target_clan_id']
+    current = get_clan_boss_tickets(target_uid, clan_id)
+    if current >= MAX_CLAN_BOSS_TICKETS:
+        await message.answer(
+            f"{E_CROSS} У игрока {html.escape(target_nick)} уже максимум билетов ({MAX_CLAN_BOSS_TICKETS}/{MAX_CLAN_BOSS_TICKETS})!"
+        )
+    else:
+        new_count = add_clan_boss_tickets(target_uid, clan_id, amount)
+        added = new_count - current
+        await message.answer(
+            f"✅ Добавлено {added} {E_CB_TICKET} билетов боссу игроку {html.escape(target_nick)}\n"
+            f"Теперь у него: {new_count}/{MAX_CLAN_BOSS_TICKETS}"
+        )
     await state.set_state(AdminPanel.main_menu)
     await message.answer("🔐 Админ панель", reply_markup=get_admin_kb())
 
@@ -6831,32 +6962,6 @@ async def handle_clan_boss_battle(message: types.Message, state: FSMContext):
     boss_skip_turn = data.get('cb_boss_skip_turn', False)
     boss_blind_turns = data.get('cb_boss_blind_turns', 0)
 
-    if text == "🏃 Отступить":
-        # Записать нанесённый урон в DB
-        if damage_dealt_total > 0:
-            add_clan_boss_damage(user_id, clan_id, damage_dealt_total)
-            # Обновить здоровье босса в DB
-            boss_data = get_clan_boss(clan_id)
-            if boss_data['status'] == 'active':
-                new_db_health = max(0, boss_data['current_health'] - damage_dealt_total)
-                update_clan_boss_health(clan_id, new_db_health)
-
-        player = get_player(user_id)
-        boss_cfg = CLAN_BOSSES_CONFIG.get(boss_num, CLAN_BOSSES_CONFIG[1])
-        await message.answer(
-            f"{E_CB_DOWN} ВЫ ОТСТУПИЛИ!\n"
-            f"{E_SQ}{E_CB_STAR} Но вы внесли свой урон в босса!\n\n"
-            f"{E_SQ}Вы нанесли в целом урона: {damage_dealt_total} {E_DMG}\n\n"
-            f"{E_CB_CROWN}{E_CB_SKULL} Ты отступил от {boss_cfg['name']}...\n\n"
-            f"{E_CROSS} -1 {E_CB_TICKET} билет потрачен",
-            reply_markup=get_clan_boss_back_kb()
-        )
-        # Снять билет
-        use_clan_boss_ticket(user_id, clan_id)
-        await state.set_state(ClanBossState.viewing_menu)
-        await state.update_data(clan_boss_clan_id=clan_id)
-        return
-
     # Определить допустимые действия (атака + скиллы)
     valid_actions = {"⚔️ Атаковать"}
     for sk_id, sk in SKILLS.items():
@@ -7026,6 +7131,13 @@ async def handle_clan_boss_battle(message: types.Message, state: FSMContext):
 async def _handle_clan_boss_victory(message, state: FSMContext, clan_id: int, boss_num: int,
                                     boss_cfg: dict, player: dict, user_id: int):
     """Обработать победу над клановым боссом"""
+    # Получить всех участников ДО удаления записей об уроне
+    participants = get_clan_boss_participants(clan_id)
+
+    # Если убийца не попал в список участников (нанёс урон только в этом ходу)
+    if user_id not in participants:
+        participants.append(user_id)
+
     defeat_clan_boss(clan_id, boss_num)
 
     # Время до следующего босса
@@ -7036,13 +7148,6 @@ async def _handle_clan_boss_victory(message, state: FSMContext, clan_id: int, bo
     # Начислить опыт клану один раз
     exp_clan = boss_cfg['rewards']['exp_clan']
     add_clan_exp(clan_id, exp_clan)
-
-    # Получить всех участников, нанёсших хоть 1 урон
-    participants = get_clan_boss_participants(clan_id)
-
-    # Если убийца не попал в список участников (маловероятно, но на всякий случай)
-    if user_id not in participants:
-        participants.append(user_id)
 
     # Начислить и уведомить каждого участника
     for participant_uid in participants:
