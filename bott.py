@@ -2079,6 +2079,11 @@ class ClanBossState(StatesGroup):
     in_battle = State()
     battle_round = State()
 
+class CoopRaidState(StatesGroup):
+    waiting_invite = State()   # Приглашённый игрок решает принять/отклонить
+    in_lobby = State()         # Принявший ожидает старта от организатора
+    in_raid = State()          # Оба игрока в активном CO-OP рейде
+
 # Словарь для отслеживания cooldown боевых действий (2 сек)
 battle_cooldowns: dict = {}
 
@@ -2086,6 +2091,11 @@ battle_cooldowns: dict = {}
 pvp_queue: dict = {}
 # Активные PvP пары: user_id -> opponent_user_id
 pvp_pairs: dict = {}
+
+# CO-OP рейд: ожидающие приглашения target_user_id -> {inviter_id, inviter_nickname, inviter_chat_id}
+coop_raid_invites: dict = {}
+# CO-OP рейд: подтверждённые пары (лобби) user_id -> partner_id (двунаправленное)
+coop_raid_pairs: dict = {}
 
 # Активные сессии клан-чата: clan_id -> set(user_id)
 clan_chat_sessions: dict = {}
@@ -2268,11 +2278,12 @@ def get_end_battle_kb():
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
-def get_raid_menu_kb() -> ReplyKeyboardMarkup:
-    """Меню рейда (до начала боя)"""
-    kb = [
-        [KeyboardButton(text="⚔️ Начать рейд"), KeyboardButton(text="❌ Выйти")]
-    ]
+def get_raid_menu_kb(has_coop_partner: bool = False) -> ReplyKeyboardMarkup:
+    """Меню рейда (до начала боя). Показывает кнопку co-op только когда партнёр принял приглашение."""
+    kb = []
+    if has_coop_partner:
+        kb.append([KeyboardButton(text="🤝 Начать совместный рейд")])
+    kb.append([KeyboardButton(text="⚔️ Начать рейд"), KeyboardButton(text="❌ Выйти")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 def get_monster_encounter_kb() -> ReplyKeyboardMarkup:
@@ -2360,6 +2371,21 @@ def get_pvp_accept_kb():
     kb = [
         [KeyboardButton(text="✅ Принять игру")],
         [KeyboardButton(text="❌ Отклонить")]
+    ]
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+def get_coop_invite_kb() -> ReplyKeyboardMarkup:
+    """Клавиатура принятия/отклонения co-op приглашения"""
+    kb = [
+        [KeyboardButton(text="✅ Принять рейд")],
+        [KeyboardButton(text="❌ Отклонить рейд")],
+    ]
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+def get_coop_lobby_kb() -> ReplyKeyboardMarkup:
+    """Клавиатура лобби co-op (ожидание старта от организатора)"""
+    kb = [
+        [KeyboardButton(text="❌ Отменить рейд")],
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
@@ -3867,12 +3893,13 @@ def get_friend_requests_kb(requests_data: list) -> ReplyKeyboardMarkup:
     kb.append([KeyboardButton(text="⬅️ Назад в друзья")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
-def get_friend_profile_kb() -> ReplyKeyboardMarkup:
+def get_friend_profile_kb(can_invite_raid: bool = False) -> ReplyKeyboardMarkup:
     """Клавиатура профиля друга"""
-    kb = [
-        [KeyboardButton(text="❌ Удалить из друзей")],
-        [KeyboardButton(text="⬅️ Назад в друзья")]
-    ]
+    kb = []
+    if can_invite_raid:
+        kb.append([KeyboardButton(text="⚔️ Пригласить в рейд")])
+    kb.append([KeyboardButton(text="❌ Удалить из друзей")])
+    kb.append([KeyboardButton(text="⬅️ Назад в друзья")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 def _get_friends_page_data(user_id: int, page: int) -> tuple:
@@ -3974,14 +4001,14 @@ async def handle_friends_menu(message: types.Message, state: FSMContext):
             if full_player:
                 await state.set_state(FriendsMenu.viewing_friend_profile)
                 await state.update_data(viewing_friend_id=full_player['user_id'])
-                await _send_friend_profile(message, full_player)
+                await _send_friend_profile(message, full_player, viewer_id=user_id)
                 return
         await message.answer(f"{E_CROSS} Друг не найден!")
         return
 
     await _send_friends_list(message, state, user_id, current_page)
 
-async def _send_friend_profile(message, friend: dict):
+async def _send_friend_profile(message, friend: dict, viewer_id: int = None):
     """Показать профиль друга"""
     health = calculate_player_health(friend['strength'])
     damage = calculate_damage(friend['strength'])
@@ -3989,6 +4016,14 @@ async def _send_friend_profile(message, friend: dict):
     status_emoji = get_player_status_emoji(friend)
     safe_nick = html.escape(friend["nickname"])
     safe_status = html.escape(friend["status"])
+    # Кнопка "пригласить в рейд": только если viewer не занят co-op парой и нет уже
+    # активного приглашения именно этому другу
+    can_invite = (
+        viewer_id is not None
+        and viewer_id != friend['user_id']
+        and viewer_id not in coop_raid_pairs
+        and friend['user_id'] not in coop_raid_invites
+    )
     profile_text = (
         f'{E_PROFILE} Профиль друга {safe_nick}:\n'
         f'{E_LOCK}{E_HASHTAG} {safe_nick}\n\n'
@@ -4002,7 +4037,8 @@ async def _send_friend_profile(message, friend: dict):
         f'{E_SQ}{friend["crystals"]} - {E_CRYSTALS}{E_GREEN} Кристаллы  \n'
         f'{E_SQ}{friend["raid_tickets"]} - {E_TICKET}{E_GREEN} Билеты рейда\n'
     )
-    await send_image_with_text(message, "images/profile.png", profile_text, reply_markup=get_friend_profile_kb())
+    await send_image_with_text(message, "images/profile.png", profile_text,
+                               reply_markup=get_friend_profile_kb(can_invite_raid=can_invite))
 
 @dp.message(FriendsMenu.viewing_friend_profile)
 async def handle_friend_profile(message: types.Message, state: FSMContext):
@@ -4026,6 +4062,77 @@ async def handle_friend_profile(message: types.Message, state: FSMContext):
         page = data.get('friends_page', 0)
         await _send_friends_list(message, state, user_id, page)
         return
+
+    if text == "⚔️ Пригласить в рейд":
+        data = await state.get_data()
+        friend_id = data.get('viewing_friend_id')
+        if not friend_id:
+            await message.answer(f"{E_CROSS} Не удалось определить друга.", reply_markup=get_main_kb())
+            await state.clear()
+            return
+        player = get_player(user_id)
+        if not player:
+            await message.answer("Сначала зарегистрируйся! /start")
+            return
+        # Проверки перед отправкой приглашения
+        if user_id in coop_raid_pairs:
+            await message.answer(f"{E_CROSS} Ты уже в co-op паре! Сначала завершите текущий совместный рейд.")
+            return
+        if friend_id in coop_raid_invites:
+            await message.answer(f"{E_CROSS} Этому игроку уже отправлено приглашение, подожди ответа.")
+            return
+        friend = get_player(friend_id)
+        if not friend:
+            await message.answer(f"{E_CROSS} Игрок не найден.")
+            return
+        # Сохраняем приглашение
+        coop_raid_invites[friend_id] = {
+            'inviter_id': user_id,
+            'inviter_nickname': html.escape(player['nickname']),
+            'inviter_chat_id': message.chat.id,
+        }
+        # Устанавливаем состояние приглашённому
+        friend_state = dp.fsm.resolve_context(bot, friend_id, friend_id)
+        await friend_state.set_state(CoopRaidState.waiting_invite)
+        await friend_state.update_data(coop_inviter_id=user_id)
+        invite_text = (
+            f'{E_SWORD2} <b>ПРИГЛАШЕНИЕ В CO-OP РЕЙД</b> {E_SWORD2}\n\n'
+            f'{E_CROWN} {html.escape(player["nickname"])} приглашает тебя '
+            f'в совместный рейд!\n\n'
+            f'{E_SQ}{E_ATK} Сила организатора: {int(player["strength"])}\n'
+            f'{E_SQ}{E_HP} HP: {calculate_player_health(player["strength"])}\n\n'
+            f'Принять или отклонить?'
+        )
+        try:
+            await bot.send_message(
+                chat_id=friend_id,
+                text=invite_text,
+                reply_markup=get_coop_invite_kb(),
+                parse_mode="HTML"
+            )
+        except Exception:
+            coop_raid_invites.pop(friend_id, None)
+            await friend_state.clear()
+            await message.answer(f"{E_CROSS} Не удалось отправить приглашение игроку.")
+            return
+        await message.answer(
+            f'{E_CHECK} Приглашение отправлено {html.escape(friend["nickname"])}!\n'
+            f'{E_HOURGLASS} Ожидаем ответа...',
+        )
+        return
+
+    # fallback — перерисовать профиль
+    data = await state.get_data()
+    friend_id = data.get('viewing_friend_id')
+    if friend_id:
+        friend = get_player(friend_id)
+        if friend:
+            await _send_friend_profile(message, friend, viewer_id=user_id)
+            return
+    await state.set_state(FriendsMenu.viewing_friends)
+    data = await state.get_data()
+    page = data.get('friends_page', 0)
+    await _send_friends_list(message, state, user_id, page)
 
 async def _send_friend_requests(message, user_id: int):
     """Показать заявки в друзья"""
@@ -4167,13 +4274,22 @@ async def open_raid(message: types.Message, state: FSMContext):
         )
         return
 
-    # Показываем меню рейда
+    has_coop = user_id in coop_raid_pairs
+    coop_info = ""
+    if has_coop:
+        partner_id = coop_raid_pairs[user_id]
+        partner = get_player(partner_id)
+        p_nick = html.escape(partner['nickname']) if partner else "Партнёр"
+        coop_info = f'\n{E_SWORD2} Партнёр готов: {p_nick} — нажми <b>🤝 Начать совместный рейд</b>!'
+
     raid_menu_text = (
         f'<tg-emoji emoji-id="5201888948091129713">🔗</tg-emoji> | Меню рейда {html.escape(player["nickname"])}:\n'
         f'<tg-emoji emoji-id="5357471466919056181">🔘</tg-emoji> Рекорд этажа: {player["raid_max_floor"]} <tg-emoji emoji-id="5359669309058603132">🏆</tg-emoji>'
+        f'{coop_info}'
     )
     await state.set_state(RaidState.viewing_menu)
-    await send_image_with_text(message, "images/raid.png", raid_menu_text, reply_markup=get_raid_menu_kb())
+    await send_image_with_text(message, "images/raid.png", raid_menu_text,
+                               reply_markup=get_raid_menu_kb(has_coop_partner=has_coop))
 
 
 @dp.message(RaidState.viewing_menu)
@@ -4182,17 +4298,196 @@ async def handle_raid_menu(message: types.Message, state: FSMContext):
     text = message.text
 
     if text == "❌ Выйти":
+        # Если уходим из меню рейда — разрываем co-op пару (если была)
+        if user_id in coop_raid_pairs:
+            partner_id = coop_raid_pairs.pop(user_id)
+            coop_raid_pairs.pop(partner_id, None)
+            try:
+                await bot.send_message(
+                    chat_id=partner_id,
+                    text=f"{E_CROSS} Партнёр покинул меню рейда. Совместный рейд отменён.",
+                    reply_markup=get_main_kb(),
+                    parse_mode="HTML"
+                )
+                partner_state = dp.fsm.resolve_context(bot, partner_id, partner_id)
+                await partner_state.clear()
+            except Exception:
+                pass
         await show_main_menu(message, state)
         return
 
+    # ============ CO-OP старт ============
+    if text == "🤝 Начать совместный рейд":
+        if user_id not in coop_raid_pairs:
+            await message.answer(
+                f"{E_CROSS} У тебя нет партнёра для совместного рейда!",
+                reply_markup=get_raid_menu_kb(has_coop_partner=False)
+            )
+            return
+
+        partner_id = coop_raid_pairs[user_id]
+        player = get_player(user_id)
+        partner = get_player(partner_id)
+
+        if not player or not partner:
+            coop_raid_pairs.pop(user_id, None)
+            coop_raid_pairs.pop(partner_id, None)
+            await message.answer(f"{E_CROSS} Ошибка: игрок не найден.", reply_markup=get_main_kb())
+            await state.clear()
+            return
+
+        # Проверяем билеты
+        if player['raid_tickets'] <= 0:
+            await message.answer(
+                f"{E_TICKET} У тебя нет билетов рейда!\nКупи билеты на рынке.",
+                reply_markup=get_raid_menu_kb(has_coop_partner=True)
+            )
+            return
+        if partner['raid_tickets'] <= 0:
+            await message.answer(
+                f"{E_TICKET} У партнёра нет билетов рейда! Рейд невозможен.",
+                reply_markup=get_raid_menu_kb(has_coop_partner=True)
+            )
+            return
+
+        # Проверяем что партнёр в лобби
+        partner_state = dp.fsm.resolve_context(bot, partner_id, partner_id)
+        current_partner_state = await partner_state.get_state()
+        if current_partner_state != CoopRaidState.in_lobby:
+            coop_raid_pairs.pop(user_id, None)
+            coop_raid_pairs.pop(partner_id, None)
+            await message.answer(
+                f"{E_CROSS} Партнёр покинул лобби. Совместный рейд отменён.",
+                reply_markup=get_raid_menu_kb(has_coop_partner=False)
+            )
+            return
+
+        # Всё ок — удаляем из пар и стартуем
+        coop_raid_pairs.pop(user_id, None)
+        coop_raid_pairs.pop(partner_id, None)
+
+        remove_raid_ticket(user_id)
+        remove_raid_ticket(partner_id)
+
+        # Характеристики обоих игроков с баффом клана
+        p1_clan = get_player_clan(user_id)
+        p1_clan_lvl = p1_clan['clan_level'] if p1_clan else 1
+        p1_str = apply_clan_strength_buff(player['strength'], p1_clan_lvl)
+        p1_hp = calculate_player_health(p1_str)
+        p1_dmg = calculate_damage(p1_str)
+
+        p2_clan = get_player_clan(partner_id)
+        p2_clan_lvl = p2_clan['clan_level'] if p2_clan else 1
+        p2_str = apply_clan_strength_buff(partner['strength'], p2_clan_lvl)
+        p2_hp = calculate_player_health(p2_str)
+        p2_dmg = calculate_damage(p2_str)
+
+        floor_id = 1
+        enemy_info = RAID_FLOORS[floor_id]
+        coop_enemy_hp = int(enemy_info['health'] * _COOP_ENEMY_HP_MULT)
+        enemy_dmg = enemy_info['base_damage']
+        mana = 100
+
+        p1_goes_first = random.random() < 0.5
+        p1_nick = html.escape(player['nickname'])
+        p2_nick = html.escape(partner['nickname'])
+
+        common = {
+            'coop_floor': floor_id,
+            'coop_enemy_health': coop_enemy_hp,
+            'coop_enemy_base_damage': enemy_dmg,
+            'coop_enemy_skip_turn': False,
+        }
+        await state.update_data(
+            **common,
+            coop_partner_id=partner_id,
+            coop_my_health=p1_hp,
+            coop_my_damage=p1_dmg,
+            coop_my_mana=mana,
+            coop_is_my_turn=p1_goes_first,
+            coop_my_blind_turns=0,
+            coop_partner_health=p2_hp,
+            coop_partner_nickname=p2_nick,
+        )
+        await state.set_state(CoopRaidState.in_raid)
+
+        await partner_state.update_data(
+            **common,
+            coop_partner_id=user_id,
+            coop_my_health=p2_hp,
+            coop_my_damage=p2_dmg,
+            coop_my_mana=mana,
+            coop_is_my_turn=not p1_goes_first,
+            coop_my_blind_turns=0,
+            coop_partner_health=p1_hp,
+            coop_partner_nickname=p1_nick,
+        )
+        await partner_state.set_state(CoopRaidState.in_raid)
+
+        reset_battle_cooldown(user_id)
+        reset_battle_cooldown(partner_id)
+
+        first_nick = p1_nick if p1_goes_first else p2_nick
+        start_header = (
+            f"{E_SWORD2}{E_SWORD2} <b>CO-OP РЕЙД НАЧАЛСЯ!</b> {E_SWORD2}{E_SWORD2}\n\n"
+            f"{E_HASHTAG} Первым ходит: {first_nick}\n\n"
+        )
+        floor_block = _fmt_coop_floor_info(floor_id, enemy_info, coop_enemy_hp)
+        p1_stats = _fmt_coop_stats(p1_nick, p1_hp, p1_dmg, mana, p2_nick, p2_hp,
+                                   enemy_info['name'], enemy_info['emoji'], coop_enemy_hp, enemy_dmg)
+        full_start = start_header + floor_block + "\n" + p1_stats
+
+        if p1_goes_first:
+            await message.answer(full_start + f"\n\n{E_SWORD} Твой ход!", reply_markup=get_battle_action_kb(user_id, mana))
+            try:
+                await bot.send_message(
+                    chat_id=partner_id,
+                    text=full_start + f"\n\n{E_HOURGLASS} Ход партнёра...",
+                    reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True),
+                    parse_mode="HTML"
+                )
+            except Exception:
+                pass
+        else:
+            await message.answer(full_start + f"\n\n{E_HOURGLASS} Ход партнёра...",
+                                 reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
+            try:
+                await bot.send_message(
+                    chat_id=partner_id,
+                    text=full_start + f"\n\n{E_SWORD} Твой ход!",
+                    reply_markup=get_battle_action_kb(partner_id, mana),
+                    parse_mode="HTML"
+                )
+            except Exception:
+                pass
+        return
+
+    # ============ SOLO старт ============
     if text != "⚔️ Начать рейд":
-        await message.answer("Выбери действие!", reply_markup=get_raid_menu_kb())
+        has_coop = user_id in coop_raid_pairs
+        await message.answer("Выбери действие!", reply_markup=get_raid_menu_kb(has_coop_partner=has_coop))
         return
 
     player = get_player(user_id)
     if not player:
         await message.answer("Сначала зарегистрируйся! /start")
         return
+
+    # Если был co-op партнёр — разрываем пару (игрок сам выбрал соло)
+    if user_id in coop_raid_pairs:
+        partner_id = coop_raid_pairs.pop(user_id)
+        coop_raid_pairs.pop(partner_id, None)
+        try:
+            await bot.send_message(
+                chat_id=partner_id,
+                text=f"{E_CROSS} Партнёр начал соло рейд. Совместный рейд отменён.",
+                reply_markup=get_main_kb(),
+                parse_mode="HTML"
+            )
+            partner_state = dp.fsm.resolve_context(bot, partner_id, partner_id)
+            await partner_state.clear()
+        except Exception:
+            pass
 
     # Проверить наличие билета рейда (повторная проверка)
     if player['raid_tickets'] <= 0:
@@ -4542,6 +4837,668 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
         player_mana=new_mana,
         enemy_skip_turn=new_enemy_skip,
         player_blind_turns=new_player_blind,
+    )
+
+
+# ============== CO-OP RAID ==============
+# Множители CO-OP (враг сильнее, но и награда выше)
+_COOP_ENEMY_HP_MULT  = 1.5   # HP врага в co-op × 1.5
+_COOP_REWARD_MULT    = 1.25  # Монеты за этаж × 1.25
+
+
+def _fmt_coop_floor_info(floor_id: int, enemy_info: dict, coop_hp: int) -> str:
+    """Блок информации об этаже для CO-OP"""
+    return (
+        f"{E_SKULL} {enemy_info['emoji']} <b>{enemy_info['name']}</b>\n"
+        f"{E_SQ}{E_ESWORD} {coop_hp} {E_RED_C}  "
+        f"{E_SQ}{E_ATK} {enemy_info['base_damage']} {E_RED_C}\n"
+        f"{E_SQ}{E_COINS} Награда: {int(enemy_info['reward'] * _COOP_REWARD_MULT)} (каждому)\n"
+    )
+
+
+def _fmt_coop_stats(
+    my_nick: str, my_hp: int, my_dmg: int, my_mana: int,
+    par_nick: str, par_hp: int,
+    e_name: str, e_emoji: str, e_hp: int, e_dmg: int,
+) -> str:
+    """Блок статов обоих игроков и врага для CO-OP"""
+    return (
+        f"{E_CROWN} {my_nick}\n"
+        f"{E_SQ}{E_HP} {my_hp}  {E_SQ}{E_ATK} {my_dmg}  {E_SQ}{E_MANA} {my_mana}/100\n\n"
+        f"{E_PROFILE} {par_nick}\n"
+        f"{E_SQ}{E_HP} {par_hp}\n\n"
+        f"{E_SKULL} {e_emoji} {e_name}\n"
+        f"{E_SQ}{E_ESWORD} {e_hp} {E_RED_C}  {E_SQ}{E_ATK} {e_dmg} {E_RED_C}"
+    )
+
+
+async def _coop_pass_turn(
+    my_id: int, partner_id: int,
+    my_state: FSMContext, message,
+    log: str,
+    new_my_hp: int, new_enemy_hp: int, new_mana: int,
+    new_enemy_skip: bool, new_my_blind: int,
+    partner_health: int, partner_nickname: str,
+    floor_id: int,
+):
+    """Сохранить состояние и передать ход партнёру."""
+    await my_state.update_data(
+        coop_my_health=new_my_hp,
+        coop_enemy_health=new_enemy_hp,
+        coop_my_mana=new_mana,
+        coop_is_my_turn=False,
+        coop_enemy_skip_turn=new_enemy_skip,
+        coop_my_blind_turns=new_my_blind,
+    )
+    await message.answer(
+        log + f"\n\n{E_HOURGLASS} Ход партнёра...",
+        reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True),
+    )
+
+    partner_state = dp.fsm.resolve_context(bot, partner_id, partner_id)
+    partner_data = await partner_state.get_data()
+    par_mana   = partner_data.get('coop_my_mana', 100)
+    par_dmg    = partner_data.get('coop_my_damage', 0)
+    par_hp_cur = partner_data.get('coop_my_health', 0)
+
+    # Синхронизируем HP врага и моё актуальное HP (как partner_health для партнёра)
+    await partner_state.update_data(
+        coop_enemy_health=new_enemy_hp,
+        coop_is_my_turn=True,
+        coop_partner_health=new_my_hp,
+    )
+
+    enemy_info = RAID_FLOORS[floor_id]
+    partner_log = (
+        f"{E_SWORD2}{E_SWORD2} <b>CO-OP РЕЙД — Этаж {floor_id}/10</b>\n\n"
+        f"{E_DOT} Партнёр ходил:\n{log}\n\n"
+        + _fmt_coop_stats(
+            partner_nickname, par_hp_cur, par_dmg, par_mana,
+            partner_data.get('coop_partner_nickname', 'Партнёр'), new_my_hp,
+            enemy_info['name'], enemy_info['emoji'], new_enemy_hp, enemy_info['base_damage'],
+        )
+        + f"\n\n{E_SWORD} Твой ход!"
+    )
+    try:
+        await bot.send_message(
+            chat_id=partner_id,
+            text=partner_log,
+            reply_markup=get_battle_action_kb(partner_id, par_mana),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+
+async def _coop_floor_victory(
+    my_id: int, partner_id: int,
+    my_state: FSMContext, message,
+    floor_id: int, player: dict,
+):
+    """Победа на этаже CO-OP рейда — наградить обоих, перейти на следующий или завершить."""
+    enemy_info   = RAID_FLOORS[floor_id]
+    reward_coins = int(round(enemy_info['reward'] * _COOP_REWARD_MULT))
+    my_data      = await my_state.get_data()
+    par_nick     = my_data.get('coop_partner_nickname', 'Партнёр')
+    my_nick      = html.escape(player['nickname'])
+
+    # Награды каждому
+    for uid in (my_id, partner_id):
+        add_coins_to_player(uid, reward_coins)
+        increment_player_pve_wins(uid)
+        update_rating_points(uid, 5)
+        p = get_player(uid)
+        if p and floor_id > p.get('raid_max_floor', 0):
+            update_player_raid_max_floor(uid, floor_id)
+
+    # Клановый опыт
+    my_clan = get_player_clan(my_id)
+    if my_clan:
+        add_clan_exp(my_clan['clan_id'], 15)
+
+    victory_text = (
+        f"{E_CHART} Этаж {floor_id} пройден!\n\n"
+        f"{E_SKULL} {enemy_info['emoji']} {enemy_info['name']} повержен! {E_TRASH}\n\n"
+        f"{E_TROPHY}{E_GREEN} <b>CO-OP ПОБЕДА!</b>\n\n"
+        f"{E_PROFILE} {my_nick} {E_CHECK}\n"
+        f"{E_PROFILE} {par_nick} {E_CHECK}\n\n"
+        f"{E_GIFT} Каждый получил:\n"
+        f"{E_PLUS} {reward_coins} {E_COINS} монет\n"
+        f"{E_PLUS} 5 {E_STAR} рейтинга\n"
+        f"{E_PLUS} 1 победа\n"
+    )
+
+    if floor_id == 10:
+        victory_text += (
+            "\n🎉 <b>ПОЗДРАВЛЯЕМ!</b>\n"
+            "Вы вместе прошли все 10 этажей!\n"
+            f"{E_SKULL} Зеркальный дух повержён!\n\n"
+            "Совместный рейд завершён."
+        )
+        await message.answer(victory_text, reply_markup=get_end_battle_kb())
+        await my_state.clear()
+        partner_state = dp.fsm.resolve_context(bot, partner_id, partner_id)
+        await partner_state.clear()
+        try:
+            await bot.send_message(
+                chat_id=partner_id, text=victory_text,
+                reply_markup=get_end_battle_kb(), parse_mode="HTML",
+            )
+        except Exception:
+            pass
+        return
+
+    # Переход на следующий этаж
+    next_floor    = floor_id + 1
+    next_enemy    = RAID_FLOORS[next_floor]
+    coop_enemy_hp = int(next_enemy['health'] * _COOP_ENEMY_HP_MULT)
+
+    partner_state = dp.fsm.resolve_context(bot, partner_id, partner_id)
+    partner_data  = await partner_state.get_data()
+    partner       = get_player(partner_id)
+
+    new_my_hp  = calculate_player_health(player['strength'])
+    new_my_dmg = calculate_damage(player['strength'])
+    new_par_hp  = calculate_player_health(partner['strength']) if partner else partner_data.get('coop_my_health', 0)
+    new_par_dmg = calculate_damage(partner['strength']) if partner else partner_data.get('coop_my_damage', 0)
+    new_mana   = 100
+
+    i_go_first = random.random() < 0.5
+    common = {
+        'coop_floor': next_floor,
+        'coop_enemy_health': coop_enemy_hp,
+        'coop_enemy_base_damage': next_enemy['base_damage'],
+        'coop_enemy_skip_turn': False,
+    }
+    await my_state.update_data(
+        **common,
+        coop_my_health=new_my_hp,
+        coop_my_damage=new_my_dmg,
+        coop_my_mana=new_mana,
+        coop_is_my_turn=i_go_first,
+        coop_my_blind_turns=0,
+        coop_partner_health=new_par_hp,
+    )
+    await partner_state.update_data(
+        **common,
+        coop_my_health=new_par_hp,
+        coop_my_damage=new_par_dmg,
+        coop_my_mana=new_mana,
+        coop_is_my_turn=not i_go_first,
+        coop_my_blind_turns=0,
+        coop_partner_health=new_my_hp,
+    )
+
+    victory_text += f"\n{E_ARROW_UP} Переход на этаж {next_floor}..."
+    await message.answer(victory_text, reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
+    try:
+        await bot.send_message(
+            chat_id=partner_id, text=victory_text,
+            reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+    await asyncio.sleep(2)
+    reset_battle_cooldown(my_id)
+    reset_battle_cooldown(partner_id)
+
+    first_nick = my_nick if i_go_first else par_nick
+    next_text = (
+        f"{E_SWORD2}{E_SWORD2} <b>CO-OP РЕЙД — Этаж {next_floor}/10</b>\n\n"
+        f"Первым ходит: {first_nick}\n\n"
+        + _fmt_coop_floor_info(next_floor, next_enemy, coop_enemy_hp) + "\n"
+        + _fmt_coop_stats(my_nick, new_my_hp, new_my_dmg, new_mana,
+                          par_nick, new_par_hp,
+                          next_enemy['name'], next_enemy['emoji'],
+                          coop_enemy_hp, next_enemy['base_damage'])
+    )
+    if i_go_first:
+        await message.answer(next_text + f"\n\n{E_SWORD} Твой ход!",
+                             reply_markup=get_battle_action_kb(my_id, new_mana))
+        try:
+            await bot.send_message(
+                chat_id=partner_id,
+                text=next_text + f"\n\n{E_HOURGLASS} Ход партнёра...",
+                reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True),
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+    else:
+        await message.answer(next_text + f"\n\n{E_HOURGLASS} Ход партнёра...",
+                             reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
+        try:
+            await bot.send_message(
+                chat_id=partner_id,
+                text=next_text + f"\n\n{E_SWORD} Твой ход!",
+                reply_markup=get_battle_action_kb(partner_id, new_mana),
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+
+
+async def _coop_raid_player_died(
+    my_id: int, partner_id: int,
+    my_state: FSMContext, message,
+    floor_id: int, player: dict,
+    enemy_info: dict, log: str,
+):
+    """Один игрок погиб в CO-OP рейде — конец для обоих."""
+    floors_done = floor_id - 1
+    my_nick = html.escape(player['nickname'])
+    my_data = await my_state.get_data()
+    par_nick = my_data.get('coop_partner_nickname', 'Партнёр')
+
+    for uid, pts in ((my_id, -10), (partner_id, -5)):
+        p = get_player(uid)
+        if p:
+            new_max = max(p.get('raid_max_floor', 0), floors_done)
+            if new_max > p.get('raid_max_floor', 0):
+                update_player_raid_max_floor(uid, new_max)
+        update_rating_points(uid, pts)
+    increment_player_deaths(my_id)
+
+    defeat_text = (
+        log
+        + f"\n{E_CHART} Результаты CO-OP боя:\n\n"
+        + f"{E_BOOK_LOSS}{E_RED_C} <b>CO-OP РЕЙД ПРОВАЛЕН!</b>\n\n"
+        + f"{E_PROFILE} {my_nick} пал! {E_SKULL}\n\n"
+        + f"{E_BAN} Потери:\n"
+        + f"{E_CROSS} -10 {E_STAR} рейтинга\n"
+        + f"{E_CROSS} Пройдено этажей: {floors_done}\n"
+    )
+    partner_defeat = (
+        f"{E_CHART} Результаты CO-OP боя:\n\n"
+        f"{E_BOOK_LOSS}{E_RED_C} <b>CO-OP РЕЙД ПРОВАЛЕН!</b>\n\n"
+        f"{E_SKULL} {my_nick} был повержён — рейд завершён.\n\n"
+        f"{E_BAN} Потери:\n"
+        f"{E_CROSS} -5 {E_STAR} рейтинга\n"
+        f"{E_CROSS} Пройдено этажей: {floors_done}\n"
+    )
+
+    await message.answer(defeat_text, reply_markup=get_end_battle_kb())
+    await my_state.clear()
+
+    partner_state = dp.fsm.resolve_context(bot, partner_id, partner_id)
+    await partner_state.clear()
+    try:
+        await bot.send_message(
+            chat_id=partner_id, text=partner_defeat,
+            reply_markup=get_end_battle_kb(), parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+
+async def _coop_raid_forfeit(my_id: int, partner_id, my_state: FSMContext, message):
+    """Игрок покинул CO-OP рейд досрочно."""
+    player = get_player(my_id)
+    my_nick = html.escape(player['nickname']) if player else 'Игрок'
+    await my_state.clear()
+    await show_main_menu(message, my_state)
+    if partner_id:
+        partner_state = dp.fsm.resolve_context(bot, partner_id, partner_id)
+        await partner_state.clear()
+        try:
+            await bot.send_message(
+                chat_id=partner_id,
+                text=(
+                    f"{E_CROSS} {my_nick} покинул CO-OP рейд.\n\n"
+                    f"{E_BAN} Рейд завершён досрочно."
+                ),
+                reply_markup=get_end_battle_kb(),
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+
+
+# --- Приглашение: принять / отклонить ---
+@dp.message(CoopRaidState.waiting_invite)
+async def handle_coop_invite_response(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text    = message.text
+
+    if text == "✅ Принять рейд":
+        invite = coop_raid_invites.pop(user_id, None)
+        if not invite:
+            await state.clear()
+            await message.answer(
+                f"{E_WARN} Приглашение уже истекло или было отозвано.",
+                reply_markup=get_main_kb(),
+            )
+            return
+
+        inviter_id       = invite['inviter_id']
+        inviter_nickname = invite['inviter_nickname']
+        inviter_chat_id  = invite['inviter_chat_id']
+
+        player = get_player(user_id)
+        if not player:
+            await state.clear()
+            await message.answer("Сначала зарегистрируйся! /start")
+            return
+
+        # Проверяем, не занят ли организатор уже в другой паре
+        if inviter_id in coop_raid_pairs:
+            await state.clear()
+            await message.answer(
+                f"{E_CROSS} Организатор уже в другой co-op паре.",
+                reply_markup=get_main_kb(),
+            )
+            return
+
+        # Формируем пару
+        coop_raid_pairs[inviter_id] = user_id
+        coop_raid_pairs[user_id]    = inviter_id
+
+        my_nick = html.escape(player['nickname'])
+
+        # Переводим себя в лобби
+        await state.set_state(CoopRaidState.in_lobby)
+        await state.update_data(coop_partner_id=inviter_id, coop_partner_nickname=inviter_nickname)
+
+        lobby_text = (
+            f"{E_SWORD2}{E_SWORD2} <b>CO-OP РЕЙД — ЛОББИ</b> {E_SWORD2}{E_SWORD2}\n\n"
+            f"{E_PROFILE} {inviter_nickname}\n"
+            f"{E_PROFILE} {my_nick}\n\n"
+            f"{E_HOURGLASS} Ожидаем, пока партнёр начнёт рейд...\n"
+            f"Нажми ❌ Отменить рейд, если передумал."
+        )
+        await message.answer(lobby_text, reply_markup=get_coop_lobby_kb())
+
+        # Уведомляем организатора
+        notify = (
+            f"{E_CHECK} {my_nick} принял приглашение!\n\n"
+            f"{E_SWORD2} Иди в меню {E_TICKET} <b>Рейд</b> и нажми\n"
+            f"🤝 <b>Начать совместный рейд</b>"
+        )
+        try:
+            await bot.send_message(
+                chat_id=inviter_chat_id,
+                text=notify,
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+
+    elif text == "❌ Отклонить рейд":
+        invite = coop_raid_invites.pop(user_id, None)
+        await state.clear()
+        await message.answer(
+            f"{E_CROSS} Ты отклонил приглашение.",
+            reply_markup=get_main_kb(),
+        )
+        if invite:
+            player = get_player(user_id)
+            my_nick = html.escape(player['nickname']) if player else 'Игрок'
+            try:
+                await bot.send_message(
+                    chat_id=invite['inviter_chat_id'],
+                    text=f"{E_CROSS} {my_nick} отклонил приглашение на co-op рейд.",
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass
+    else:
+        await message.answer(
+            "Прими или откажись от приглашения:",
+            reply_markup=get_coop_invite_kb(),
+        )
+
+
+# --- Лобби: ожидание старта (принявший игрок) ---
+@dp.message(CoopRaidState.in_lobby)
+async def handle_coop_lobby(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text    = message.text
+
+    if text == "❌ Отменить рейд":
+        data       = await state.get_data()
+        partner_id = data.get('coop_partner_id')
+
+        coop_raid_pairs.pop(user_id,    None)
+        coop_raid_pairs.pop(partner_id, None)
+
+        player = get_player(user_id)
+        my_nick = html.escape(player['nickname']) if player else 'Партнёр'
+
+        await state.clear()
+        await show_main_menu(message, state)
+
+        if partner_id:
+            try:
+                await bot.send_message(
+                    chat_id=partner_id,
+                    text=(
+                        f"{E_CROSS} {my_nick} отменил совместный рейд.\n"
+                        f"Ты вернулся в главное меню."
+                    ),
+                    reply_markup=get_main_kb(),
+                    parse_mode="HTML",
+                )
+                partner_state = dp.fsm.resolve_context(bot, partner_id, partner_id)
+                await partner_state.clear()
+            except Exception:
+                pass
+    else:
+        await message.answer(
+            f"{E_HOURGLASS} Ожидаем начала рейда от партнёра...",
+            reply_markup=get_coop_lobby_kb(),
+        )
+
+
+# --- Активный CO-OP бой ---
+@dp.message(CoopRaidState.in_raid)
+async def coop_raid_battle_round(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    action  = message.text
+    player  = get_player(user_id)
+    data    = await state.get_data()
+
+    if not player:
+        await state.clear()
+        await message.answer(f"{E_CROSS} Ошибка: игрок не найден.", reply_markup=get_main_kb())
+        return
+
+    # Ждём своего хода
+    if not data.get('coop_is_my_turn', False):
+        await message.answer(
+            f"{E_HOURGLASS} Сейчас ход партнёра, подожди!",
+            reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True),
+        )
+        return
+
+    # Cooldown 2 сек
+    if not can_battle_action(user_id):
+        await message.answer("⏳ Подожди перед следующим ходом!")
+        return
+
+    floor_id         = data.get('coop_floor', 1)
+    partner_id       = data.get('coop_partner_id')
+    enemy_info       = RAID_FLOORS[floor_id]
+    my_health        = data.get('coop_my_health', 1)
+    my_damage        = data.get('coop_my_damage', 0)
+    enemy_health     = data.get('coop_enemy_health', 0)
+    enemy_base_dmg   = data.get('coop_enemy_base_damage', enemy_info['base_damage'])
+    my_mana          = data.get('coop_my_mana', 100)
+    enemy_skip_turn  = data.get('coop_enemy_skip_turn', False)
+    my_blind_turns   = data.get('coop_my_blind_turns', 0)
+    partner_health   = data.get('coop_partner_health', 0)
+    partner_nickname = data.get('coop_partner_nickname', 'Партнёр')
+    my_nick          = html.escape(player['nickname'])
+
+    # Валидация действия
+    valid_actions = {"🗡️ Атаковать", "Крит💥20%"}
+    for sk_id, sk in SKILLS.items():
+        if has_purchased_skill(user_id, sk_id):
+            valid_actions.add(f"✨ Скилл {sk_id}: {sk['name']}")
+
+    if action not in valid_actions:
+        if action == "🏠 В главное меню":
+            await _coop_raid_forfeit(user_id, partner_id, state, message)
+            return
+        await message.answer("Выбери действие!", reply_markup=get_battle_action_kb(user_id, my_mana))
+        return
+
+    log            = f"{E_SWORD2}{E_SWORD2} <b>CO-OP РЕЙД — Этаж {floor_id}/10</b>\n\n"
+    new_enemy_hp   = enemy_health
+    new_my_hp      = my_health
+    new_mana       = my_mana
+    new_enemy_skip = False
+    new_my_blind   = max(0, my_blind_turns - 1)
+    player_hit     = 0
+
+    # ============ Обработка действия ============
+    skill_used = None
+    for sk_id, sk in SKILLS.items():
+        if action == f"✨ Скилл {sk_id}: {sk['name']}":
+            skill_used = (sk_id, sk)
+            break
+
+    if skill_used:
+        sk_id, sk = skill_used
+        if my_mana < sk['mana_cost']:
+            await message.answer(
+                f"{E_CROSS} Недостаточно маны! Требуется {sk['mana_cost']}{E_MANA}",
+                reply_markup=get_battle_action_kb(user_id, my_mana),
+            )
+            return
+        new_mana -= sk['mana_cost']
+        log += f"✨ <b>{sk['name']}</b>!\n"
+
+        if roll_miss():
+            increment_player_dodges(user_id)
+            log += f"{E_CROSS}{E_ATK} Промах! Враг уклонился\n\n"
+            player_hit = 0
+        elif sk_id == 1:   # Мега-молот
+            player_hit = int(round(my_damage * sk['damage_mult'] * random.uniform(0.8, 1.2)))
+            log += f"{E_PROFILE} {my_nick} наносит {player_hit} урона! {E_ARROW_UP}\n"
+            if random.random() < sk['stun_chance']:
+                new_enemy_skip = True
+                log += f"😵 Враг оглушён и пропустит следующий ход!\n"
+        elif sk_id == 2:   # Кровавое неистовство
+            player_hit = int(round(my_damage * sk['damage_mult'] * random.uniform(0.8, 1.2)))
+            hp_loss = max(1, int(round(calculate_player_health(player['strength']) * sk['hp_loss_pct'])))
+            new_my_hp = max(1, new_my_hp - hp_loss)
+            log += f"🩸 Ты теряешь {hp_loss} HP!\n"
+            log += f"{E_PROFILE} {my_nick} наносит {player_hit} урона! {E_ARROW_UP}\n"
+        elif sk_id == 3:   # Ослепляющая вспышка
+            player_hit = 0
+            new_my_blind = sk['blind_turns']
+            log += f"🔦 Враг ослеплён на {sk['blind_turns']} хода! (-50% точности)\n"
+        else:
+            player_hit = int(round(my_damage * random.uniform(0.8, 1.2)))
+        log += "\n"
+
+    elif action == "Крит💥20%":
+        is_crit = random.random() < 0.20
+        if not is_crit:
+            increment_player_dodges(user_id)
+            log += f"{E_CROSS}{E_ATK} Ты промахиваешься!\n{E_SQ}Неудачный крит.\n\n"
+            player_hit = 0
+            # Враг всё равно контратакует при неудачном крите
+            if enemy_skip_turn:
+                log += f"😵 {enemy_info['name']} оглушён, пропускает ход!\n\n"
+            else:
+                b_extra = SKILLS[3]['miss_chance_add'] if new_my_blind > 0 else 0.0
+                if roll_miss(b_extra):
+                    increment_player_dodges(user_id)
+                    log += f"{E_CROSS}{E_ATK} {enemy_info['name']} промахивается!\n\n"
+                else:
+                    e_hit = int(round(enemy_base_dmg * random.uniform(0.7, 1.3)))
+                    new_my_hp = int(round(new_my_hp - e_hit))
+                    log += (
+                        f"{E_SKULL} {enemy_info['name']} контратакует! {E_ARROW_DN}\n"
+                        f"{E_DMG}{E_HEART_B} Урон тебе: {e_hit}\n\n"
+                    )
+            if new_my_hp <= 0:
+                await _coop_raid_player_died(user_id, partner_id, state, message,
+                                             floor_id, player, enemy_info, log)
+                return
+            log += _fmt_coop_stats(
+                my_nick, new_my_hp, my_damage, new_mana,
+                partner_nickname, partner_health,
+                enemy_info['name'], enemy_info['emoji'], new_enemy_hp, enemy_base_dmg,
+            )
+            await _coop_pass_turn(user_id, partner_id, state, message, log,
+                                  new_my_hp, new_enemy_hp, new_mana,
+                                  new_enemy_skip, new_my_blind,
+                                  partner_health, partner_nickname, floor_id)
+            return
+
+        # Крит успешен
+        if roll_miss():
+            player_hit = 0
+            increment_player_dodges(user_id)
+            log += f"{E_CROSS}{E_ATK} Промах! Враг уклонился\n\n"
+        else:
+            base_dmg   = int(round(my_damage * random.uniform(0.8, 1.2)))
+            player_hit = base_dmg * 2
+            log += (
+                f"{E_DMG} КРИТИЧЕСКИЙ УДАР! {E_ARROW_UP}\n"
+                f"{E_PROFILE} {my_nick} атакует!\n"
+                f"{E_DMG}{E_ESWORD} Урон врагу: {player_hit}\n\n"
+            )
+    else:
+        # Обычная атака
+        if roll_miss():
+            player_hit = 0
+            increment_player_dodges(user_id)
+            log += f"{E_CROSS}{E_ATK} Промах! Враг уклонился\n\n"
+        else:
+            player_hit = int(round(my_damage * random.uniform(0.8, 1.2)))
+            log += (
+                f"{E_BELL}{E_DMG} Ты ударяешь!\n\n"
+                f"{E_PROFILE} {my_nick} атакует! {E_ARROW_UP}\n"
+                f"{E_DMG}{E_ESWORD} Урон врагу: {player_hit}\n\n"
+            )
+
+    new_enemy_hp = int(round(new_enemy_hp - player_hit))
+
+    # Победа на этаже
+    if new_enemy_hp <= 0:
+        # Передаём актуальный HP врага (0) в state перед вызовом хелпера
+        await state.update_data(coop_my_health=new_my_hp, coop_my_mana=new_mana)
+        await _coop_floor_victory(user_id, partner_id, state, message, floor_id, player)
+        return
+
+    # Контратака врага на этого игрока
+    if enemy_skip_turn:
+        log += f"😵 {enemy_info['name']} оглушён, пропускает ход!\n\n"
+    else:
+        b_extra = SKILLS[3]['miss_chance_add'] if new_my_blind > 0 else 0.0
+        if roll_miss(b_extra):
+            increment_player_dodges(user_id)
+            log += f"{E_CROSS}{E_ATK} {enemy_info['name']} промахивается!\n\n"
+        else:
+            e_hit = int(round(enemy_base_dmg * random.uniform(0.7, 1.3)))
+            new_my_hp = int(round(new_my_hp - e_hit))
+            log += (
+                f"{E_SKULL} {enemy_info['name']} контратакует! {E_ARROW_DN}\n"
+                f"{E_DMG}{E_HEART_B} Урон тебе: {e_hit}\n\n"
+            )
+
+    # Смерть после контратаки
+    if new_my_hp <= 0:
+        await _coop_raid_player_died(user_id, partner_id, state, message,
+                                     floor_id, player, enemy_info, log)
+        return
+
+    # Блок статов и передача хода
+    log += _fmt_coop_stats(
+        my_nick, new_my_hp, my_damage, new_mana,
+        partner_nickname, partner_health,
+        enemy_info['name'], enemy_info['emoji'], new_enemy_hp, enemy_base_dmg,
+    )
+    await _coop_pass_turn(
+        user_id, partner_id, state, message, log,
+        new_my_hp, new_enemy_hp, new_mana,
+        new_enemy_skip, new_my_blind,
+        partner_health, partner_nickname, floor_id,
     )
 
 
