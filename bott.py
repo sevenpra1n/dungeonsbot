@@ -464,6 +464,17 @@ def init_database():
         )
     ''')
 
+    # Таблица лайков профиля (один лайк от одного игрока другому)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS player_likes (
+            liker_id INTEGER NOT NULL,
+            liked_id INTEGER NOT NULL,
+            PRIMARY KEY (liker_id, liked_id),
+            FOREIGN KEY (liker_id) REFERENCES players(user_id),
+            FOREIGN KEY (liked_id) REFERENCES players(user_id)
+        )
+    ''')
+
     conn.commit()
     conn.close()
 
@@ -1081,6 +1092,29 @@ def increment_player_pve_wins(user_id: int):
     conn.commit()
     conn.close()
 
+def has_liked_player(liker_id: int, liked_id: int) -> bool:
+    """Проверить, поставил ли liker_id лайк игроку liked_id"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('SELECT 1 FROM player_likes WHERE liker_id = ? AND liked_id = ?', (liker_id, liked_id))
+    result = cursor.fetchone()
+    conn.close()
+    return result is not None
+
+def give_like_to_player(liker_id: int, liked_id: int) -> bool:
+    """Поставить лайк. Возвращает True если лайк добавлен, False если уже лайкал или сам себе."""
+    if liker_id == liked_id:
+        return False
+    if has_liked_player(liker_id, liked_id):
+        return False
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('INSERT OR IGNORE INTO player_likes (liker_id, liked_id) VALUES (?, ?)', (liker_id, liked_id))
+    cursor.execute('UPDATE players SET likes = COALESCE(likes, 0) + 1 WHERE user_id = ?', (liked_id,))
+    conn.commit()
+    conn.close()
+    return True
+
 def set_player_clan_image_flag(user_id: int):
     """Отметить что игрок установил картину в клане"""
     conn = sqlite3.connect(DB_NAME)
@@ -1563,7 +1597,8 @@ def get_leaderboard_page(page: int = 0, per_page: int = 5):
     
     offset = page * per_page
     cursor.execute('''
-        SELECT nickname, strength, COALESCE(wins, 0), COALESCE(rating_points, 0) FROM players
+        SELECT nickname, strength, COALESCE(wins, 0), COALESCE(rating_points, 0),
+               COALESCE(status, 'Новичок'), COALESCE(crystals, 0) FROM players
         WHERE strength > 0
         ORDER BY rating_points DESC, wins DESC, strength DESC
         LIMIT ? OFFSET ?
@@ -2614,7 +2649,8 @@ def get_clan_boss_back_kb() -> ReplyKeyboardMarkup:
 def get_rating_kb(leaderboard, page: int, total_pages: int):
     """Меню рейтинга с кнопками игроков и пагинацией"""
     kb = []
-    for nickname, strength, wins, rating_pts in leaderboard:
+    for row in leaderboard:
+        nickname = row[0]
         kb.append([KeyboardButton(text=f"👤 {nickname}")])
     nav = []
     if page > 0:
@@ -2639,6 +2675,11 @@ def get_rating_player_kb(viewer_id: int = None, target_id: int = None):
             kb.append([KeyboardButton(text="⏳ Заявка отправлена")])
         elif fs == 'pending_received':
             kb.append([KeyboardButton(text="➕ Добавить в друзья")])
+        # Like button — shown only if not already liked
+        if not has_liked_player(viewer_id, target_id):
+            kb.append([KeyboardButton(text="❤️ Лайк")])
+        else:
+            kb.append([KeyboardButton(text="❤️ Лайкнуто")])
     kb.append([KeyboardButton(text="⬅️ Назад в рейтинг")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
@@ -3035,8 +3076,12 @@ async def cmd_start(message: types.Message, state: FSMContext):
 @dp.message(Registration.waiting_for_nickname)
 async def process_nickname(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
-    nickname = message.text
-    
+    nickname = message.text.strip() if message.text else ""
+
+    if not nickname or len(nickname) > 32:
+        await message.answer("❌ Никнейм должен быть от 1 до 32 символов. Попробуй ещё раз:")
+        return
+
     add_player(user_id, nickname)
     
     await state.clear()
@@ -3078,8 +3123,8 @@ async def _send_profile(message, player: dict):
         f'Уровень {E_CIRCLE} {player["player_level"]}{E_STAR}\n'
         f'{E_SQ}{exp_info["current_exp"]} / {exp_info["needed_exp"]}{E_EXP_DOT}{E_EXP} Опыта\n\n'
         f'Рейтинговая лига:\n'
-        f'{E_SQ}{league}\n'
-        f'{E_SQ}{player.get("rating_points", 0)} {E_STAR} Points\n\n'
+        f'{E_SQ}{player.get("rating_points", 0)} {E_STAR} Points\n'
+        f'{E_SQ}{league}\n\n'
         f'{E_SQ}{player["wins"]} - {E_TROPHY} {E_YELLOW} Победы\n'
         f'{E_SQ}{int(display_strength)} - {E_ATK} {E_YELLOW} Сила\n'
         f'{E_SQ}{health} - {E_HP} {E_YELLOW} Здоровье\n\n'
@@ -3197,17 +3242,17 @@ async def _send_inventory(message, user_id: int, back_button: str = "⬅️ На
         f'├ количество: {inv["stone"]}\n\n'
         f'{E_FOOD} Еда\n'
         f'├ количество: {inv["food"]}\n\n'
-        f'🪙 Медь\n'
+        f'{E_COPPER} Медь\n'
         f'├ количество: {inv.get("copper", 0)}\n\n'
         f'{E_IRON} Железо\n'
         f'├ количество: {inv["iron"]}\n\n'
         f'{E_GOLD_M} Золото\n'
         f'├ количество: {inv["gold"]}\n\n'
-        f'🔩 Сталь\n'
+        f'{E_STEEL} Сталь\n'
         f'├ количество: {inv.get("steel", 0)}\n\n'
-        f'🔮 Аметист\n'
+        f'{E_AMETHYST} Аметист\n'
         f'├ количество: {inv.get("amethyst", 0)}\n\n'
-        f'💠 Самоцвет\n'
+        f'{E_GEM} Самоцвет\n'
         f'├ количество: {inv.get("gem", 0)}\n'
     )
     await send_image_with_text(message, "images/inventory.png", text,
@@ -3217,8 +3262,8 @@ async def _send_components(message, user_id: int):
     """Показать компоненты игрока"""
     comp = get_components(user_id)
     text = (
-        f'🧩 <b>Компоненты:</b>\n\n'
-        f'🧩 Компоненты\n'
+        f'{E_SQ} Компоненты:\n\n'
+        f'{E_SQ} Компоненты\n'
         f'├ Редкость: обычная\n'
         f'├ количество: {comp["common"]}\n\n'
         f'├ Редкость: редкая\n'
@@ -3607,7 +3652,8 @@ async def handle_location(message: types.Message, state: FSMContext):
         await state.set_state(LocationMenu.searching_enemy)
         await message.answer(
             "🔍 <b>Поиск врага...</b>\n\n⏳ Осталось 10 секунд. Подожди — кнопки заблокированы.",
-            reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True)
+            reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True),
+            parse_mode="HTML"
         )
         asyncio.create_task(_run_enemy_search(user_id, message.chat.id, search_time=10, location_id=1))
         return
@@ -3616,7 +3662,8 @@ async def handle_location(message: types.Message, state: FSMContext):
         await state.set_state(LocationMenu.searching_enemy)
         await message.answer(
             f"{E_SKULL} <b>Поиск врага...</b>\n\n⏳ Осталось 30 секунд. Подожди — кнопки заблокированы.",
-            reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True)
+            reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True),
+            parse_mode="HTML"
         )
         asyncio.create_task(_run_enemy_search(user_id, message.chat.id, search_time=30, location_id=2))
         return
@@ -4245,9 +4292,17 @@ def _format_rating_page(leaderboard, page: int) -> str:
     
     start_index = page * 5 + 1
     
-    for i, (nickname, strength, wins, rating_pts) in enumerate(leaderboard):
+    for i, row in enumerate(leaderboard):
+        nickname, strength, wins, rating_pts, status, crystals = row
         index = start_index + i
         safe_nick = html.escape(nickname)
+        safe_status = html.escape(status)
+        # Get status emoji from STATUSES dict
+        status_emoji = '🔸'
+        for s in STATUSES.values():
+            if s['name'] == status:
+                status_emoji = s.get('custom_emoji', s['emoji'])
+                break
         league = get_rating_league(rating_pts)
         
         if index == 1:
@@ -4260,9 +4315,11 @@ def _format_rating_page(leaderboard, page: int) -> str:
             prefix = f"{E_RED_C} {index}. {E_HASHTAG}"
         
         response += (
-            f"{prefix} {safe_nick}:\n"
-            f"{E_SQ}{int(strength)} {E_ATK}\n"
-            f"{E_SQ}{wins} {E_TROPHY}\n"
+            f"{prefix} {E_PROFILE} {safe_nick}:\n"
+            f"├ Статус: {status_emoji} {safe_status}\n\n"
+            f"{int(strength)} {E_ATK}\n"
+            f"{wins} {E_TROPHY}\n"
+            f"{crystals} 💠\n"
             f"├ Лига: {league}\n"
             f"├ Points {rating_pts} {E_STAR}\n\n"
         )
@@ -4342,8 +4399,8 @@ async def handle_rating_menu(message: types.Message, state: FSMContext):
                     f'Уровень {E_CIRCLE} {full_player["player_level"]}{E_STAR}\n'
                     f'{E_SQ}{exp_info["current_exp"]} / {exp_info["needed_exp"]}{E_EXP_DOT}{E_EXP} Опыта\n\n'
                     f'Рейтинговая лига:\n'
-                    f'{E_SQ}{league}\n'
-                    f'{E_SQ}{full_player.get("rating_points", 0)} {E_STAR} Points\n\n'
+                    f'{E_SQ}{full_player.get("rating_points", 0)} {E_STAR} Points\n'
+                    f'{E_SQ}{league}\n\n'
                     f'{E_SQ}{full_player["wins"]} - {E_TROPHY} {E_YELLOW} Победы\n'
                     f'{E_SQ}{int(full_player["strength"])} - {E_ATK} {E_YELLOW} Сила\n'
                     f'{E_SQ}{health} - {E_HP} {E_YELLOW} Здоровье\n\n'
@@ -4398,8 +4455,35 @@ async def add_friend_from_rating(message: types.Message, state: FSMContext):
                 )
             except Exception:
                 pass
-        # Refresh the keyboard to show updated state
-        await send_image_with_text(message, "images/profile.png", "⏳ Заявка отправлена!", reply_markup=get_rating_player_kb(user_id, target_id))
+        # Refresh the profile view with updated keyboard
+        target_player = get_player(target_id)
+        if target_player:
+            health = calculate_player_health(target_player['strength'])
+            exp_info = get_experience_progress(target_player['user_id'])
+            status_emoji = get_player_status_emoji(target_player)
+            league = get_rating_league(target_player.get('rating_points', 0))
+            safe_nick_t = html.escape(target_player["nickname"])
+            safe_status_t = html.escape(target_player["status"])
+            profile_text = (
+                f'{E_PROFILE} Профиль {safe_nick_t}:\n'
+                f'{E_LOCK}{E_HASHTAG} {safe_nick_t}\n\n'
+                f'{status_emoji} {safe_status_t}\n\n'
+                f'Уровень {E_CIRCLE} {target_player["player_level"]}{E_STAR}\n'
+                f'{E_SQ}{exp_info["current_exp"]} / {exp_info["needed_exp"]}{E_EXP_DOT}{E_EXP} Опыта\n\n'
+                f'Рейтинговая лига:\n'
+                f'{E_SQ}{target_player.get("rating_points", 0)} {E_STAR} Points\n'
+                f'{E_SQ}{league}\n\n'
+                f'{E_SQ}{target_player["wins"]} - {E_TROPHY} {E_YELLOW} Победы\n'
+                f'{E_SQ}{int(target_player["strength"])} - {E_ATK} {E_YELLOW} Сила\n'
+                f'{E_SQ}{health} - {E_HP} {E_YELLOW} Здоровье\n\n'
+                f'{E_SQ}{target_player["coins"]} - {E_COINS}{E_GREEN} Монеты  \n'
+                f'{E_SQ}{target_player["crystals"]} - {E_CRYSTALS}{E_GREEN} Кристаллы  \n'
+                f'{E_SQ}{target_player["raid_tickets"]} - {E_TICKET}{E_GREEN} Билеты рейда\n\n'
+                f'{E_SQ}{E_HP} {target_player.get("likes", 0)} лайков профиля\n'
+            )
+            await send_image_with_text(message, "images/profile.png", profile_text, reply_markup=get_rating_player_kb(user_id, target_id))
+        else:
+            await message.answer("✅ Заявка отправлена!", reply_markup=get_rating_player_kb(user_id, target_id))
     elif result == 'already_friends':
         await message.answer("✅ Вы уже друзья!")
     elif result == 'already_pending':
@@ -4413,6 +4497,34 @@ async def friend_status_info(message: types.Message, state: FSMContext):
         await message.answer("✅ Этот игрок уже у вас в друзьях!")
     else:
         await message.answer("⏳ Заявка уже отправлена, ожидайте ответа!")
+
+@dp.message(RatingState.viewing_player, F.text.in_({"❤️ Лайк", "❤️ Лайкнуто"}))
+async def like_from_rating(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    data = await state.get_data()
+    target_id = data.get('viewing_player_id')
+    if not target_id:
+        await message.answer(f"{E_CROSS} Ошибка: игрок не найден.")
+        return
+    if message.text == "❤️ Лайкнуто":
+        await message.answer("❤️ Вы уже ставили лайк этому игроку!", reply_markup=get_rating_player_kb(user_id, target_id))
+        return
+    result = give_like_to_player(user_id, target_id)
+    if result:
+        target = get_player(target_id)
+        if target:
+            safe_nick = html.escape(target['nickname'])
+            try:
+                await bot.send_message(
+                    chat_id=target_id,
+                    text=f"{E_HP} Тебе поставили лайк профиля! Всего лайков: {target.get('likes', 0) + 1}",
+                    parse_mode="HTML"
+                )
+            except Exception:
+                pass
+        await message.answer(f"❤️ Лайк поставлен!", reply_markup=get_rating_player_kb(user_id, target_id))
+    else:
+        await message.answer("❤️ Вы уже ставили лайк этому игроку!", reply_markup=get_rating_player_kb(user_id, target_id))
 
 # ============== FRIENDS MENU ==============
 FRIENDS_PER_PAGE = 5
@@ -4445,11 +4557,17 @@ def get_friend_requests_kb(requests_data: list) -> ReplyKeyboardMarkup:
     kb.append([KeyboardButton(text="⬅️ Назад в друзья")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
-def get_friend_profile_kb(can_invite_raid: bool = False) -> ReplyKeyboardMarkup:
+def get_friend_profile_kb(can_invite_raid: bool = False, viewer_id: int = None, friend_id: int = None) -> ReplyKeyboardMarkup:
     """Клавиатура профиля друга"""
     kb = []
     if can_invite_raid:
         kb.append([KeyboardButton(text="⚔️ Пригласить в рейд")])
+    # Like button — shown only if not already liked
+    if viewer_id and friend_id and viewer_id != friend_id:
+        if not has_liked_player(viewer_id, friend_id):
+            kb.append([KeyboardButton(text="❤️ Лайк")])
+        else:
+            kb.append([KeyboardButton(text="❤️ Лайкнуто")])
     kb.append([KeyboardButton(text="❌ Удалить из друзей")])
     kb.append([KeyboardButton(text="⬅️ Назад в друзья")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
@@ -4508,7 +4626,7 @@ async def _send_friends_list(message, state: FSMContext, user_id: int, page: int
         safe_status = html.escape(friend.get('status', 'Новичок'))
         league = get_rating_league(friend.get('rating_points', 0))
         text += (
-            f'{E_SQ}{idx}. {E_RARITY_ULTRA} {safe_nick}\n'
+            f'{idx}. {E_PROFILE} {safe_nick}\n'
             f'  ├ Сила: {int(friend["strength"])} {E_ATK}\n'
             f'  ├ Уровень: {friend["player_level"]} {E_STAR}\n'
             f'  ├ Статус: {status_emoji} {safe_status}\n'
@@ -4586,8 +4704,8 @@ async def _send_friend_profile(message, friend: dict, viewer_id: int = None):
         f'Уровень {E_CIRCLE} {friend["player_level"]}{E_STAR}\n'
         f'{E_SQ}{exp_info["current_exp"]} / {exp_info["needed_exp"]}{E_EXP_DOT}{E_EXP} Опыта\n\n'
         f'Рейтинговая лига:\n'
-        f'{E_SQ}{league}\n'
-        f'{E_SQ}{friend.get("rating_points", 0)} {E_STAR} Points\n\n'
+        f'{E_SQ}{friend.get("rating_points", 0)} {E_STAR} Points\n'
+        f'{E_SQ}{league}\n\n'
         f'{E_SQ}{friend["wins"]} - {E_TROPHY} {E_YELLOW} Победы\n'
         f'{E_SQ}{int(friend["strength"])} - {E_ATK} {E_YELLOW} Сила\n'
         f'{E_SQ}{health} - {E_HP} {E_YELLOW} Здоровье\n\n'
@@ -4597,7 +4715,7 @@ async def _send_friend_profile(message, friend: dict, viewer_id: int = None):
         f'{E_SQ}{E_HP} {friend.get("likes", 0)} лайков профиля\n'
     )
     await send_image_with_text(message, "images/profile.png", profile_text,
-                               reply_markup=get_friend_profile_kb(can_invite_raid=can_invite))
+                               reply_markup=get_friend_profile_kb(can_invite_raid=can_invite, viewer_id=viewer_id, friend_id=friend['user_id']))
 
 @dp.message(FriendsMenu.viewing_friend_profile)
 async def handle_friend_profile(message: types.Message, state: FSMContext):
@@ -4678,6 +4796,34 @@ async def handle_friend_profile(message: types.Message, state: FSMContext):
             f'{E_CHECK} Приглашение отправлено {html.escape(friend["nickname"])}!\n'
             f'{E_HOURGLASS} Ожидаем ответа...',
         )
+        return
+
+    if text in ("❤️ Лайк", "❤️ Лайкнуто"):
+        data = await state.get_data()
+        friend_id = data.get('viewing_friend_id')
+        if text == "❤️ Лайкнуто":
+            await message.answer("❤️ Вы уже ставили лайк этому игроку!")
+            return
+        if friend_id:
+            result = give_like_to_player(user_id, friend_id)
+            if result:
+                target = get_player(friend_id)
+                if target:
+                    try:
+                        await bot.send_message(
+                            chat_id=friend_id,
+                            text=f"{E_HP} Тебе поставили лайк профиля! Всего лайков: {target.get('likes', 0) + 1}",
+                            parse_mode="HTML"
+                        )
+                    except Exception:
+                        pass
+                await message.answer(f"❤️ Лайк поставлен!")
+                # Refresh profile
+                friend_player = get_player(friend_id)
+                if friend_player:
+                    await _send_friend_profile(message, friend_player, viewer_id=user_id)
+            else:
+                await message.answer("❤️ Вы уже ставили лайк этому игроку!")
         return
 
     # fallback — перерисовать профиль
@@ -6331,6 +6477,7 @@ async def battle_round(message: types.Message, state: FSMContext):
         add_coins_to_player(user_id, reward)
         rating_pts = enemy_info.get('rating_points', 5)
         update_rating_points(user_id, rating_pts)
+        increment_player_pve_wins(user_id)
         player_clan = get_player_clan(user_id)
         if player_clan:
             add_clan_exp(player_clan['clan_id'], 10)
@@ -6424,8 +6571,8 @@ async def open_online(message: types.Message, state: FSMContext):
         f'{E_ONLINE2}{E_SWORD} ОНЛАЙН РЕЖИМ:\n'
         f'{E_SQ}Начните подбор игрока, нажав на кнопку.\n\n'
         f'{E_PROFILE} Характеристики {html.escape(player["nickname"])}:\n\n'
-        f'{E_SQ}{get_rating_league(player.get("rating_points", 0))}\n'
-        f'{E_SQ}{player.get("rating_points", 0)} {E_STAR} Points\n\n'
+        f'{E_SQ}{player.get("rating_points", 0)} {E_STAR} Points\n'
+        f'{E_SQ}{get_rating_league(player.get("rating_points", 0))}\n\n'
         f'{E_SQ}{E_ATK} {int(buffed_strength)} Сила {E_YELLOW}\n'
         f'{E_SQ}{E_HP} {health} Здоровье {E_YELLOW}\n'
         f'{E_SQ}{E_DMG} {damage} Урон {E_YELLOW}\n'
