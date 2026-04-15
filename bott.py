@@ -195,6 +195,7 @@ def init_database():
         'ALTER TABLE players ADD COLUMN pve_wins INTEGER DEFAULT 0',
         'ALTER TABLE players ADD COLUMN has_set_clan_image INTEGER DEFAULT 0',
         'ALTER TABLE players ADD COLUMN is_spammer INTEGER DEFAULT 0',
+        'ALTER TABLE players ADD COLUMN likes INTEGER DEFAULT 0',
     ]:
         try:
             cursor.execute(col_sql)
@@ -450,7 +451,8 @@ def get_player(user_id: int):
                COALESCE(experience, 0), COALESCE(player_level, 1), COALESCE(status, 'Новичок'),
                COALESCE(online_matches, 0),
                COALESCE(deaths, 0), COALESCE(dodges, 0), COALESCE(pve_wins, 0),
-               COALESCE(has_set_clan_image, 0), COALESCE(is_spammer, 0)
+               COALESCE(has_set_clan_image, 0), COALESCE(is_spammer, 0),
+               COALESCE(likes, 0)
         FROM players
         WHERE user_id = ?
     ''', (user_id,))
@@ -483,6 +485,7 @@ def get_player(user_id: int):
             "pve_wins": result[20],
             "has_set_clan_image": result[21],
             "is_spammer": result[22],
+            "likes": result[23],
         }
     return None
 
@@ -1629,6 +1632,46 @@ def update_rating_points(user_id: int, points: int):
     ''', (points, user_id))
     conn.commit()
     conn.close()
+
+
+def get_rating_league(rating_points: int) -> str:
+    """Получить название лиги по очкам рейтинга"""
+    if rating_points < 100:
+        return "🎗 Новичковая лига"
+    elif rating_points < 200:
+        return "🌟 Серебряная лига"
+    elif rating_points < 350:
+        return "🌟 Любительская лига"
+    elif rating_points < 500:
+        return "📕 Продвинутая лига"
+    elif rating_points < 800:
+        return f"{E_GIFT} Избранная лига"
+    elif rating_points < 1150:
+        return f"{E_GIFT} Профессиональная лига"
+    elif rating_points < 1500:
+        return f"{E_GIFT} Киберспортивная лига"
+    else:
+        return f"{E_GIFT} Мировая лига"
+
+
+def get_pvp_league_points(rating_points: int) -> tuple:
+    """Вернуть (очки за победу, очки за поражение) для текущей лиги"""
+    if rating_points < 100:
+        return (12, 3)
+    elif rating_points < 200:
+        return (10, 4)
+    elif rating_points < 350:
+        return (10, 4)
+    elif rating_points < 500:
+        return (9, 5)
+    elif rating_points < 800:
+        return (8, 6)
+    elif rating_points < 1150:
+        return (8, 7)
+    elif rating_points < 1500:
+        return (7, 9)
+    else:
+        return (5, 11)
 
 def get_player_clan(user_id: int):
     """Получить клан игрока (None если нет клана)"""
@@ -2785,21 +2828,26 @@ async def _send_profile(message, player: dict):
     damage = calculate_damage(display_strength)
     exp_info = get_experience_progress(player['user_id'])
     status_emoji = get_player_status_emoji(player)
+    league = get_rating_league(player.get('rating_points', 0))
 
     safe_nick = html.escape(player["nickname"])
     safe_status = html.escape(player["status"])
     response = (
-        f'{E_PROFILE} Профиль игрока:\n'
+        f'{E_PROFILE} Профиль {safe_nick}:\n'
         f'{E_LOCK}{E_HASHTAG} {safe_nick}\n\n'
         f'{status_emoji} {safe_status}\n\n'
         f'Уровень {E_CIRCLE} {player["player_level"]}{E_STAR}\n'
-        f'{E_SQ}{exp_info["current_exp"]} / {exp_info["needed_exp"]}{E_EXP_DOT}{E_EXP} Опыта\n\n\n'
+        f'{E_SQ}{exp_info["current_exp"]} / {exp_info["needed_exp"]}{E_EXP_DOT}{E_EXP} Опыта\n\n'
+        f'Рейтинговая лига:\n'
+        f'{E_SQ}{league}\n'
+        f'{E_SQ}{player.get("rating_points", 0)} {E_STAR} Points\n\n'
         f'{E_SQ}{player["wins"]} - {E_TROPHY} {E_YELLOW} Победы\n'
         f'{E_SQ}{int(display_strength)} - {E_ATK} {E_YELLOW} Сила\n'
         f'{E_SQ}{health} - {E_HP} {E_YELLOW} Здоровье\n\n'
         f'{E_SQ}{player["coins"]} - {E_COINS}{E_GREEN} Монеты  \n'
         f'{E_SQ}{player["crystals"]} - {E_CRYSTALS}{E_GREEN} Кристаллы  \n'
-        f'{E_SQ}{player["raid_tickets"]} - {E_TICKET}{E_GREEN} Билеты рейда\n'
+        f'{E_SQ}{player["raid_tickets"]} - {E_TICKET}{E_GREEN} Билеты рейда\n\n'
+        f'{E_SQ}{E_HP} {player.get("likes", 0)} лайков профиля\n'
     )
     await send_image_with_text(message, "images/profile.png", response, reply_markup=get_profile_kb())
 
@@ -3701,6 +3749,7 @@ def _format_rating_page(leaderboard, page: int) -> str:
     for i, (nickname, strength, wins, rating_pts) in enumerate(leaderboard):
         index = start_index + i
         safe_nick = html.escape(nickname)
+        league = get_rating_league(rating_pts)
         
         if index == 1:
             prefix = f"{E_STAR} 1. {E_RARITY_ULTRA}"
@@ -3715,7 +3764,8 @@ def _format_rating_page(leaderboard, page: int) -> str:
             f"{prefix} {safe_nick}:\n"
             f"{E_SQ}{int(strength)} {E_ATK}\n"
             f"{E_SQ}{wins} {E_TROPHY}\n"
-            f"{E_SQ}{rating_pts} 💠\n\n"
+            f"├ Лига: {league}\n"
+            f"├ Points {rating_pts} {E_STAR}\n\n"
         )
     
     return response
@@ -3785,18 +3835,23 @@ async def handle_rating_menu(message: types.Message, state: FSMContext):
                 status_emoji = get_player_status_emoji(full_player)
                 safe_nick = html.escape(full_player["nickname"])
                 safe_status = html.escape(full_player["status"])
+                league = get_rating_league(full_player.get('rating_points', 0))
                 profile_text = (
-                    f'{E_PROFILE} Профиль игрока {safe_nick}:\n'
+                    f'{E_PROFILE} Профиль {safe_nick}:\n'
                     f'{E_LOCK}{E_HASHTAG} {safe_nick}\n\n'
                     f'{status_emoji} {safe_status}\n\n'
                     f'Уровень {E_CIRCLE} {full_player["player_level"]}{E_STAR}\n'
-                    f'{E_SQ}{exp_info["current_exp"]} / {exp_info["needed_exp"]}{E_EXP_DOT}{E_EXP} Опыта\n\n\n'
+                    f'{E_SQ}{exp_info["current_exp"]} / {exp_info["needed_exp"]}{E_EXP_DOT}{E_EXP} Опыта\n\n'
+                    f'Рейтинговая лига:\n'
+                    f'{E_SQ}{league}\n'
+                    f'{E_SQ}{full_player.get("rating_points", 0)} {E_STAR} Points\n\n'
                     f'{E_SQ}{full_player["wins"]} - {E_TROPHY} {E_YELLOW} Победы\n'
                     f'{E_SQ}{int(full_player["strength"])} - {E_ATK} {E_YELLOW} Сила\n'
                     f'{E_SQ}{health} - {E_HP} {E_YELLOW} Здоровье\n\n'
                     f'{E_SQ}{full_player["coins"]} - {E_COINS}{E_GREEN} Монеты  \n'
                     f'{E_SQ}{full_player["crystals"]} - {E_CRYSTALS}{E_GREEN} Кристаллы  \n'
-                    f'{E_SQ}{full_player["raid_tickets"]} - {E_TICKET}{E_GREEN} Билеты рейда\n'
+                    f'{E_SQ}{full_player["raid_tickets"]} - {E_TICKET}{E_GREEN} Билеты рейда\n\n'
+                    f'{E_SQ}{E_HP} {full_player.get("likes", 0)} лайков профиля\n'
                 )
                 viewer_id = message.from_user.id
                 await state.set_state(RatingState.viewing_player)
@@ -3952,11 +4007,13 @@ async def _send_friends_list(message, state: FSMContext, user_id: int, page: int
         safe_nick = html.escape(friend['nickname'])
         status_emoji = get_player_status_emoji(friend)
         safe_status = html.escape(friend.get('status', 'Новичок'))
+        league = get_rating_league(friend.get('rating_points', 0))
         text += (
             f'{E_SQ}{idx}. {E_RARITY_ULTRA} {safe_nick}\n'
             f'  ├ Сила: {int(friend["strength"])} {E_ATK}\n'
             f'  ├ Уровень: {friend["player_level"]} {E_STAR}\n'
-            f'  ├ Статус: {status_emoji} {safe_status}\n\n'
+            f'  ├ Статус: {status_emoji} {safe_status}\n'
+            f'  ├ Лига: {league}\n\n'
         )
 
     await message.answer(text, reply_markup=get_friends_kb(friends_data, page, total_pages, has_requests), parse_mode="HTML")
@@ -4014,6 +4071,7 @@ async def _send_friend_profile(message, friend: dict, viewer_id: int = None):
     status_emoji = get_player_status_emoji(friend)
     safe_nick = html.escape(friend["nickname"])
     safe_status = html.escape(friend["status"])
+    league = get_rating_league(friend.get('rating_points', 0))
     # Кнопка "пригласить в рейд": только если viewer не занят co-op парой и нет уже
     # активного приглашения именно этому другу
     can_invite = (
@@ -4023,17 +4081,21 @@ async def _send_friend_profile(message, friend: dict, viewer_id: int = None):
         and friend['user_id'] not in coop_raid_invites
     )
     profile_text = (
-        f'{E_PROFILE} Профиль друга {safe_nick}:\n'
+        f'{E_PROFILE} Профиль {safe_nick}:\n'
         f'{E_LOCK}{E_HASHTAG} {safe_nick}\n\n'
         f'{status_emoji} {safe_status}\n\n'
         f'Уровень {E_CIRCLE} {friend["player_level"]}{E_STAR}\n'
-        f'{E_SQ}{exp_info["current_exp"]} / {exp_info["needed_exp"]}{E_EXP_DOT}{E_EXP} Опыта\n\n\n'
+        f'{E_SQ}{exp_info["current_exp"]} / {exp_info["needed_exp"]}{E_EXP_DOT}{E_EXP} Опыта\n\n'
+        f'Рейтинговая лига:\n'
+        f'{E_SQ}{league}\n'
+        f'{E_SQ}{friend.get("rating_points", 0)} {E_STAR} Points\n\n'
         f'{E_SQ}{friend["wins"]} - {E_TROPHY} {E_YELLOW} Победы\n'
         f'{E_SQ}{int(friend["strength"])} - {E_ATK} {E_YELLOW} Сила\n'
         f'{E_SQ}{health} - {E_HP} {E_YELLOW} Здоровье\n\n'
         f'{E_SQ}{friend["coins"]} - {E_COINS}{E_GREEN} Монеты  \n'
         f'{E_SQ}{friend["crystals"]} - {E_CRYSTALS}{E_GREEN} Кристаллы  \n'
-        f'{E_SQ}{friend["raid_tickets"]} - {E_TICKET}{E_GREEN} Билеты рейда\n'
+        f'{E_SQ}{friend["raid_tickets"]} - {E_TICKET}{E_GREEN} Билеты рейда\n\n'
+        f'{E_SQ}{E_HP} {friend.get("likes", 0)} лайков профиля\n'
     )
     await send_image_with_text(message, "images/profile.png", profile_text,
                                reply_markup=get_friend_profile_kb(can_invite_raid=can_invite))
@@ -4908,7 +4970,6 @@ async def _coop_pass_turn(
 
     enemy_info = RAID_FLOORS[floor_id]
     partner_log = (
-        f"{E_SWORD} <b>CO-OP РЕЙД — Этаж {floor_id}/10</b>\n\n"
         f"{E_DOT} Партнёр ходил:\n{log}\n\n"
         + _fmt_coop_stats(
             partner_nickname, par_hp_cur, par_dmg, par_mana,
@@ -4963,7 +5024,7 @@ async def _coop_floor_victory(
         f"{E_GIFT} Каждый получил:\n"
         f"{E_PLUS} {reward_coins} {E_COINS} монет\n"
         f"{E_PLUS} 5 {E_STAR} рейтинга\n"
-        f"{E_PLUS} 1 победа\n"
+        f"{E_PLUS} 15 {E_CLAN_BOTTLE} опыта клана\n"
     )
 
     if floor_id == 10:
@@ -5862,13 +5923,15 @@ async def open_online(message: types.Message, state: FSMContext):
 
     online_text = (
         f'{E_ONLINE2}{E_SWORD} ОНЛАЙН РЕЖИМ:\n'
-        f'{E_SQ}Начните подбор игрока, нажав на кнопку.\n'
-        f'{E_SQ}{E_WARN} Возможно долгий подбор, не выходите из поиска если хотите найти игрока.\n\n'
+        f'{E_SQ}Начните подбор игрока, нажав на кнопку.\n\n'
         f'{E_PROFILE} Характеристики {html.escape(player["nickname"])}:\n\n'
+        f'{E_SQ}{get_rating_league(player.get("rating_points", 0))}\n'
+        f'{E_SQ}{player.get("rating_points", 0)} {E_STAR} Points\n\n'
         f'{E_SQ}{E_ATK} {int(buffed_strength)} Сила {E_YELLOW}\n'
         f'{E_SQ}{E_HP} {health} Здоровье {E_YELLOW}\n'
         f'{E_SQ}{E_DMG} {damage} Урон {E_YELLOW}\n'
-        f'{E_SQ}{E_MANA} {mana} / 100 {E_BOOK_MANA}{E_YELLOW}\n'
+        f'{E_SQ}{E_MANA} {mana} / 100 {E_BOOK_MANA}{E_YELLOW}\n\n'
+        f'{E_WARN} внимание! любой абуз рейтинга с помощью твинков и тд, карается баном навсегда по айди профиля!\n'
     )
     await send_image_with_text(message, "images/online.png", online_text, reply_markup=get_online_menu_kb())
     await state.set_state(OnlineState.viewing_menu)
@@ -5929,22 +5992,20 @@ async def start_online_search(message: types.Message, state: FSMContext):
         pvp_pairs[opponent_id] = user_id
 
         match_text_me = (
-            '✅ <b>СОПЕРНИК НАЙДЕН!</b>\n\n'
-            'Ваш соперник:\n'
-            f'{E_NICK} {html.escape(opponent_data["nickname"])}\n'
-            f'{E_HP} {opponent_data["health"]}\n'
-            f'{E_DMG} {opponent_data["damage"]}\n'
-            f'{int(opponent_data["strength"])}{E_ATK} | {opponent_data["wins"]}{E_TROPHY}\n\n'
-            'Подтвердите участие!'
+            f'{E_SWORD} <b>СОПЕРНИК НАЙДЕН!</b>\n\n'
+            f'{E_PROFILE} Характеристики {html.escape(opponent_data["nickname"])}:\n\n'
+            f'{E_SQ}{E_ATK} {int(opponent_data["strength"])} Сила {E_YELLOW}\n'
+            f'{E_SQ}{E_HP} {opponent_data["health"]} Здоровье {E_YELLOW}\n'
+            f'{E_SQ}{E_DMG} {opponent_data["damage"]} Урон {E_YELLOW}\n\n'
+            f'{E_LOCK} примите игру, чтобы начать битву'
         )
         match_text_opp = (
-            '✅ <b>СОПЕРНИК НАЙДЕН!</b>\n\n'
-            'Ваш соперник:\n'
-            f'{E_NICK} {html.escape(my_data["nickname"])}\n'
-            f'{E_HP} {my_data["health"]}\n'
-            f'{E_DMG} {my_data["damage"]}\n'
-            f'{int(my_data["strength"])}{E_ATK} | {my_data["wins"]}{E_TROPHY}\n\n'
-            'Подтвердите участие!'
+            f'{E_SWORD} <b>СОПЕРНИК НАЙДЕН!</b>\n\n'
+            f'{E_PROFILE} Характеристики {html.escape(my_data["nickname"])}:\n\n'
+            f'{E_SQ}{E_ATK} {int(my_data["strength"])} Сила {E_YELLOW}\n'
+            f'{E_SQ}{E_HP} {my_data["health"]} Здоровье {E_YELLOW}\n'
+            f'{E_SQ}{E_DMG} {my_data["damage"]} Урон {E_YELLOW}\n\n'
+            f'{E_LOCK} примите игру, чтобы начать битву'
         )
 
         # Сохраняем данные для подтверждения
@@ -6115,6 +6176,9 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
         await message.answer("⏳ Подожди перед следующим ходом!")
         return
 
+    my_player = get_player(user_id)
+    my_nick = html.escape(my_player['nickname']) if my_player else 'Игрок'
+
     my_health = data['pvp_player_health']
     my_damage = data['pvp_player_damage']
     enemy_health = data['pvp_enemy_health']
@@ -6211,11 +6275,17 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
 
     if new_enemy_health <= 0:
         update_player_wins(user_id)
-        update_rating_points(user_id, 7)
+        my_rating = my_player.get('rating_points', 0) if my_player else 0
+        win_pts, _ = get_pvp_league_points(my_rating)
+        update_rating_points(user_id, win_pts)
         add_online_match(user_id)
         if opponent_id:
             add_online_match(opponent_id)
             increment_player_deaths(opponent_id)
+            opp_p = get_player(opponent_id)
+            if opp_p:
+                _, loss_pts = get_pvp_league_points(opp_p['rating_points'])
+                update_rating_points(opponent_id, -loss_pts)
         winner_clan = get_player_clan(user_id)
         if winner_clan:
             add_clan_exp(winner_clan['clan_id'], 2)
@@ -6224,7 +6294,7 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
             f"{E_TROPHY}{E_GREEN} ВЫ ПОБЕДИЛИ!\n\n"
             f"{E_GIFT} Получено:\n"
             f"{E_PLUS} +1 победа\n"
-            f"{E_PLUS} +7 💠 рейтинга\n"
+            f"{E_PLUS} +{win_pts} 💠 рейтинга\n"
         )
         await message.answer(battle_log, reply_markup=get_end_battle_kb())
         pvp_pairs.pop(user_id, None)
@@ -6235,11 +6305,15 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
             opp_state = dp.fsm.resolve_context(bot, opponent_id, opponent_id)
             await opp_state.clear()
             try:
+                if dealt > 0:
+                    dmg_line = f'{E_DMG}{E_HEART_B} Урон тебе: {dealt}\n\n'
+                else:
+                    dmg_line = f'{E_CROSS}{E_ATK} {my_nick} промахнулся!\n\n'
                 opp_loss_text = (
                     f'⚔️ <b>PvP БОЙ</b> ⚔️\n\n'
-                    f'Соперник атакует! {E_ARROW_DN}\n'
-                    f'{E_DMG}{E_HEART_B} Урон тебе: {dealt}\n\n'
-                    f'{E_BOOK_LOSS}{E_RED_C} ВЫ ПРОИГРАЛИ!'
+                    f'{E_SKULL} {my_nick} атакует! {E_ARROW_DN}\n'
+                    + dmg_line
+                    + f'{E_BOOK_LOSS}{E_RED_C} ВЫ ПРОИГРАЛИ!'
                 )
                 await bot.send_message(
                     chat_id=opponent_id,
@@ -6252,9 +6326,11 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
         return
 
     # Передаём ход сопернику
+    opp_player = get_player(opponent_id) if opponent_id else None
+    opp_nick = html.escape(opp_player['nickname']) if opp_player else 'Соперник'
     battle_log += (
         f'{E_CROWN} Ты: {E_HP} {my_health} | {E_MANA} {new_my_mana}/100\n'
-        f'{E_SKULL} Соперник: {E_ESWORD} {new_enemy_health}\n\n'
+        f'{E_SKULL} {opp_nick}: {E_ESWORD} {new_enemy_health}\n\n'
         "⏳ Ход соперника..."
     )
     await message.answer(battle_log, reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
@@ -6283,10 +6359,14 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
             pvp_opp_blind_turns=new_opp_blind,
         )
         try:
+            if dealt > 0:
+                opp_dmg_line = f'{E_DMG}{E_HEART_B} Урон тебе: {dealt}\n\n'
+            else:
+                opp_dmg_line = f'{E_CROSS}{E_ATK} {my_nick} промахнулся!\n\n'
             opp_msg = (
                 f'⚔️ <b>PvP БОЙ</b> ⚔️\n\n'
-                f'Соперник атакует! {E_ARROW_DN}\n'
-                f'{E_DMG}{E_HEART_B} Урон тебе: {dealt}\n\n'
+                f'{E_SKULL} {my_nick} атакует! {E_ARROW_DN}\n'
+                + opp_dmg_line
             )
             if opp_should_skip:
                 opp_msg += "😵 Ты оглушён и пропустишь следующий ход!\n"
@@ -6294,7 +6374,7 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
                 opp_msg += f"🔦 Ты ослеплён на {opp_blind_add} хода!\n"
             opp_msg += (
                 f'\n{E_CROWN} Ты: {E_HP} {new_opp_player_health} | {E_MANA} {opp_mana}/100\n'
-                f'{E_SKULL} Соперник: {E_ESWORD} {my_health}\n\n'
+                f'{E_SKULL} {my_nick}: {E_ESWORD} {my_health}\n\n'
             )
             # Bug fix: skip opponent turn immediately when opp_skip_now is True (handles both fresh stun and stored stun)
             if opp_skip_now:
@@ -6310,7 +6390,7 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
                 await message.answer(
                     f'😵 Соперник был оглушён — его ход пропущен!\n\n'
                     f'{E_CROWN} Ты: {E_HP} {my_health} | {E_MANA} {new_my_mana}/100\n'
-                    f'{E_SKULL} Соперник: {E_ESWORD} {new_enemy_health}\n\n'
+                    f'{E_SKULL} {opp_nick}: {E_ESWORD} {new_enemy_health}\n\n'
                     f'{E_SWORD} Снова твой ход!',
                     reply_markup=get_battle_action_kb(user_id, new_my_mana)
                 )
