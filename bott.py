@@ -116,6 +116,16 @@ E_RARITY_LEGENDARY = '<tg-emoji emoji-id="5395487888903280719">🌟</tg-emoji>' 
 E_RARITY_MYTHIC    = '<tg-emoji emoji-id="5395620513198410698">🌟</tg-emoji>'  # мифический
 E_RARITY_ULTRA     = '<tg-emoji emoji-id="5936138290519349485">🎁</tg-emoji>'  # ультра
 
+# New material/chest emoji
+E_COPPER   = '<tg-emoji emoji-id="5215420556089776398">🪙</tg-emoji>'   # медь
+E_STEEL    = '<tg-emoji emoji-id="6280718212392816659">🔩</tg-emoji>'   # сталь
+E_AMETHYST = '<tg-emoji emoji-id="5429321386403327800">🔮</tg-emoji>'   # аметист
+E_GEM      = '<tg-emoji emoji-id="5442864569338838830">💠</tg-emoji>'   # самоцвет
+E_CHEST_W  = '<tg-emoji emoji-id="5854908544712707500">📦</tg-emoji>'   # деревянный сундук
+E_CHEST_S  = '<tg-emoji emoji-id="5854908544712707500">🔩</tg-emoji>'   # стальной сундук
+E_CHEST_G  = '<tg-emoji emoji-id="5854908544712707500">🌟</tg-emoji>'   # золотой сундук
+E_CHEST_D  = '<tg-emoji emoji-id="5854908544712707500">👑</tg-emoji>'   # всевышний сундук
+
 RARITY_EMOJIS = {
     "common":    E_RARITY_COMMON,
     "uncommon":  E_RARITY_UNCOMMON,
@@ -195,6 +205,7 @@ def init_database():
         'ALTER TABLE players ADD COLUMN pve_wins INTEGER DEFAULT 0',
         'ALTER TABLE players ADD COLUMN has_set_clan_image INTEGER DEFAULT 0',
         'ALTER TABLE players ADD COLUMN is_spammer INTEGER DEFAULT 0',
+        'ALTER TABLE players ADD COLUMN likes INTEGER DEFAULT 0',
     ]:
         try:
             cursor.execute(col_sql)
@@ -330,6 +341,51 @@ def init_database():
             FOREIGN KEY (user_id) REFERENCES players(user_id)
         )
     ''')
+    # Миграция: добавить новые колонки материалов если их нет
+    for inv_col in [
+        'ALTER TABLE player_inventory ADD COLUMN copper INTEGER DEFAULT 0',
+        'ALTER TABLE player_inventory ADD COLUMN steel INTEGER DEFAULT 0',
+        'ALTER TABLE player_inventory ADD COLUMN amethyst INTEGER DEFAULT 0',
+        'ALTER TABLE player_inventory ADD COLUMN gem INTEGER DEFAULT 0',
+        'ALTER TABLE player_inventory ADD COLUMN chest_wood INTEGER DEFAULT 0',
+        'ALTER TABLE player_inventory ADD COLUMN chest_steel INTEGER DEFAULT 0',
+        'ALTER TABLE player_inventory ADD COLUMN chest_gold INTEGER DEFAULT 0',
+        'ALTER TABLE player_inventory ADD COLUMN chest_divine INTEGER DEFAULT 0',
+    ]:
+        try:
+            cursor.execute(inv_col)
+            conn.commit()
+        except sqlite3.OperationalError as e:
+            if "duplicate column name" not in str(e).lower():
+                logging.warning(f"Inventory migration warning: {e}")
+
+    # Таблица компонентов игрока
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS player_components (
+            user_id INTEGER PRIMARY KEY,
+            common INTEGER DEFAULT 0,
+            rare INTEGER DEFAULT 0,
+            epic INTEGER DEFAULT 0,
+            legendary INTEGER DEFAULT 0,
+            mythic INTEGER DEFAULT 0,
+            FOREIGN KEY (user_id) REFERENCES players(user_id)
+        )
+    ''')
+    cursor.execute('''
+        INSERT OR IGNORE INTO player_components (user_id)
+        SELECT user_id FROM players
+    ''')
+
+    # Таблица разблокированных сундучных статусов
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS player_chest_statuses (
+            user_id INTEGER NOT NULL,
+            status_name TEXT NOT NULL,
+            unlocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, status_name),
+            FOREIGN KEY (user_id) REFERENCES players(user_id)
+        )
+    ''')
 
     # Таблица активных активностей (локации)
     cursor.execute('''
@@ -450,7 +506,8 @@ def get_player(user_id: int):
                COALESCE(experience, 0), COALESCE(player_level, 1), COALESCE(status, 'Новичок'),
                COALESCE(online_matches, 0),
                COALESCE(deaths, 0), COALESCE(dodges, 0), COALESCE(pve_wins, 0),
-               COALESCE(has_set_clan_image, 0), COALESCE(is_spammer, 0)
+               COALESCE(has_set_clan_image, 0), COALESCE(is_spammer, 0),
+               COALESCE(likes, 0)
         FROM players
         WHERE user_id = ?
     ''', (user_id,))
@@ -483,6 +540,7 @@ def get_player(user_id: int):
             "pve_wins": result[20],
             "has_set_clan_image": result[21],
             "is_spammer": result[22],
+            "likes": result[23],
         }
     return None
 
@@ -724,6 +782,101 @@ STATUSES = {
     14: {"name": "Пример для подражания", "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="6021486768228940485">🎁</tg-emoji>', "required_level": 1, "type": "unlock_strength", "required_strength": 2000},
     15: {"name": "Какашка",      "emoji": "💩", "custom_emoji": '<tg-emoji emoji-id="6005662304824203821">💩</tg-emoji>', "required_level": 1, "type": "unlock_spam"},
     16: {"name": "багоюзер 777", "emoji": "💎", "custom_emoji": '<tg-emoji emoji-id="5354902509540370798">💎</tg-emoji>', "required_level": 1, "type": "unlock_bagouser"},
+    # Page 4 - chest statuses
+    17: {"name": "Руинер",                "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="5886484710481205789">🎁</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
+    18: {"name": "Хакер",                 "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="6021412890496473421">🎁</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
+    19: {"name": "Щедрый",                "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="6001349144046737619">🎁</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
+    20: {"name": "Шахтер",                "emoji": "⛏️", "custom_emoji": '<tg-emoji emoji-id="5456456455634370613">⛏️</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
+    21: {"name": "Очаровашка",            "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="5938394329465756346">🎁</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
+    22: {"name": "Доверие",               "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="6021462012037437193">🎁</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
+    23: {"name": "На богатом",            "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="6021486768228940485">🎁</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
+    24: {"name": "Лучший в своем деле",   "emoji": "🏆", "custom_emoji": '<tg-emoji emoji-id="5312315739842026755">🏆</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
+    25: {"name": "Дизайнер",              "emoji": "🎨", "custom_emoji": '<tg-emoji emoji-id="5222021318378948590">🎨</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
+}
+
+# ============== CHEST CONFIG ==============
+# Формат drop-записи:
+#   ("material", amount)                           — гарантированный дроп
+#   ("material", (min, max))                       — гарантированный дроп в диапазоне
+#   ("material", amount, chance)                   — дроп с шансом (0.0–1.0)
+#   ("material", (min, max), chance)               — диапазон с шансом
+#   ("status", "Название", chance)                 — разблокировать статус с шансом
+#   ("experience", amount)                         — опыт профиля
+#   ("experience", (min, max))                     — опыт в диапазоне
+#   ("coins", (min, max))                          — монеты в диапазоне
+
+CHEST_CONFIG = {
+    "chest_wood": {
+        "name": "Деревянный сундук",
+        "emoji": "📦",
+        "drop_label": "низкий",
+        "drops": [
+            ("coins",      (30, 100)),
+            ("experience", 5),
+            ("wood",       (0, 10)),
+            ("food",       (4, 12)),
+            ("crystals",   1,    0.05),
+            ("iron",       2,    0.10),
+        ],
+    },
+    "chest_steel": {
+        "name": "Стальной сундук",
+        "emoji": "🔩",
+        "drop_label": "средний",
+        "drops": [
+            ("coins",      (50, 180)),
+            ("experience", 10),
+            ("wood",       (7, 13)),
+            ("food",       (10, 25)),
+            ("crystals",   2,    0.05),
+            ("iron",       (4, 10), 0.10),
+            ("iron",       4),
+            ("status",     "Руинер", 0.08),
+            ("gold",       1,    0.05),
+        ],
+    },
+    "chest_gold": {
+        "name": "Золотой сундук",
+        "emoji": "🌟",
+        "drop_label": "высокий",
+        "drops": [
+            ("coins",      (150, 600)),
+            ("experience", (35, 50)),
+            ("wood",       (20, 75)),
+            ("food",       (50, 115)),
+            ("crystals",   (1, 3)),
+            ("crystals",   10,   0.05),
+            ("iron",       (15, 25), 0.10),
+            ("iron",       12),
+            ("status",     "Хакер",      0.02),
+            ("status",     "Щедрый",     0.05),
+            ("status",     "Шахтер",     0.10),
+            ("status",     "Очаровашка", 0.05),
+            ("gold",       3),
+            ("gold",       (6, 10), 0.07),
+        ],
+    },
+    "chest_divine": {
+        "name": "Всевышний сундук",
+        "emoji": "👑",
+        "drop_label": "очень высокий",
+        "drops": [
+            ("coins",      (1150, 5000)),
+            ("experience", (100, 400)),
+            ("wood",       (200, 450)),
+            ("food",       (700, 1200)),
+            ("crystals",   35),
+            ("crystals",   100,  0.10),
+            ("iron",       200,  0.10),
+            ("iron",       (80, 150)),
+            ("status",     "Доверие",             0.02),
+            ("status",     "На богатом",          0.05),
+            ("status",     "Лучший в своем деле", 0.07),
+            ("status",     "Дизайнер",            0.08),
+            ("gold",       (15, 50)),
+            ("gold",       (30, 50), 0.07),
+        ],
+    },
 }
 
 def get_player_status_emoji(player: dict) -> str:
@@ -783,6 +936,9 @@ def get_available_statuses(user_id: int) -> dict:
                 is_available = True
         elif status_info["type"] == "unlock_bagouser":
             if player.get('user_id') == BAGOUSER_ID:
+                is_available = True
+        elif status_info["type"] == "unlock_chest":
+            if player.get('_chest_unlocked_' + status_info.get('name', ''), False):
                 is_available = True
         if is_available:
             available[status_id] = status_info
@@ -946,17 +1102,33 @@ def get_inventory(user_id: int) -> dict:
     """Получить инвентарь игрока"""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute('SELECT food, wood, stone, iron, gold FROM player_inventory WHERE user_id = ?', (user_id,))
+    cursor.execute(
+        'SELECT food, wood, stone, iron, gold, '
+        'COALESCE(copper,0), COALESCE(steel,0), COALESCE(amethyst,0), COALESCE(gem,0), '
+        'COALESCE(chest_wood,0), COALESCE(chest_steel,0), COALESCE(chest_gold,0), COALESCE(chest_divine,0) '
+        'FROM player_inventory WHERE user_id = ?', (user_id,))
     row = cursor.fetchone()
     conn.close()
     if row:
-        return {'food': row[0], 'wood': row[1], 'stone': row[2], 'iron': row[3], 'gold': row[4]}
-    return {'food': 0, 'wood': 0, 'stone': 0, 'iron': 0, 'gold': 0}
+        return {
+            'food': row[0], 'wood': row[1], 'stone': row[2], 'iron': row[3], 'gold': row[4],
+            'copper': row[5], 'steel': row[6], 'amethyst': row[7], 'gem': row[8],
+            'chest_wood': row[9], 'chest_steel': row[10], 'chest_gold': row[11], 'chest_divine': row[12],
+        }
+    return {'food': 0, 'wood': 0, 'stone': 0, 'iron': 0, 'gold': 0,
+            'copper': 0, 'steel': 0, 'amethyst': 0, 'gem': 0,
+            'chest_wood': 0, 'chest_steel': 0, 'chest_gold': 0, 'chest_divine': 0}
+
+# Allowed inventory material column names (validated before use in SQL)
+ALLOWED_INVENTORY_MATERIALS = frozenset({
+    'food', 'wood', 'stone', 'iron', 'gold',
+    'copper', 'steel', 'amethyst', 'gem',
+    'chest_wood', 'chest_steel', 'chest_gold', 'chest_divine',
+})
 
 def add_inventory_material(user_id: int, material: str, amount: int):
     """Добавить материал в инвентарь"""
-    allowed = {'food', 'wood', 'stone', 'iron', 'gold'}
-    if material not in allowed:
+    if material not in ALLOWED_INVENTORY_MATERIALS:
         return
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -986,8 +1158,7 @@ def add_admin_materials_to_player(user_id: int, amount: int):
 
 def remove_inventory_material(user_id: int, material: str, amount: int) -> bool:
     """Снять материал из инвентаря. Возвращает True если успешно."""
-    allowed = {'food', 'wood', 'stone', 'iron', 'gold'}
-    if material not in allowed:
+    if material not in ALLOWED_INVENTORY_MATERIALS:
         return False
     inv = get_inventory(user_id)
     if inv.get(material, 0) < amount:
@@ -1001,6 +1172,70 @@ def remove_inventory_material(user_id: int, material: str, amount: int) -> bool:
     conn.commit()
     conn.close()
     return True
+
+
+def get_components(user_id: int) -> dict:
+    """Получить компоненты игрока"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(
+        'SELECT COALESCE(common,0), COALESCE(rare,0), COALESCE(epic,0), '
+        'COALESCE(legendary,0), COALESCE(mythic,0) '
+        'FROM player_components WHERE user_id = ?', (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return {'common': row[0], 'rare': row[1], 'epic': row[2], 'legendary': row[3], 'mythic': row[4]}
+    return {'common': 0, 'rare': 0, 'epic': 0, 'legendary': 0, 'mythic': 0}
+
+def add_component(user_id: int, rarity: str, amount: int = 1):
+    """Добавить компонент нужной редкости"""
+    allowed = {'common', 'rare', 'epic', 'legendary', 'mythic'}
+    if rarity not in allowed:
+        return
+    # Map rarity to column index to avoid f-string SQL
+    col_map = {'common': 'common', 'rare': 'rare', 'epic': 'epic', 'legendary': 'legendary', 'mythic': 'mythic'}
+    col = col_map[rarity]
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('INSERT OR IGNORE INTO player_components (user_id) VALUES (?)', (user_id,))
+    # Column name is validated against a known-safe set above
+    cursor.execute(f'UPDATE player_components SET {col} = COALESCE({col}, 0) + ? WHERE user_id = ?',
+                   (amount, user_id))
+    conn.commit()
+    conn.close()
+
+
+def get_unlocked_chest_statuses(user_id: int) -> set:
+    """Получить множество названий разблокированных сундучных статусов игрока"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('SELECT status_name FROM player_chest_statuses WHERE user_id = ?', (user_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return {row[0] for row in rows}
+
+def unlock_chest_status(user_id: int, status_name: str):
+    """Разблокировать сундучный статус (если ещё не разблокирован)"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('INSERT OR IGNORE INTO player_chest_statuses (user_id, status_name) VALUES (?, ?)',
+                   (user_id, status_name))
+    conn.commit()
+    conn.close()
+
+
+def get_player_with_chest_statuses(user_id: int) -> dict | None:
+    """Получить данные игрока с флагами разблокированных сундучных статусов"""
+    player = get_player(user_id)
+    if not player:
+        return None
+    unlocked = get_unlocked_chest_statuses(user_id)
+    for status_info in STATUSES.values():
+        if status_info.get('type') == 'unlock_chest':
+            key = '_chest_unlocked_' + status_info['name']
+            player[key] = status_info['name'] in unlocked
+    return player
 
 # ============== ACTIVITY FUNCTIONS ==============
 def start_activity(user_id: int, activity_type: str, location_id: int, duration_seconds: int):
@@ -1630,6 +1865,46 @@ def update_rating_points(user_id: int, points: int):
     conn.commit()
     conn.close()
 
+
+def get_rating_league(rating_points: int) -> str:
+    """Получить название лиги по очкам рейтинга"""
+    if rating_points < 100:
+        return "🎗 Новичковая лига"
+    elif rating_points < 200:
+        return "🌟 Серебряная лига"
+    elif rating_points < 350:
+        return "🌟 Любительская лига"
+    elif rating_points < 500:
+        return "📕 Продвинутая лига"
+    elif rating_points < 800:
+        return f"{E_GIFT} Избранная лига"
+    elif rating_points < 1150:
+        return f"{E_GIFT} Профессиональная лига"
+    elif rating_points < 1500:
+        return f"{E_GIFT} Киберспортивная лига"
+    else:
+        return f"{E_GIFT} Мировая лига"
+
+
+def get_pvp_league_points(rating_points: int) -> tuple:
+    """Вернуть (очки за победу, очки за поражение) для текущей лиги"""
+    if rating_points < 100:
+        return (12, 3)
+    elif rating_points < 200:
+        return (10, 4)
+    elif rating_points < 350:
+        return (10, 4)
+    elif rating_points < 500:
+        return (9, 5)
+    elif rating_points < 800:
+        return (8, 6)
+    elif rating_points < 1150:
+        return (8, 7)
+    elif rating_points < 1500:
+        return (7, 9)
+    else:
+        return (5, 11)
+
 def get_player_clan(user_id: int):
     """Получить клан игрока (None если нет клана)"""
     conn = sqlite3.connect(DB_NAME)
@@ -2054,6 +2329,9 @@ class ProfileMenu(StatesGroup):
     viewing_profile = State()
     viewing_statuses = State()
     viewing_inventory = State()
+    viewing_components = State()
+    viewing_chests = State()
+    opening_chest = State()
 
 class MarketMenu(StatesGroup):
     viewing_category = State()
@@ -2587,6 +2865,8 @@ def is_status_available(player: dict, status_info: dict) -> bool:
         return player.get('is_spammer', 0) >= 1
     if s_type == "unlock_bagouser":
         return player.get('user_id') == BAGOUSER_ID
+    if s_type == "unlock_chest":
+        return player.get('_chest_unlocked_' + status_info.get('name', ''), False)
     return False
 
 def _get_status_requirement_text(status_info: dict) -> str:
@@ -2610,6 +2890,8 @@ def _get_status_requirement_text(status_info: dict) -> str:
         return "🔒 Спам в чате клана"
     if s_type == "unlock_bagouser":
         return "🔒 Особый"
+    if s_type == "unlock_chest":
+        return "🔒 Можно найти в сундуке"
     return "🔒"
 
 def get_statuses_kb(player: dict, page: int = 0) -> ReplyKeyboardMarkup:
@@ -2785,21 +3067,26 @@ async def _send_profile(message, player: dict):
     damage = calculate_damage(display_strength)
     exp_info = get_experience_progress(player['user_id'])
     status_emoji = get_player_status_emoji(player)
+    league = get_rating_league(player.get('rating_points', 0))
 
     safe_nick = html.escape(player["nickname"])
     safe_status = html.escape(player["status"])
     response = (
-        f'{E_PROFILE} Профиль игрока:\n'
+        f'{E_PROFILE} Профиль {safe_nick}:\n'
         f'{E_LOCK}{E_HASHTAG} {safe_nick}\n\n'
         f'{status_emoji} {safe_status}\n\n'
         f'Уровень {E_CIRCLE} {player["player_level"]}{E_STAR}\n'
-        f'{E_SQ}{exp_info["current_exp"]} / {exp_info["needed_exp"]}{E_EXP_DOT}{E_EXP} Опыта\n\n\n'
+        f'{E_SQ}{exp_info["current_exp"]} / {exp_info["needed_exp"]}{E_EXP_DOT}{E_EXP} Опыта\n\n'
+        f'Рейтинговая лига:\n'
+        f'{E_SQ}{league}\n'
+        f'{E_SQ}{player.get("rating_points", 0)} {E_STAR} Points\n\n'
         f'{E_SQ}{player["wins"]} - {E_TROPHY} {E_YELLOW} Победы\n'
         f'{E_SQ}{int(display_strength)} - {E_ATK} {E_YELLOW} Сила\n'
         f'{E_SQ}{health} - {E_HP} {E_YELLOW} Здоровье\n\n'
         f'{E_SQ}{player["coins"]} - {E_COINS}{E_GREEN} Монеты  \n'
         f'{E_SQ}{player["crystals"]} - {E_CRYSTALS}{E_GREEN} Кристаллы  \n'
-        f'{E_SQ}{player["raid_tickets"]} - {E_TICKET}{E_GREEN} Билеты рейда\n'
+        f'{E_SQ}{player["raid_tickets"]} - {E_TICKET}{E_GREEN} Билеты рейда\n\n'
+        f'{E_SQ}{E_HP} {player.get("likes", 0)} лайков профиля\n'
     )
     await send_image_with_text(message, "images/profile.png", response, reply_markup=get_profile_kb())
 
@@ -2814,6 +3101,7 @@ async def handle_profile_menu(message: types.Message, state: FSMContext):
 
     if text == "📦 Инвентарь":
         await state.set_state(ProfileMenu.viewing_inventory)
+        await state.update_data(inv_from_profile=True)
         await _send_inventory(message, user_id)
         return
 
@@ -2829,20 +3117,6 @@ async def handle_profile_menu(message: types.Message, state: FSMContext):
     player = get_player(user_id)
     if player:
         await _send_profile(message, player)
-
-@dp.message(ProfileMenu.viewing_inventory)
-async def handle_profile_inventory(message: types.Message, state: FSMContext):
-    user_id = message.from_user.id
-    text = message.text
-
-    if text == "⬅️ Назад":
-        player = get_player(user_id)
-        await state.set_state(ProfileMenu.viewing_profile)
-        if player:
-            await _send_profile(message, player)
-        return
-
-    await _send_inventory(message, user_id)
 
 @dp.message(ProfileMenu.viewing_statuses)
 async def handle_profile_statuses(message: types.Message, state: FSMContext):
@@ -2892,21 +3166,184 @@ async def handle_profile_statuses(message: types.Message, state: FSMContext):
     await message.answer("Выбери статус из списка!", reply_markup=get_statuses_kb(player, current_page))
 
 # ============== INVENTORY TAB ==============
+def _get_inventory_kb(back_button: str = "⬅️ Назад") -> ReplyKeyboardMarkup:
+    """Клавиатура главного инвентаря"""
+    return ReplyKeyboardMarkup(keyboard=[
+        [KeyboardButton(text="📦 Компоненты"), KeyboardButton(text="🎁 Сундуки")],
+        [KeyboardButton(text=back_button)],
+    ], resize_keyboard=True)
+
+def _get_chests_kb() -> ReplyKeyboardMarkup:
+    """Клавиатура сундуков"""
+    return ReplyKeyboardMarkup(keyboard=[
+        [KeyboardButton(text="📦 Деревянный сундук")],
+        [KeyboardButton(text="🔩 Стальной сундук")],
+        [KeyboardButton(text="🌟 Золотой сундук")],
+        [KeyboardButton(text="👑 Всевышний сундук")],
+        [KeyboardButton(text="⬅️ Назад в инвентарь")],
+    ], resize_keyboard=True)
+
 async def _send_inventory(message, user_id: int, back_button: str = "⬅️ Назад"):
-    """Показать инвентарь игрока"""
+    """Показать инвентарь игрока (ресурсы)"""
     player = get_player(user_id)
     inv = get_inventory(user_id)
     nickname = html.escape(player['nickname']) if player else "Игрок"
     text = (
-        f'{E_INV_BOX} | Инвентарь {nickname}:\n\n'
-        f'{E_SQ}{inv["wood"]} {E_WOOD}  Древесина\n'
-        f'{E_SQ}{inv["stone"]} {E_STONE}  Камень\n'
-        f'{E_SQ}{inv["food"]} {E_FOOD}  Еда\n'
-        f'{E_SQ}{inv["iron"]} {E_IRON}  Железо\n'
-        f'{E_SQ}{inv["gold"]} {E_GOLD_M}  Золото\n'
+        f'{E_INV_BOX} | Инвентарь {nickname}:\n'
+        f'{E_SQ}Хранение ресурсов\n\n'
+        f'{E_WOOD} Древесина\n'
+        f'├ количество: {inv["wood"]}\n\n'
+        f'{E_STONE} Камень\n'
+        f'├ количество: {inv["stone"]}\n\n'
+        f'{E_FOOD} Еда\n'
+        f'├ количество: {inv["food"]}\n\n'
+        f'🪙 Медь\n'
+        f'├ количество: {inv.get("copper", 0)}\n\n'
+        f'{E_IRON} Железо\n'
+        f'├ количество: {inv["iron"]}\n\n'
+        f'{E_GOLD_M} Золото\n'
+        f'├ количество: {inv["gold"]}\n\n'
+        f'🔩 Сталь\n'
+        f'├ количество: {inv.get("steel", 0)}\n\n'
+        f'🔮 Аметист\n'
+        f'├ количество: {inv.get("amethyst", 0)}\n\n'
+        f'💠 Самоцвет\n'
+        f'├ количество: {inv.get("gem", 0)}\n'
     )
-    inv_kb = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text=back_button)]], resize_keyboard=True)
-    await send_image_with_text(message, "images/inventory.png", text, reply_markup=inv_kb)
+    await send_image_with_text(message, "images/inventory.png", text,
+                               reply_markup=_get_inventory_kb(back_button))
+
+async def _send_components(message, user_id: int):
+    """Показать компоненты игрока"""
+    comp = get_components(user_id)
+    text = (
+        f'🧩 <b>Компоненты:</b>\n\n'
+        f'🧩 Компоненты\n'
+        f'├ Редкость: обычная\n'
+        f'├ количество: {comp["common"]}\n\n'
+        f'├ Редкость: редкая\n'
+        f'├ количество: {comp["rare"]}\n\n'
+        f'├ Редкость: эпическая\n'
+        f'├ количество: {comp["epic"]}\n\n'
+        f'├ Редкость: легендарная\n'
+        f'├ количество: {comp["legendary"]}\n\n'
+        f'├ Редкость: мифическая\n'
+        f'├ количество: {comp["mythic"]}\n'
+    )
+    kb = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="⬅️ Назад в инвентарь")]], resize_keyboard=True)
+    await message.answer(text, reply_markup=kb, parse_mode="HTML")
+
+async def _send_chests(message, user_id: int):
+    """Показать сундуки игрока"""
+    inv = get_inventory(user_id)
+    text = (
+        f'{E_INV_BOX} Твои сундуки:\n\n'
+        f'📦 Деревянный сундук:\n'
+        f'├ Количество: {inv.get("chest_wood", 0)}\n'
+        f'├ Дроп: низкий\n\n'
+        f'🔩 Стальной сундук:\n'
+        f'├ Количество: {inv.get("chest_steel", 0)}\n'
+        f'├ Дроп: средний\n\n'
+        f'🌟 Золотой сундук:\n'
+        f'├ Количество: {inv.get("chest_gold", 0)}\n'
+        f'├ Дроп: высокий\n\n'
+        f'👑 Всевышний сундук:\n'
+        f'├ Количество: {inv.get("chest_divine", 0)}\n'
+        f'├ Дроп: очень высокий\n'
+    )
+    await message.answer(text, reply_markup=_get_chests_kb(), parse_mode="HTML")
+
+
+def _roll_chest_drops(user_id: int, chest_key: str) -> tuple[list[str], dict]:
+    """
+    Бросить дроп для сундука chest_key.
+    Возвращает (lines, rewards) где lines — список строк для отображения,
+    rewards — словарь {material: amount, 'experience': amount, 'coins': amount, 'crystals': amount, 'status': name}
+    """
+    cfg = CHEST_CONFIG[chest_key]
+    lines = []
+    rewards: dict = {}
+    unlocked_statuses = get_unlocked_chest_statuses(user_id)
+
+    for drop in cfg["drops"]:
+        # drop formats:
+        # ("coins",      (min, max))
+        # ("experience", amount)
+        # ("material",   amount)
+        # ("material",   amount,    chance)
+        # ("material",   (min, max), chance)
+        # ("status",     "Name",    chance)
+        if drop[0] == "status":
+            _, sname, chance = drop
+            if sname in unlocked_statuses:
+                continue  # уже разблокирован — пропускаем
+            if random.random() < chance:
+                unlock_chest_status(user_id, sname)
+                # Сразу устанавливаем статус
+                set_player_status(user_id, sname)
+                lines.append(f"✨ Статус «{sname}» разблокирован!")
+            continue
+
+        resource = drop[0]
+        if len(drop) == 2:
+            # guaranteed
+            val = drop[1]
+            amount = random.randint(val[0], val[1]) if isinstance(val, tuple) else val
+            chance = 1.0
+            rolled = True
+        else:
+            val = drop[1]
+            chance = drop[2]
+            rolled = random.random() < chance
+            if not rolled:
+                continue
+            amount = random.randint(val[0], val[1]) if isinstance(val, tuple) else val
+
+        if amount <= 0:
+            continue
+
+        if resource == "coins":
+            rewards['coins'] = rewards.get('coins', 0) + amount
+            lines.append(f"{E_PLUS} +{amount} {E_COINS} монет")
+        elif resource == "crystals":
+            rewards['crystals'] = rewards.get('crystals', 0) + amount
+            lines.append(f"{E_PLUS} +{amount} {E_CRYSTALS} кристаллов")
+        elif resource == "experience":
+            rewards['experience'] = rewards.get('experience', 0) + amount
+            lines.append(f"{E_PLUS} +{amount} {E_STAR} опыта")
+        else:
+            rewards[resource] = rewards.get(resource, 0) + amount
+            mat_emojis = {
+                'wood': E_WOOD, 'stone': E_STONE, 'food': E_FOOD,
+                'iron': E_IRON, 'gold': E_GOLD_M,
+                'copper': '🪙', 'steel': '🔩', 'amethyst': '🔮', 'gem': '💠',
+            }
+            emoji = mat_emojis.get(resource, '📦')
+            lines.append(f"{E_PLUS} +{amount} {emoji}")
+
+    return lines, rewards
+
+
+async def _apply_chest_rewards(user_id: int, rewards: dict):
+    """Применить награды сундука к игроку"""
+    if rewards.get('coins'):
+        add_coins_to_player(user_id, rewards['coins'])
+    if rewards.get('crystals'):
+        add_crystals_to_player(user_id, rewards['crystals'])
+    if rewards.get('experience'):
+        add_experience_to_player(user_id, rewards['experience'])
+    for mat in ('wood', 'stone', 'food', 'iron', 'gold', 'copper', 'steel', 'amethyst', 'gem'):
+        if rewards.get(mat):
+            add_inventory_material(user_id, mat, rewards[mat])
+
+
+CHEST_BUTTON_MAP = {
+    "📦 Деревянный сундук": "chest_wood",
+    "🔩 Стальной сундук":   "chest_steel",
+    "🌟 Золотой сундук":    "chest_gold",
+    "👑 Всевышний сундук":  "chest_divine",
+}
+
 
 @dp.message(F.text == "📦 Инвентарь")
 async def open_inventory_main(message: types.Message, state: FSMContext):
@@ -2915,7 +3352,117 @@ async def open_inventory_main(message: types.Message, state: FSMContext):
     if not player:
         await message.answer("Сначала зарегистрируйся! /start")
         return
+    await state.set_state(ProfileMenu.viewing_inventory)
     await _send_inventory(message, user_id, back_button="🏠 В главное меню")
+
+
+@dp.message(ProfileMenu.viewing_inventory)
+async def handle_inventory_menu(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+
+    if text in ("⬅️ Назад", "🏠 В главное меню"):
+        data = await state.get_data()
+        from_profile = data.get('inv_from_profile', False)
+        if from_profile or text == "⬅️ Назад":
+            player = get_player(user_id)
+            await state.set_state(ProfileMenu.viewing_profile)
+            if player:
+                await _send_profile(message, player)
+        else:
+            await show_main_menu(message, state)
+        return
+
+    if text == "📦 Компоненты":
+        await state.set_state(ProfileMenu.viewing_components)
+        await _send_components(message, user_id)
+        return
+
+    if text == "🎁 Сундуки":
+        await state.set_state(ProfileMenu.viewing_chests)
+        await _send_chests(message, user_id)
+        return
+
+    await _send_inventory(message, user_id)
+
+
+@dp.message(ProfileMenu.viewing_components)
+async def handle_components_menu(message: types.Message, state: FSMContext):
+    if message.text == "⬅️ Назад в инвентарь":
+        await state.set_state(ProfileMenu.viewing_inventory)
+        user_id = message.from_user.id
+        data = await state.get_data()
+        back = "🏠 В главное меню" if not data.get('inv_from_profile', False) else "⬅️ Назад"
+        await _send_inventory(message, user_id, back_button=back)
+        return
+    await _send_components(message, message.from_user.id)
+
+
+@dp.message(ProfileMenu.viewing_chests)
+async def handle_chests_menu(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+
+    if text == "⬅️ Назад в инвентарь":
+        await state.set_state(ProfileMenu.viewing_inventory)
+        data = await state.get_data()
+        back = "🏠 В главное меню" if not data.get('inv_from_profile', False) else "⬅️ Назад"
+        await _send_inventory(message, user_id, back_button=back)
+        return
+
+    chest_key = CHEST_BUTTON_MAP.get(text)
+    if chest_key:
+        inv = get_inventory(user_id)
+        if inv.get(chest_key, 0) <= 0:
+            chest_name = CHEST_CONFIG[chest_key]["name"]
+            await message.answer(
+                f"{E_CROSS} У тебя нет {chest_name}а!",
+                reply_markup=_get_chests_kb(), parse_mode="HTML"
+            )
+            return
+        # Remove chest and start animation
+        remove_inventory_material(user_id, chest_key, 1)
+        await state.set_state(ProfileMenu.opening_chest)
+        await state.update_data(opening_chest_key=chest_key)
+
+        # Send animated open message
+        anim_msg = await message.answer("📦 открываем сундук…", parse_mode="HTML")
+        await asyncio.sleep(2)
+
+        steps = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+        for pct in steps:
+            await asyncio.sleep(0.4)
+            try:
+                await anim_msg.edit_text(f"⚙️ {pct}%")
+            except Exception:
+                pass
+
+        # Roll rewards
+        lines, rewards = _roll_chest_drops(user_id, chest_key)
+        await _apply_chest_rewards(user_id, rewards)
+
+        chest_name = CHEST_CONFIG[chest_key]["name"]
+        reward_text = "\n".join(lines) if lines else "Пусто…"
+        result_text = (
+            f'🎁 Вы открыли <b>{chest_name}</b>:\n\n'
+            f'{reward_text}'
+        )
+        try:
+            await anim_msg.edit_text(result_text, parse_mode="HTML")
+        except Exception:
+            await message.answer(result_text, parse_mode="HTML")
+
+        await state.set_state(ProfileMenu.viewing_chests)
+        await _send_chests(message, user_id)
+        return
+
+    await _send_chests(message, user_id)
+
+
+@dp.message(ProfileMenu.opening_chest)
+async def handle_opening_chest(message: types.Message, state: FSMContext):
+    """Пропустить ввод во время анимации открытия сундука"""
+    pass
 
 # ============== MAP / LOCATIONS ==============
 @dp.message(F.text == "🗺️ Карта")
@@ -3701,6 +4248,7 @@ def _format_rating_page(leaderboard, page: int) -> str:
     for i, (nickname, strength, wins, rating_pts) in enumerate(leaderboard):
         index = start_index + i
         safe_nick = html.escape(nickname)
+        league = get_rating_league(rating_pts)
         
         if index == 1:
             prefix = f"{E_STAR} 1. {E_RARITY_ULTRA}"
@@ -3715,7 +4263,8 @@ def _format_rating_page(leaderboard, page: int) -> str:
             f"{prefix} {safe_nick}:\n"
             f"{E_SQ}{int(strength)} {E_ATK}\n"
             f"{E_SQ}{wins} {E_TROPHY}\n"
-            f"{E_SQ}{rating_pts} 💠\n\n"
+            f"├ Лига: {league}\n"
+            f"├ Points {rating_pts} {E_STAR}\n\n"
         )
     
     return response
@@ -3785,18 +4334,23 @@ async def handle_rating_menu(message: types.Message, state: FSMContext):
                 status_emoji = get_player_status_emoji(full_player)
                 safe_nick = html.escape(full_player["nickname"])
                 safe_status = html.escape(full_player["status"])
+                league = get_rating_league(full_player.get('rating_points', 0))
                 profile_text = (
-                    f'{E_PROFILE} Профиль игрока {safe_nick}:\n'
+                    f'{E_PROFILE} Профиль {safe_nick}:\n'
                     f'{E_LOCK}{E_HASHTAG} {safe_nick}\n\n'
                     f'{status_emoji} {safe_status}\n\n'
                     f'Уровень {E_CIRCLE} {full_player["player_level"]}{E_STAR}\n'
-                    f'{E_SQ}{exp_info["current_exp"]} / {exp_info["needed_exp"]}{E_EXP_DOT}{E_EXP} Опыта\n\n\n'
+                    f'{E_SQ}{exp_info["current_exp"]} / {exp_info["needed_exp"]}{E_EXP_DOT}{E_EXP} Опыта\n\n'
+                    f'Рейтинговая лига:\n'
+                    f'{E_SQ}{league}\n'
+                    f'{E_SQ}{full_player.get("rating_points", 0)} {E_STAR} Points\n\n'
                     f'{E_SQ}{full_player["wins"]} - {E_TROPHY} {E_YELLOW} Победы\n'
                     f'{E_SQ}{int(full_player["strength"])} - {E_ATK} {E_YELLOW} Сила\n'
                     f'{E_SQ}{health} - {E_HP} {E_YELLOW} Здоровье\n\n'
                     f'{E_SQ}{full_player["coins"]} - {E_COINS}{E_GREEN} Монеты  \n'
                     f'{E_SQ}{full_player["crystals"]} - {E_CRYSTALS}{E_GREEN} Кристаллы  \n'
-                    f'{E_SQ}{full_player["raid_tickets"]} - {E_TICKET}{E_GREEN} Билеты рейда\n'
+                    f'{E_SQ}{full_player["raid_tickets"]} - {E_TICKET}{E_GREEN} Билеты рейда\n\n'
+                    f'{E_SQ}{E_HP} {full_player.get("likes", 0)} лайков профиля\n'
                 )
                 viewer_id = message.from_user.id
                 await state.set_state(RatingState.viewing_player)
@@ -3952,11 +4506,13 @@ async def _send_friends_list(message, state: FSMContext, user_id: int, page: int
         safe_nick = html.escape(friend['nickname'])
         status_emoji = get_player_status_emoji(friend)
         safe_status = html.escape(friend.get('status', 'Новичок'))
+        league = get_rating_league(friend.get('rating_points', 0))
         text += (
             f'{E_SQ}{idx}. {E_RARITY_ULTRA} {safe_nick}\n'
             f'  ├ Сила: {int(friend["strength"])} {E_ATK}\n'
             f'  ├ Уровень: {friend["player_level"]} {E_STAR}\n'
-            f'  ├ Статус: {status_emoji} {safe_status}\n\n'
+            f'  ├ Статус: {status_emoji} {safe_status}\n'
+            f'  ├ Лига: {league}\n\n'
         )
 
     await message.answer(text, reply_markup=get_friends_kb(friends_data, page, total_pages, has_requests), parse_mode="HTML")
@@ -4014,6 +4570,7 @@ async def _send_friend_profile(message, friend: dict, viewer_id: int = None):
     status_emoji = get_player_status_emoji(friend)
     safe_nick = html.escape(friend["nickname"])
     safe_status = html.escape(friend["status"])
+    league = get_rating_league(friend.get('rating_points', 0))
     # Кнопка "пригласить в рейд": только если viewer не занят co-op парой и нет уже
     # активного приглашения именно этому другу
     can_invite = (
@@ -4023,17 +4580,21 @@ async def _send_friend_profile(message, friend: dict, viewer_id: int = None):
         and friend['user_id'] not in coop_raid_invites
     )
     profile_text = (
-        f'{E_PROFILE} Профиль друга {safe_nick}:\n'
+        f'{E_PROFILE} Профиль {safe_nick}:\n'
         f'{E_LOCK}{E_HASHTAG} {safe_nick}\n\n'
         f'{status_emoji} {safe_status}\n\n'
         f'Уровень {E_CIRCLE} {friend["player_level"]}{E_STAR}\n'
-        f'{E_SQ}{exp_info["current_exp"]} / {exp_info["needed_exp"]}{E_EXP_DOT}{E_EXP} Опыта\n\n\n'
+        f'{E_SQ}{exp_info["current_exp"]} / {exp_info["needed_exp"]}{E_EXP_DOT}{E_EXP} Опыта\n\n'
+        f'Рейтинговая лига:\n'
+        f'{E_SQ}{league}\n'
+        f'{E_SQ}{friend.get("rating_points", 0)} {E_STAR} Points\n\n'
         f'{E_SQ}{friend["wins"]} - {E_TROPHY} {E_YELLOW} Победы\n'
         f'{E_SQ}{int(friend["strength"])} - {E_ATK} {E_YELLOW} Сила\n'
         f'{E_SQ}{health} - {E_HP} {E_YELLOW} Здоровье\n\n'
         f'{E_SQ}{friend["coins"]} - {E_COINS}{E_GREEN} Монеты  \n'
         f'{E_SQ}{friend["crystals"]} - {E_CRYSTALS}{E_GREEN} Кристаллы  \n'
-        f'{E_SQ}{friend["raid_tickets"]} - {E_TICKET}{E_GREEN} Билеты рейда\n'
+        f'{E_SQ}{friend["raid_tickets"]} - {E_TICKET}{E_GREEN} Билеты рейда\n\n'
+        f'{E_SQ}{E_HP} {friend.get("likes", 0)} лайков профиля\n'
     )
     await send_image_with_text(message, "images/profile.png", profile_text,
                                reply_markup=get_friend_profile_kb(can_invite_raid=can_invite))
@@ -4908,7 +5469,6 @@ async def _coop_pass_turn(
 
     enemy_info = RAID_FLOORS[floor_id]
     partner_log = (
-        f"{E_SWORD} <b>CO-OP РЕЙД — Этаж {floor_id}/10</b>\n\n"
         f"{E_DOT} Партнёр ходил:\n{log}\n\n"
         + _fmt_coop_stats(
             partner_nickname, par_hp_cur, par_dmg, par_mana,
@@ -4963,7 +5523,7 @@ async def _coop_floor_victory(
         f"{E_GIFT} Каждый получил:\n"
         f"{E_PLUS} {reward_coins} {E_COINS} монет\n"
         f"{E_PLUS} 5 {E_STAR} рейтинга\n"
-        f"{E_PLUS} 1 победа\n"
+        f"{E_PLUS} 15 {E_CLAN_BOTTLE} опыта клана\n"
     )
 
     if floor_id == 10:
@@ -5862,13 +6422,15 @@ async def open_online(message: types.Message, state: FSMContext):
 
     online_text = (
         f'{E_ONLINE2}{E_SWORD} ОНЛАЙН РЕЖИМ:\n'
-        f'{E_SQ}Начните подбор игрока, нажав на кнопку.\n'
-        f'{E_SQ}{E_WARN} Возможно долгий подбор, не выходите из поиска если хотите найти игрока.\n\n'
+        f'{E_SQ}Начните подбор игрока, нажав на кнопку.\n\n'
         f'{E_PROFILE} Характеристики {html.escape(player["nickname"])}:\n\n'
+        f'{E_SQ}{get_rating_league(player.get("rating_points", 0))}\n'
+        f'{E_SQ}{player.get("rating_points", 0)} {E_STAR} Points\n\n'
         f'{E_SQ}{E_ATK} {int(buffed_strength)} Сила {E_YELLOW}\n'
         f'{E_SQ}{E_HP} {health} Здоровье {E_YELLOW}\n'
         f'{E_SQ}{E_DMG} {damage} Урон {E_YELLOW}\n'
-        f'{E_SQ}{E_MANA} {mana} / 100 {E_BOOK_MANA}{E_YELLOW}\n'
+        f'{E_SQ}{E_MANA} {mana} / 100 {E_BOOK_MANA}{E_YELLOW}\n\n'
+        f'{E_WARN} внимание! любой абуз рейтинга с помощью твинков и тд, карается баном навсегда по айди профиля!\n'
     )
     await send_image_with_text(message, "images/online.png", online_text, reply_markup=get_online_menu_kb())
     await state.set_state(OnlineState.viewing_menu)
@@ -5929,22 +6491,20 @@ async def start_online_search(message: types.Message, state: FSMContext):
         pvp_pairs[opponent_id] = user_id
 
         match_text_me = (
-            '✅ <b>СОПЕРНИК НАЙДЕН!</b>\n\n'
-            'Ваш соперник:\n'
-            f'{E_NICK} {html.escape(opponent_data["nickname"])}\n'
-            f'{E_HP} {opponent_data["health"]}\n'
-            f'{E_DMG} {opponent_data["damage"]}\n'
-            f'{int(opponent_data["strength"])}{E_ATK} | {opponent_data["wins"]}{E_TROPHY}\n\n'
-            'Подтвердите участие!'
+            f'{E_SWORD} <b>СОПЕРНИК НАЙДЕН!</b>\n\n'
+            f'{E_PROFILE} Характеристики {html.escape(opponent_data["nickname"])}:\n\n'
+            f'{E_SQ}{E_ATK} {int(opponent_data["strength"])} Сила {E_YELLOW}\n'
+            f'{E_SQ}{E_HP} {opponent_data["health"]} Здоровье {E_YELLOW}\n'
+            f'{E_SQ}{E_DMG} {opponent_data["damage"]} Урон {E_YELLOW}\n\n'
+            f'{E_LOCK} примите игру, чтобы начать битву'
         )
         match_text_opp = (
-            '✅ <b>СОПЕРНИК НАЙДЕН!</b>\n\n'
-            'Ваш соперник:\n'
-            f'{E_NICK} {html.escape(my_data["nickname"])}\n'
-            f'{E_HP} {my_data["health"]}\n'
-            f'{E_DMG} {my_data["damage"]}\n'
-            f'{int(my_data["strength"])}{E_ATK} | {my_data["wins"]}{E_TROPHY}\n\n'
-            'Подтвердите участие!'
+            f'{E_SWORD} <b>СОПЕРНИК НАЙДЕН!</b>\n\n'
+            f'{E_PROFILE} Характеристики {html.escape(my_data["nickname"])}:\n\n'
+            f'{E_SQ}{E_ATK} {int(my_data["strength"])} Сила {E_YELLOW}\n'
+            f'{E_SQ}{E_HP} {my_data["health"]} Здоровье {E_YELLOW}\n'
+            f'{E_SQ}{E_DMG} {my_data["damage"]} Урон {E_YELLOW}\n\n'
+            f'{E_LOCK} примите игру, чтобы начать битву'
         )
 
         # Сохраняем данные для подтверждения
@@ -6115,6 +6675,9 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
         await message.answer("⏳ Подожди перед следующим ходом!")
         return
 
+    my_player = get_player(user_id)
+    my_nick = html.escape(my_player['nickname']) if my_player else 'Игрок'
+
     my_health = data['pvp_player_health']
     my_damage = data['pvp_player_damage']
     enemy_health = data['pvp_enemy_health']
@@ -6211,11 +6774,17 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
 
     if new_enemy_health <= 0:
         update_player_wins(user_id)
-        update_rating_points(user_id, 7)
+        my_rating = my_player.get('rating_points', 0) if my_player else 0
+        win_pts, _ = get_pvp_league_points(my_rating)
+        update_rating_points(user_id, win_pts)
         add_online_match(user_id)
         if opponent_id:
             add_online_match(opponent_id)
             increment_player_deaths(opponent_id)
+            opp_p = get_player(opponent_id)
+            if opp_p:
+                _, loss_pts = get_pvp_league_points(opp_p['rating_points'])
+                update_rating_points(opponent_id, -loss_pts)
         winner_clan = get_player_clan(user_id)
         if winner_clan:
             add_clan_exp(winner_clan['clan_id'], 2)
@@ -6224,7 +6793,7 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
             f"{E_TROPHY}{E_GREEN} ВЫ ПОБЕДИЛИ!\n\n"
             f"{E_GIFT} Получено:\n"
             f"{E_PLUS} +1 победа\n"
-            f"{E_PLUS} +7 💠 рейтинга\n"
+            f"{E_PLUS} +{win_pts} 💠 рейтинга\n"
         )
         await message.answer(battle_log, reply_markup=get_end_battle_kb())
         pvp_pairs.pop(user_id, None)
@@ -6235,11 +6804,15 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
             opp_state = dp.fsm.resolve_context(bot, opponent_id, opponent_id)
             await opp_state.clear()
             try:
+                if dealt > 0:
+                    dmg_line = f'{E_DMG}{E_HEART_B} Урон тебе: {dealt}\n\n'
+                else:
+                    dmg_line = f'{E_CROSS}{E_ATK} {my_nick} промахнулся!\n\n'
                 opp_loss_text = (
                     f'⚔️ <b>PvP БОЙ</b> ⚔️\n\n'
-                    f'Соперник атакует! {E_ARROW_DN}\n'
-                    f'{E_DMG}{E_HEART_B} Урон тебе: {dealt}\n\n'
-                    f'{E_BOOK_LOSS}{E_RED_C} ВЫ ПРОИГРАЛИ!'
+                    f'{E_SKULL} {my_nick} атакует! {E_ARROW_DN}\n'
+                    + dmg_line
+                    + f'{E_BOOK_LOSS}{E_RED_C} ВЫ ПРОИГРАЛИ!'
                 )
                 await bot.send_message(
                     chat_id=opponent_id,
@@ -6252,9 +6825,11 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
         return
 
     # Передаём ход сопернику
+    opp_player = get_player(opponent_id) if opponent_id else None
+    opp_nick = html.escape(opp_player['nickname']) if opp_player else 'Соперник'
     battle_log += (
         f'{E_CROWN} Ты: {E_HP} {my_health} | {E_MANA} {new_my_mana}/100\n'
-        f'{E_SKULL} Соперник: {E_ESWORD} {new_enemy_health}\n\n'
+        f'{E_SKULL} {opp_nick}: {E_ESWORD} {new_enemy_health}\n\n'
         "⏳ Ход соперника..."
     )
     await message.answer(battle_log, reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
@@ -6283,10 +6858,14 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
             pvp_opp_blind_turns=new_opp_blind,
         )
         try:
+            if dealt > 0:
+                opp_dmg_line = f'{E_DMG}{E_HEART_B} Урон тебе: {dealt}\n\n'
+            else:
+                opp_dmg_line = f'{E_CROSS}{E_ATK} {my_nick} промахнулся!\n\n'
             opp_msg = (
                 f'⚔️ <b>PvP БОЙ</b> ⚔️\n\n'
-                f'Соперник атакует! {E_ARROW_DN}\n'
-                f'{E_DMG}{E_HEART_B} Урон тебе: {dealt}\n\n'
+                f'{E_SKULL} {my_nick} атакует! {E_ARROW_DN}\n'
+                + opp_dmg_line
             )
             if opp_should_skip:
                 opp_msg += "😵 Ты оглушён и пропустишь следующий ход!\n"
@@ -6294,7 +6873,7 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
                 opp_msg += f"🔦 Ты ослеплён на {opp_blind_add} хода!\n"
             opp_msg += (
                 f'\n{E_CROWN} Ты: {E_HP} {new_opp_player_health} | {E_MANA} {opp_mana}/100\n'
-                f'{E_SKULL} Соперник: {E_ESWORD} {my_health}\n\n'
+                f'{E_SKULL} {my_nick}: {E_ESWORD} {my_health}\n\n'
             )
             # Bug fix: skip opponent turn immediately when opp_skip_now is True (handles both fresh stun and stored stun)
             if opp_skip_now:
@@ -6310,7 +6889,7 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
                 await message.answer(
                     f'😵 Соперник был оглушён — его ход пропущен!\n\n'
                     f'{E_CROWN} Ты: {E_HP} {my_health} | {E_MANA} {new_my_mana}/100\n'
-                    f'{E_SKULL} Соперник: {E_ESWORD} {new_enemy_health}\n\n'
+                    f'{E_SKULL} {opp_nick}: {E_ESWORD} {new_enemy_health}\n\n'
                     f'{E_SWORD} Снова твой ход!',
                     reply_markup=get_battle_action_kb(user_id, new_my_mana)
                 )
