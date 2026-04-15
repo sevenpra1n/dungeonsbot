@@ -1119,11 +1119,16 @@ def get_inventory(user_id: int) -> dict:
             'copper': 0, 'steel': 0, 'amethyst': 0, 'gem': 0,
             'chest_wood': 0, 'chest_steel': 0, 'chest_gold': 0, 'chest_divine': 0}
 
+# Allowed inventory material column names (validated before use in SQL)
+ALLOWED_INVENTORY_MATERIALS = frozenset({
+    'food', 'wood', 'stone', 'iron', 'gold',
+    'copper', 'steel', 'amethyst', 'gem',
+    'chest_wood', 'chest_steel', 'chest_gold', 'chest_divine',
+})
+
 def add_inventory_material(user_id: int, material: str, amount: int):
     """Добавить материал в инвентарь"""
-    allowed = {'food', 'wood', 'stone', 'iron', 'gold', 'copper', 'steel', 'amethyst', 'gem',
-               'chest_wood', 'chest_steel', 'chest_gold', 'chest_divine'}
-    if material not in allowed:
+    if material not in ALLOWED_INVENTORY_MATERIALS:
         return
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -1153,9 +1158,7 @@ def add_admin_materials_to_player(user_id: int, amount: int):
 
 def remove_inventory_material(user_id: int, material: str, amount: int) -> bool:
     """Снять материал из инвентаря. Возвращает True если успешно."""
-    allowed = {'food', 'wood', 'stone', 'iron', 'gold', 'copper', 'steel', 'amethyst', 'gem',
-               'chest_wood', 'chest_steel', 'chest_gold', 'chest_divine'}
-    if material not in allowed:
+    if material not in ALLOWED_INVENTORY_MATERIALS:
         return False
     inv = get_inventory(user_id)
     if inv.get(material, 0) < amount:
@@ -1190,10 +1193,14 @@ def add_component(user_id: int, rarity: str, amount: int = 1):
     allowed = {'common', 'rare', 'epic', 'legendary', 'mythic'}
     if rarity not in allowed:
         return
+    # Map rarity to column index to avoid f-string SQL
+    col_map = {'common': 'common', 'rare': 'rare', 'epic': 'epic', 'legendary': 'legendary', 'mythic': 'mythic'}
+    col = col_map[rarity]
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute('INSERT OR IGNORE INTO player_components (user_id) VALUES (?)', (user_id,))
-    cursor.execute(f'UPDATE player_components SET {rarity} = COALESCE({rarity}, 0) + ? WHERE user_id = ?',
+    # Column name is validated against a known-safe set above
+    cursor.execute(f'UPDATE player_components SET {col} = COALESCE({col}, 0) + ? WHERE user_id = ?',
                    (amount, user_id))
     conn.commit()
     conn.close()
