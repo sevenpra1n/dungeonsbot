@@ -137,25 +137,25 @@ async def _send_inventory(message, user_id: int, back_button: str = "⬅️ На
     nickname = html.escape(player['nickname']) if player else "Игрок"
     text = (
         f'{E_INV_BOX} | Инвентарь {nickname}:\n'
-        f'{E_SQ}Хранение ресурсов\n\n'
-        f'{E_WOOD} Древесина\n'
-        f'├ количество: {inv["wood"]}\n\n'
-        f'{E_STONE} Камень\n'
-        f'├ количество: {inv["stone"]}\n\n'
-        f'{E_FOOD} Еда\n'
-        f'├ количество: {inv["food"]}\n\n'
-        f'{E_COPPER} Медь\n'
-        f'├ количество: {inv.get("copper", 0)}\n\n'
-        f'{E_IRON} Железо\n'
-        f'├ количество: {inv["iron"]}\n\n'
-        f'{E_GOLD_M} Золото\n'
-        f'├ количество: {inv["gold"]}\n\n'
-        f'{E_STEEL} Сталь\n'
-        f'├ количество: {inv.get("steel", 0)}\n\n'
-        f'{E_AMETHYST} Аметист\n'
-        f'├ количество: {inv.get("amethyst", 0)}\n\n'
-        f'{E_GEM} Самоцвет\n'
-        f'├ количество: {inv.get("gem", 0)}\n'
+        f'{E_SQ} Хранение ресурсов\n\n'
+        f'{E_WOOD} {E_BULLET} Древесина\n'
+        f'├ {E_SQ} количество: {inv["wood"]} {E_SQ}\n\n'
+        f'{E_STONE} {E_BULLET} Камень\n'
+        f'├ {E_SQ} количество: {inv["stone"]} {E_SQ}\n\n'
+        f'{E_FOOD} {E_BULLET} Еда\n'
+        f'├ {E_SQ} количество: {inv["food"]} {E_SQ}\n\n'
+        f'{E_COPPER} {E_BULLET} Медь\n'
+        f'├ {E_SQ} количество: {inv.get("copper", 0)} {E_SQ}\n\n'
+        f'{E_IRON} {E_BULLET} Железо\n'
+        f'├ {E_SQ} количество: {inv["iron"]} {E_SQ}\n\n'
+        f'{E_GOLD_M} {E_BULLET} Золото\n'
+        f'├ {E_SQ} количество: {inv["gold"]} {E_SQ}\n\n'
+        f'{E_STEEL} {E_BULLET} Сталь\n'
+        f'├ {E_SQ} количество: {inv.get("steel", 0)} {E_SQ}\n\n'
+        f'{E_AMETHYST} {E_BULLET} Аметист\n'
+        f'├ {E_SQ} количество: {inv.get("amethyst", 0)} {E_SQ}\n\n'
+        f'{E_SQ} {E_BULLET} Самоцвет\n'
+        f'├ {E_SQ} количество: {inv.get("gem", 0)} {E_SQ}\n'
     )
     await send_image_with_text(message, "images/inventory.png", text,
                                reply_markup=_get_inventory_kb(back_button))
@@ -165,18 +165,18 @@ async def _send_components(message, user_id: int):
     comp = get_components(user_id)
     total = comp["common"] + comp["rare"] + comp["epic"] + comp["legendary"] + comp["mythic"]
     text = (
-        f'{E_SQ} Компоненты:\n\n'
-        f'{total} {E_SQ} Компоненты\n'
-        f'├ Редкость: обычная\n'
-        f'├ количество: {comp["common"]}\n\n'
-        f'├ Редкость: редкая\n'
-        f'├ количество: {comp["rare"]}\n\n'
-        f'├ Редкость: эпическая\n'
-        f'├ количество: {comp["epic"]}\n\n'
-        f'├ Редкость: легендарная\n'
-        f'├ количество: {comp["legendary"]}\n\n'
-        f'├ Редкость: мифическая\n'
-        f'├ количество: {comp["mythic"]}\n'
+        f'{E_DOT} Компоненты:\n\n'
+        f'{total} {E_DOT} Компоненты\n'
+        f'├ {E_RARITY_COMMON} Редкость:обычная\n'
+        f'├ {E_SQ} количество: {comp["common"]} {E_SQ}\n\n'
+        f'├ {E_RARITY_RARE} Редкость:редкая\n'
+        f'├ {E_SQ} количество: {comp["rare"]} {E_SQ}\n\n'
+        f'├ {E_RARITY_EPIC} Редкость:эпическая\n'
+        f'├ {E_SQ} количество: {comp["epic"]} {E_SQ}\n\n'
+        f'├ {E_RARITY_LEGENDARY} Редкость:легендарная\n'
+        f'├ {E_SQ} количество: {comp["legendary"]} {E_SQ}\n\n'
+        f'├ {E_RARITY_MYTHIC} Редкость:мифическая\n'
+        f'├ {E_SQ} количество: {comp["mythic"]} {E_SQ}\n'
     )
     kb = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="⬅️ Назад в инвентарь")]], resize_keyboard=True)
     await message.answer(text, reply_markup=kb, parse_mode="HTML")
@@ -185,19 +185,19 @@ async def _send_chests(message, user_id: int):
     """Показать сундуки игрока"""
     inv = get_inventory(user_id)
     text = (
-        f'{E_INV_BOX} Твои сундуки:\n\n'
+        f'{E_CHEST_W} Твои сундуки:\n\n'
         f'{E_CHEST_W} Деревянный сундук:\n'
         f'├ Количество: {inv.get("chest_wood", 0)}\n'
-        f'├ Дроп: низкий\n\n'
+        f'├ Дроп: низкий {E_RARITY_COMMON}\n\n'
         f'{E_CHEST_S} Стальной сундук:\n'
         f'├ Количество: {inv.get("chest_steel", 0)}\n'
-        f'├ Дроп: средний\n\n'
+        f'├ Дроп: средний {E_RARITY_RARE}\n\n'
         f'{E_CHEST_G} Золотой сундук:\n'
         f'├ Количество: {inv.get("chest_gold", 0)}\n'
-        f'├ Дроп: высокий\n\n'
+        f'├ Дроп: высокий {E_RARITY_EPIC}\n\n'
         f'{E_CHEST_D} Всевышний сундук:\n'
         f'├ Количество: {inv.get("chest_divine", 0)}\n'
-        f'├ Дроп: очень высокий\n'
+        f'├ Дроп: очень высокий {E_RARITY_LEGENDARY}\n'
     )
     await message.answer(text, reply_markup=_get_chests_kb(), parse_mode="HTML")
 
@@ -258,7 +258,7 @@ def _roll_chest_drops(user_id: int, chest_key: str) -> tuple[list[str], dict]:
             lines.append(f"{E_PLUS} +{amount} {E_CRYSTALS} кристаллов")
         elif resource == "experience":
             rewards['experience'] = rewards.get('experience', 0) + amount
-            lines.append(f"{E_PLUS} +{amount} {E_EXP} опыта профиля")
+            lines.append(f"{E_PLUS} +{amount} {E_STAR} опыта профиля")
         else:
             rewards[resource] = rewards.get(resource, 0) + amount
             mat_emojis = {
@@ -395,7 +395,7 @@ async def handle_chests_menu(message: types.Message, state: FSMContext):
         for pct in steps:
             await asyncio.sleep(0.4)
             try:
-                await anim_msg.edit_text(f"{E_HOURGLASS} {pct}%", parse_mode="HTML")
+                await anim_msg.edit_text(f"{chest_icon} {pct}%", parse_mode="HTML")
             except Exception:
                 pass
 
@@ -1234,7 +1234,7 @@ def _format_rating_page(leaderboard, page: int) -> str:
         response += (
             f"{prefix} {E_PROFILE} {safe_nick}:\n"
             f"├ Статус: {status_emoji} {safe_status}\n\n"
-            f"{int(strength)} {E_ATK}\n"
+            f"{int(strength)} {E_POW}\n"
             f"{wins} {E_TROPHY}\n"
             f"{crystals} 💠\n"
             f"├ Лига: {league}\n"
@@ -1602,7 +1602,7 @@ async def _send_friends_list(message, state: FSMContext, user_id: int, page: int
         league = get_rating_league(friend.get('rating_points', 0))
         text += (
             f'{idx}. {E_PROFILE} {safe_nick}\n'
-            f'  ├ Сила: {int(friend["strength"])} {E_ATK}\n'
+            f'  ├ Сила: {int(friend["strength"])} {E_POW}\n'
             f'  ├ Уровень: {friend["player_level"]} {E_STAR}\n'
             f'  ├ Статус: {status_emoji} {safe_status}\n'
             f'  ├ Лига: {league}\n\n'
