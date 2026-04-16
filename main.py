@@ -1,20 +1,30 @@
+"""Main entry point for the DungeonsBot."""
+
+import asyncio
 import logging
-from aiogram import Bot, Dispatcher
-from bot.all_handlers import router
 
-# Configure logging
+from bot.loader import bot, dp
+from bot.handlers.all_handlers import router
+from bot.database import init_database
+
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-API_TOKEN = 'YOUR_API_TOKEN'
 
-# Initialize bot and dispatcher
-bot = Bot(token=API_TOKEN)
-dispatcher = Dispatcher(bot)
+async def main():
+    """Start the bot with polling."""
+    init_database()
+    logger.info("Database initialized")
 
-# Include all handlers
-dispatcher.include_router(router)
+    dp.include_router(router)
+    logger.info("Handlers included")
 
-# Start polling
-if __name__ == '__main__':
-    import asyncio
-    asyncio.run(dispatcher.start_polling())
+    logger.info("Bot started polling...")
+    await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("Bot stopped by user")
