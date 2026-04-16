@@ -3,7 +3,7 @@
 # ============== EMOJI CONSTANTS ==============
 # Custom tg-emoji for rich display in messages (used via variables, NOT inline in text)
 E_COINS    = '<tg-emoji emoji-id="5215420556089776398">👛</tg-emoji>'   # монеты
-E_CRYSTALS = '<tg-emoji emoji-id="5226399342658930683">💎</tg-emoji>'   # кристаллы
+E_CRYSTALS = '<tg-emoji emoji-id="5429321386403327800">💎</tg-emoji>'   # кристаллы (restored original working ID)
 E_TICKET   = '<tg-emoji emoji-id="5334675412599480338">📕</tg-emoji>'   # билет рейда
 E_EXP      = '<tg-emoji emoji-id="5336829549151823064">📕</tg-emoji>'   # опыт
 E_STAR     = '<tg-emoji emoji-id="5206476089127372379">⭐️</tg-emoji>'  # уровень/звезда
@@ -101,15 +101,17 @@ E_RARITY_LEGENDARY = '<tg-emoji emoji-id="5395487888903280719">🌟</tg-emoji>' 
 E_RARITY_MYTHIC    = '<tg-emoji emoji-id="5395620513198410698">🌟</tg-emoji>'  # мифический
 E_RARITY_ULTRA     = '<tg-emoji emoji-id="5936138290519349485">🎁</tg-emoji>'  # ультра
 
-# New material/chest emoji
-E_COPPER   = '<tg-emoji emoji-id="5215420556089776398">🪙</tg-emoji>'   # медь
-E_STEEL    = '<tg-emoji emoji-id="6280718212392816659">🔩</tg-emoji>'   # сталь
-E_AMETHYST = '<tg-emoji emoji-id="5429321386403327800">🔮</tg-emoji>'   # аметист
-E_GEM      = '<tg-emoji emoji-id="5442864569338838830">💠</tg-emoji>'   # самоцвет
-E_CHEST_W  = '<tg-emoji emoji-id="5206626000665868017">📦</tg-emoji>'   # деревянный сундук
-E_CHEST_S  = '<tg-emoji emoji-id="5278613311858959074">🔩</tg-emoji>'   # стальной сундук
-E_CHEST_G  = '<tg-emoji emoji-id="5276384644739129761">🌟</tg-emoji>'   # золотой сундук
-E_CHEST_D  = '<tg-emoji emoji-id="5217822164362739968">👑</tg-emoji>'   # всевышний сундук
+# New material emoji – each uses a UNIQUE confirmed-working ID
+E_COPPER   = '<tg-emoji emoji-id="5215416430741459742">🪙</tg-emoji>'   # медь  (id from status «На богатом»)
+E_STEEL    = '<tg-emoji emoji-id="5251203410396458957">🔩</tg-emoji>'   # сталь (id from E_SHIELD – metallic)
+E_AMETHYST = '<tg-emoji emoji-id="6280806319351927135">🔮</tg-emoji>'   # аметист (id from E_MANA – purple)
+E_GEM      = '<tg-emoji emoji-id="5442871127753895753">💠</tg-emoji>'   # самоцвет (id from E_CLAN_LVL – diamond)
+
+# Chest emoji – each uses a UNIQUE confirmed-working ID
+E_CHEST_W  = '<tg-emoji emoji-id="5854908544712707500">📦</tg-emoji>'   # деревянный сундук (id = E_INV_BOX – box)
+E_CHEST_S  = '<tg-emoji emoji-id="5201888948091129713">🔩</tg-emoji>'   # стальной сундук (id from E_LINK – chain/metal)
+E_CHEST_G  = '<tg-emoji emoji-id="5276111746812112286">🌟</tg-emoji>'   # золотой сундук (id from E_ITEMS_STAR – golden star)
+E_CHEST_D  = '<tg-emoji emoji-id="5217822164362739968">👑</tg-emoji>'   # всевышний сундук (id = E_CROWN)
 
 # Clan boss emoji
 E_CB_SKULL  = '<tg-emoji emoji-id="5298899451715275167">💀</tg-emoji>'
