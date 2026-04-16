@@ -3,7 +3,7 @@
 # ============== EMOJI CONSTANTS ==============
 # Custom tg-emoji for rich display in messages (used via variables, NOT inline in text)
 E_COINS    = '<tg-emoji emoji-id="5215420556089776398">👛</tg-emoji>'   # монеты
-E_CRYSTALS = '<tg-emoji emoji-id="5429203678529613915">💎</tg-emoji>'   # кристаллы
+E_CRYSTALS = '<tg-emoji emoji-id="5226399342658930683">💎</tg-emoji>'   # кристаллы
 E_TICKET   = '<tg-emoji emoji-id="5334675412599480338">📕</tg-emoji>'   # билет рейда
 E_EXP      = '<tg-emoji emoji-id="5336829549151823064">📕</tg-emoji>'   # опыт
 E_STAR     = '<tg-emoji emoji-id="5206476089127372379">⭐️</tg-emoji>'  # уровень/звезда

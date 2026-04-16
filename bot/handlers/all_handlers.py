@@ -258,7 +258,7 @@ def _roll_chest_drops(user_id: int, chest_key: str) -> tuple[list[str], dict]:
             lines.append(f"{E_PLUS} +{amount} {E_CRYSTALS} кристаллов")
         elif resource == "experience":
             rewards['experience'] = rewards.get('experience', 0) + amount
-            lines.append(f"{E_PLUS} +{amount} {E_EXP} опыта профиля")
+            lines.append(f"{E_PLUS} +{amount} {E_STAR} опыта профиля")
         else:
             rewards[resource] = rewards.get(resource, 0) + amount
             mat_emojis = {
