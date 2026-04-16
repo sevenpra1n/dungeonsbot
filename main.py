@@ -5,6 +5,8 @@ import logging
 
 from bot.loader import bot, dp
 from bot.handlers.all_handlers import router
+from bot.handlers.start import router as start_router
+from bot.handlers.profile import router as profile_router
 from bot.database import init_database
 
 logging.basicConfig(level=logging.INFO)
@@ -16,6 +18,8 @@ async def main():
     init_database()
     logger.info("Database initialized")
 
+    dp.include_router(start_router)
+    dp.include_router(profile_router)
     dp.include_router(router)
     logger.info("Handlers included")
 

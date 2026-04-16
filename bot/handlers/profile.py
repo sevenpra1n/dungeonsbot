@@ -78,7 +78,7 @@ async def handle_profile_menu(message: types.Message, state: FSMContext):
         return
 
     if text == "📦 Инвентарь":
-        from bot.handlers.inventory import _send_inventory
+        from bot.handlers.all_handlers import _send_inventory
         await state.set_state(ProfileMenu.viewing_inventory)
         await state.update_data(inv_from_profile=True)
         await _send_inventory(message, user_id)
