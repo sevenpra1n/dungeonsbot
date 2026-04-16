@@ -16,115 +16,114 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, FSInputFile
 
 # ============== EMOJI CONSTANTS ==============
-# Custom tg-emoji for rich display in messages (used via variables, NOT inline in text)
-E_COINS    = '<tg-emoji emoji-id="5215420556089776398">👛</tg-emoji>'   # монеты
-E_CRYSTALS = '<tg-emoji emoji-id="5429321386403327800">💎</tg-emoji>'   # кристаллы
-E_TICKET   = '<tg-emoji emoji-id="5334675412599480338">📕</tg-emoji>'   # билет рейда
-E_EXP      = '<tg-emoji emoji-id="5336829549151823064">📕</tg-emoji>'   # опыт
-E_STAR     = '<tg-emoji emoji-id="5206476089127372379">⭐️</tg-emoji>'  # уровень/звезда
-E_PROFILE  = '<tg-emoji emoji-id="5275979556308674886">👤</tg-emoji>'   # профиль
-E_ONLINE   = '<tg-emoji emoji-id="5447410659077661506">🌐</tg-emoji>'   # онлайн режим
-E_NICK     = '<tg-emoji emoji-id="5280968723463680459">🆔</tg-emoji>'   # никнейм
-E_HP       = '<tg-emoji emoji-id="5267283746477861842">❤️</tg-emoji>'   # HP
-E_DMG      = '<tg-emoji emoji-id="5429507440091612100">💥</tg-emoji>'   # урон
-E_POW      = '<tg-emoji emoji-id="5242487302550199778">👊</tg-emoji>'   # мощь/сила
-E_SWORD    = '<tg-emoji emoji-id="5393607290228067750">🗡</tg-emoji>'   # боевой меч / начало боя
-E_CURSOR   = '<tg-emoji emoji-id="5438335517735267694">🖱</tg-emoji>'   # твой ход (начало)
-E_MANA     = '<tg-emoji emoji-id="6280806319351927135">💜</tg-emoji>'   # мана
-E_CROWN    = '<tg-emoji emoji-id="5217822164362739968">👑</tg-emoji>'   # ты (PvP)
-E_SKULL    = '<tg-emoji emoji-id="5274108672849491069">💀</tg-emoji>'   # враг (PvP)
-E_ESWORD   = '<tg-emoji emoji-id="5438255528264348146">🗡</tg-emoji>'   # враг меч (PvP/бой)
+E_COINS    = '👛'   # монеты
+E_CRYSTALS = '💎'   # кристаллы
+E_TICKET   = '📕'   # билет рейда
+E_EXP      = '📕'   # опыт
+E_STAR     = '⭐️'  # уровень/звезда
+E_PROFILE  = '👤'   # профиль
+E_ONLINE   = '🌐'   # онлайн режим
+E_NICK     = '🆔'   # никнейм
+E_HP       = '❤️'   # HP
+E_DMG      = '💥'   # урон
+E_POW      = '👊'   # мощь/сила
+E_SWORD    = '🗡'   # боевой меч / начало боя
+E_CURSOR   = '🖱'   # твой ход (начало)
+E_MANA     = '💜'   # мана
+E_CROWN    = '👑'   # ты (PvP)
+E_SKULL    = '💀'   # враг (PvP)
+E_ESWORD   = '🗡'   # враг меч (PvP/бой)
 E_ANGRY    = '😡'   # кик из клана
 
 # Additional emoji
-E_GIFT     = '<tg-emoji emoji-id="5429203678529613915">🎁</tg-emoji>'   # подарок/награда
-E_TROPHY   = '<tg-emoji emoji-id="5312315739842026755">🏆</tg-emoji>'   # трофей/победы
-E_ATK      = '<tg-emoji emoji-id="5408935401442267103">⚔️</tg-emoji>'   # сила (профиль)
+E_GIFT     = '🎁'   # подарок/награда
+E_TROPHY   = '🏆'   # трофей/победы
+E_ATK      = '⚔️'   # сила (профиль)
 E_BULLET   = '▪️'   # маркер-пуля
-E_INV_BOX  = '<tg-emoji emoji-id="5854908544712707500">📦</tg-emoji>'   # инвентарь
-E_BOOK     = '<tg-emoji emoji-id="6284954269917384589">📚</tg-emoji>'   # описание (ресурс)
-E_FORGE    = '<tg-emoji emoji-id="5462995330163289902">⏫</tg-emoji>'   # кузня
-E_WEAPON   = '<tg-emoji emoji-id="5442864569338838830">🗡</tg-emoji>'   # оружие
-E_ARMOR_E  = '<tg-emoji emoji-id="5307620077867129678">🤩</tg-emoji>'   # броня (эмодзи)
-E_CLAN     = '<tg-emoji emoji-id="5453957997418004470">👥</tg-emoji>'   # клан
-E_CLAN_LVL = '<tg-emoji emoji-id="5442871127753895753">💎</tg-emoji>'   # уровень клана
-E_CLAN_EXP = '<tg-emoji emoji-id="5258513401784573443">👥</tg-emoji>'   # опыт клана
-E_CLAN_STAR= '<tg-emoji emoji-id="6284992018384950997">🌟</tg-emoji>'   # соруководители
-E_WOOD     = '<tg-emoji emoji-id="5449918202718985124">🌳</tg-emoji>'   # древесина
-E_STONE    = '<tg-emoji emoji-id="5433955200849159326">🪨</tg-emoji>'   # камень
-E_FOOD     = '<tg-emoji emoji-id="6284888960644682300">🥕</tg-emoji>'   # еда
-E_IRON     = '<tg-emoji emoji-id="6280718212392816659">⛰</tg-emoji>'   # железо
-E_GOLD_M   = '<tg-emoji emoji-id="6278282858561803026">🥇</tg-emoji>'   # золото (материал)
-E_PLUS     = '<tg-emoji emoji-id="5397916757333654639">➕</tg-emoji>'   # плюс (награда)
+E_INV_BOX  = '📦'   # инвентарь
+E_BOOK     = '📚'   # описание (ресурс)
+E_FORGE    = '⏫'   # кузня
+E_WEAPON   = '🗡'   # оружие
+E_ARMOR_E  = '🤩'   # броня (эмодзи)
+E_CLAN     = '👥'   # клан
+E_CLAN_LVL = '💎'   # уровень клана
+E_CLAN_EXP = '👥'   # опыт клана
+E_CLAN_STAR= '🌟'   # соруководители
+E_WOOD     = '🌳'   # древесина
+E_STONE    = '🪨'   # камень
+E_FOOD     = '🥕'   # еда
+E_IRON     = '⛰'   # железо
+E_GOLD_M   = '🥇'   # золото (материал)
+E_PLUS     = '➕'   # плюс (награда)
 E_CHECK    = '✅'   # галочка
-E_BELL     = '<tg-emoji emoji-id="5206222720416643915">🔔</tg-emoji>'   # колокол
+E_BELL     = '🔔'   # колокол
 E_TIMER    = '🕑'   # таймер
-E_HOURGLASS= '<tg-emoji emoji-id="5906598824012420908">⌛️</tg-emoji>'  # песочные часы
-E_MAP_E    = '<tg-emoji emoji-id="6285108394818802672">🗺</tg-emoji>'   # карта
-E_BOOK2    = '<tg-emoji emoji-id="5334859426178313935">📕</tg-emoji>'   # книга (действие)
-E_MARKET   = '<tg-emoji emoji-id="5246762912428603768">📉</tg-emoji>'   # рынок
-E_TRASH    = '<tg-emoji emoji-id="5276384644739129761">🗑</tg-emoji>'   # продажа
-E_CHART    = '<tg-emoji emoji-id="5278778882848220741">📊</tg-emoji>'   # покупка
-E_CROSS    = '<tg-emoji emoji-id="5019523782004441717">❌</tg-emoji>'   # крестик ошибки
-E_LOCK     = '<tg-emoji emoji-id="6034962180875490251">🔓</tg-emoji>'   # замок
-E_HASHTAG  = '<tg-emoji emoji-id="5354857360844152098">#️⃣</tg-emoji>'  # решётка
-E_DOT      = '<tg-emoji emoji-id="5323718538710491847">🔸</tg-emoji>'   # точка
-E_CIRCLE   = '<tg-emoji emoji-id="5357471466919056181">🔘</tg-emoji>'   # кружок
-E_SQ       = '<tg-emoji emoji-id="5267324424113124134">▫️</tg-emoji>'   # квадрат
-E_YELLOW   = '<tg-emoji emoji-id="5906800644525660990">🟡</tg-emoji>'   # жёлтый
-E_GREEN    = '<tg-emoji emoji-id="5906852613629941703">🟢</tg-emoji>'   # зелёный
-E_RED_C    = '<tg-emoji emoji-id="5907027122446145395">🔴</tg-emoji>'   # красный
-E_WARN     = '<tg-emoji emoji-id="5276240711795107620">⚠️</tg-emoji>'   # предупреждение
-E_ITEMS_STAR = '<tg-emoji emoji-id="5276111746812112286">⭐️</tg-emoji>' # звезда предметов
-E_AXE_S1   = '<tg-emoji emoji-id="5204460680018666213">⭐️</tg-emoji>'  # топор 1
-E_AXE_S2   = '<tg-emoji emoji-id="5204221415980539813">⭐️</tg-emoji>'  # топор 2
-E_AXE_S3   = '<tg-emoji emoji-id="5204347567759956677">⭐️</tg-emoji>'  # топор 3
-E_AXE_S4   = '<tg-emoji emoji-id="5204141284775697953">⭐️</tg-emoji>'  # топор 4
-E_AXE_S5   = '<tg-emoji emoji-id="5217979901331644711">⭐️</tg-emoji>'  # топор 5
-E_TREE     = '<tg-emoji emoji-id="5217972428088556660">🌳</tg-emoji>'   # дерево (локация)
-E_EXP_DOT  = '<tg-emoji emoji-id="5321440402157353076">🔸</tg-emoji>'  # точка (опыт профиль)
+E_HOURGLASS= '⌛️'  # песочные часы
+E_MAP_E    = '🗺'   # карта
+E_BOOK2    = '📕'   # книга (действие)
+E_MARKET   = '📉'   # рынок
+E_TRASH    = '🗑'   # продажа
+E_CHART    = '📊'   # покупка
+E_CROSS    = '❌'   # крестик ошибки
+E_LOCK     = '🔓'   # замок
+E_HASHTAG  = '#️⃣'  # решётка
+E_DOT      = '🔸'   # точка
+E_CIRCLE   = '🔘'   # кружок
+E_SQ       = '▫️'   # квадрат
+E_YELLOW   = '🟡'   # жёлтый
+E_GREEN    = '🟢'   # зелёный
+E_RED_C    = '🔴'   # красный
+E_WARN     = '⚠️'   # предупреждение
+E_ITEMS_STAR = '⭐️' # звезда предметов
+E_AXE_S1   = '⭐️'  # топор 1
+E_AXE_S2   = '⭐️'  # топор 2
+E_AXE_S3   = '⭐️'  # топор 3
+E_AXE_S4   = '⭐️'  # топор 4
+E_AXE_S5   = '⭐️'  # топор 5
+E_TREE     = '🌳'   # дерево (локация)
+E_EXP_DOT  = '🔸'  # точка (опыт профиль)
 
 # Battle UI emoji
-E_ARROW_UP = '<tg-emoji emoji-id="5206401524200145033">🔼</tg-emoji>'   # стрелка вверх (атака игрока)
-E_ARROW_DN = '<tg-emoji emoji-id="5206510891247371052">🔽</tg-emoji>'   # стрелка вниз (атака врага)
-E_HEART_B  = '<tg-emoji emoji-id="5278611606756942667">❤️</tg-emoji>'   # сердце (урон игроку)
-E_BOOK_MANA= '<tg-emoji emoji-id="5206626000665868017">📚</tg-emoji>'   # книга (мана)
-E_BOOK_LOSS= '<tg-emoji emoji-id="5334598421015731428">📕</tg-emoji>'   # книга (поражение)
-E_BAN      = '<tg-emoji emoji-id="5278578973595427038">🚫</tg-emoji>'   # запрет (потери)
+E_ARROW_UP = '🔼'   # стрелка вверх (атака игрока)
+E_ARROW_DN = '🔽'   # стрелка вниз (атака врага)
+E_HEART_B  = '❤️'   # сердце (урон игроку)
+E_BOOK_MANA= '📚'   # книга (мана)
+E_BOOK_LOSS= '📕'   # книга (поражение)
+E_BAN      = '🚫'   # запрет (потери)
 
 # Forge / equipment display emoji
-E_LINK     = '<tg-emoji emoji-id="5201888948091129713">🔗</tg-emoji>'   # ссылка (экипировка)
-E_SHIELD   = '<tg-emoji emoji-id="5251203410396458957">🛡</tg-emoji>'   # щит (броня)
-E_HAMMER   = '<tg-emoji emoji-id="5276314275994954605">🔨</tg-emoji>'   # молот (кузня выбор)
-E_PIN      = '<tg-emoji emoji-id="5264910987500220457">📌</tg-emoji>'   # закрепить (текущее)
-E_CART     = '<tg-emoji emoji-id="5278613311858959074">🛒</tg-emoji>'   # тележка (покупка)
-E_ATK2     = '<tg-emoji emoji-id="6334472841953544334">⚔️</tg-emoji>'   # сила (кузня строки)
-E_CLAN_BOTTLE = '<tg-emoji emoji-id="6284926868026037181">🍾</tg-emoji>' # опыт клана (награда)
-E_GIFT_UP  = '<tg-emoji emoji-id="5886484710481205789">🎁</tg-emoji>'   # подарок (улучшение)
-E_ONLINE2  = '<tg-emoji emoji-id="5298668674532538341">👥</tg-emoji>'   # онлайн режим заголовок
-E_SEARCH   = '<tg-emoji emoji-id="5309965701241379366">🔎</tg-emoji>'   # поиск (лупа)
-E_RATING   = '<tg-emoji emoji-id="5413566144986503832">🏆</tg-emoji>'   # рейтинг заголовок
-E_GIFT_GOLD2 = '<tg-emoji emoji-id="6021412890496473421">🎁</tg-emoji>' # подарок (2 место)
-E_GIFT_GOLD3 = '<tg-emoji emoji-id="6001349144046737619">🎁</tg-emoji>' # подарок (3 место)
+E_LINK     = '🔗'   # ссылка (экипировка)
+E_SHIELD   = '🛡'   # щит (броня)
+E_HAMMER   = '🔨'   # молот (кузня выбор)
+E_PIN      = '📌'   # закрепить (текущее)
+E_CART     = '🛒'   # тележка (покупка)
+E_ATK2     = '⚔️'   # сила (кузня строки)
+E_CLAN_BOTTLE = '🍾' # опыт клана (награда)
+E_GIFT_UP  = '🎁'   # подарок (улучшение)
+E_ONLINE2  = '👥'   # онлайн режим заголовок
+E_SEARCH   = '🔎'   # поиск (лупа)
+E_RATING   = '🏆'   # рейтинг заголовок
+E_GIFT_GOLD2 = '🥈' # 2 место
+E_GIFT_GOLD3 = '🥉' # 3 место
 
 # Rarity emoji
-E_RARITY_COMMON    = '<tg-emoji emoji-id="5395855331945392566">🌟</tg-emoji>'  # обычный
-E_RARITY_UNCOMMON  = '<tg-emoji emoji-id="5395404338904472969">🌟</tg-emoji>'  # необычный
-E_RARITY_RARE      = '<tg-emoji emoji-id="5395316601312548706">🌟</tg-emoji>'  # редкий
-E_RARITY_EPIC      = '<tg-emoji emoji-id="5395550054259921224">🌟</tg-emoji>'  # эпический
-E_RARITY_LEGENDARY = '<tg-emoji emoji-id="5395487888903280719">🌟</tg-emoji>'  # легендарный
-E_RARITY_MYTHIC    = '<tg-emoji emoji-id="5395620513198410698">🌟</tg-emoji>'  # мифический
-E_RARITY_ULTRA     = '<tg-emoji emoji-id="5936138290519349485">🎁</tg-emoji>'  # ультра
+E_RARITY_COMMON    = '🌑'  # обычный
+E_RARITY_UNCOMMON  = '🌿'  # необычный
+E_RARITY_RARE      = '🔵'  # редкий
+E_RARITY_EPIC      = '🟣'  # эпический
+E_RARITY_LEGENDARY = '🌟'  # легендарный
+E_RARITY_MYTHIC    = '🌈'  # мифический
+E_RARITY_ULTRA     = '💠'  # ультра
 
 # New material/chest emoji
-E_COPPER   = '<tg-emoji emoji-id="5215420556089776398">🪙</tg-emoji>'   # медь
-E_STEEL    = '<tg-emoji emoji-id="6280718212392816659">🔩</tg-emoji>'   # сталь
-E_AMETHYST = '<tg-emoji emoji-id="5429321386403327800">🔮</tg-emoji>'   # аметист
-E_GEM      = '<tg-emoji emoji-id="5442864569338838830">💠</tg-emoji>'   # самоцвет
-E_CHEST_W  = '<tg-emoji emoji-id="5854908544712707500">📦</tg-emoji>'   # деревянный сундук
-E_CHEST_S  = '<tg-emoji emoji-id="5854908544712707500">🔩</tg-emoji>'   # стальной сундук
-E_CHEST_G  = '<tg-emoji emoji-id="5854908544712707500">🌟</tg-emoji>'   # золотой сундук
-E_CHEST_D  = '<tg-emoji emoji-id="5854908544712707500">👑</tg-emoji>'   # всевышний сундук
+E_COPPER   = '🪙'   # медь
+E_STEEL    = '🔩'   # сталь
+E_AMETHYST = '🔮'   # аметист
+E_GEM      = '💠'   # самоцвет
+E_CHEST_W  = '📦'   # деревянный сундук
+E_CHEST_S  = '🔩'   # стальной сундук
+E_CHEST_G  = '🌟'   # золотой сундук
+E_CHEST_D  = '👑'   # всевышний сундук
 
 RARITY_EMOJIS = {
     "common":    E_RARITY_COMMON,
@@ -783,34 +782,34 @@ def get_experience_progress(user_id: int) -> dict:
 
 # ============== STATUS SYSTEM ==============
 STATUSES = {
-    1: {"name": "Новичок",      "emoji": "🔸", "custom_emoji": '<tg-emoji emoji-id="5323718538710491847">🔸</tg-emoji>', "required_level": 1,  "type": "default"},
-    2: {"name": "Продвинутый",  "emoji": "🌱", "custom_emoji": '<tg-emoji emoji-id="5343920308229256142">🌱</tg-emoji>', "required_level": 5,  "type": "unlock_level"},
-    3: {"name": "Охотник",      "emoji": "🔪", "custom_emoji": '<tg-emoji emoji-id="5224460534534916102">🔪</tg-emoji>', "required_level": 1,  "type": "free"},
-    4: {"name": "Любитель PVP", "emoji": "⚔️", "custom_emoji": '<tg-emoji emoji-id="5454014806950429357">⚔️</tg-emoji>', "required_level": 1,  "type": "free"},
-    5: {"name": "Добытчик",     "emoji": "🥇", "custom_emoji": '<tg-emoji emoji-id="6278187557532472415">🥇</tg-emoji>', "required_level": 1,  "type": "free"},
+    1: {"name": "Новичок",      "emoji": "🔸", "required_level": 1,  "type": "default"},
+    2: {"name": "Продвинутый",  "emoji": "🌱", "required_level": 5,  "type": "unlock_level"},
+    3: {"name": "Охотник",      "emoji": "🔪", "required_level": 1,  "type": "free"},
+    4: {"name": "Любитель PVP", "emoji": "⚔️", "required_level": 1,  "type": "free"},
+    5: {"name": "Добытчик",     "emoji": "🥇", "required_level": 1,  "type": "free"},
     # Page 2 - new statuses
-    6:  {"name": "Сердцеед",     "emoji": "❤️", "custom_emoji": '<tg-emoji emoji-id="5355174247826217637">❤️</tg-emoji>', "required_level": 1, "type": "unlock_friends", "required_friends": 1},
-    7:  {"name": "Стиляга",      "emoji": "👓", "custom_emoji": '<tg-emoji emoji-id="5834901642155137299">👓</tg-emoji>', "required_level": 1, "type": "unlock_strength", "required_strength": 200},
-    8:  {"name": "Press F",      "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="5938394329465756346">🎁</tg-emoji>', "required_level": 1, "type": "unlock_deaths", "required_deaths": 20},
-    9:  {"name": "Лидер",        "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="5936238625250350064">🎁</tg-emoji>', "required_level": 1, "type": "unlock_strength", "required_strength": 1000},
-    10: {"name": "Удачливый",    "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="5960593366151337910">🎁</tg-emoji>', "required_level": 1, "type": "unlock_dodges", "required_dodges": 30},
+    6:  {"name": "Сердцеед",     "emoji": "❤️", "required_level": 1, "type": "unlock_friends", "required_friends": 1},
+    7:  {"name": "Стиляга",      "emoji": "👓", "required_level": 1, "type": "unlock_strength", "required_strength": 200},
+    8:  {"name": "Press F",      "emoji": "🎁", "required_level": 1, "type": "unlock_deaths", "required_deaths": 20},
+    9:  {"name": "Лидер",        "emoji": "🎁", "required_level": 1, "type": "unlock_strength", "required_strength": 1000},
+    10: {"name": "Удачливый",    "emoji": "🍀", "required_level": 1, "type": "unlock_dodges", "required_dodges": 30},
     # Page 3 - new statuses
-    11: {"name": "Гладиатор",    "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="6001349144046737619">🎁</tg-emoji>', "required_level": 1, "type": "unlock_pve_wins", "required_pve_wins": 50},
-    12: {"name": "Убийца",       "emoji": "👹", "custom_emoji": '<tg-emoji emoji-id="5796297917752941521">👹</tg-emoji>', "required_level": 1, "type": "unlock_pve_wins", "required_pve_wins": 120},
-    13: {"name": "Творчество",   "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="6021462012037437193">🎁</tg-emoji>', "required_level": 1, "type": "unlock_clan_image"},
-    14: {"name": "Пример для подражания", "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="6021486768228940485">🎁</tg-emoji>', "required_level": 1, "type": "unlock_strength", "required_strength": 2000},
-    15: {"name": "Какашка",      "emoji": "💩", "custom_emoji": '<tg-emoji emoji-id="6005662304824203821">💩</tg-emoji>', "required_level": 1, "type": "unlock_spam"},
-    16: {"name": "багоюзер 777", "emoji": "💎", "custom_emoji": '<tg-emoji emoji-id="5354902509540370798">💎</tg-emoji>', "required_level": 1, "type": "unlock_bagouser"},
+    11: {"name": "Гладиатор",    "emoji": "🏛", "required_level": 1, "type": "unlock_pve_wins", "required_pve_wins": 50},
+    12: {"name": "Убийца",       "emoji": "👹", "required_level": 1, "type": "unlock_pve_wins", "required_pve_wins": 120},
+    13: {"name": "Творчество",   "emoji": "🎨", "required_level": 1, "type": "unlock_clan_image"},
+    14: {"name": "Пример для подражания", "emoji": "🌠", "required_level": 1, "type": "unlock_strength", "required_strength": 2000},
+    15: {"name": "Какашка",      "emoji": "💩", "required_level": 1, "type": "unlock_spam"},
+    16: {"name": "багоюзер 777", "emoji": "💎", "required_level": 1, "type": "unlock_bagouser"},
     # Page 4 - chest statuses
-    17: {"name": "Руинер",                "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="5886484710481205789">🎁</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
-    18: {"name": "Хакер",                 "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="6021412890496473421">🎁</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
-    19: {"name": "Щедрый",                "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="6001349144046737619">🎁</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
-    20: {"name": "Шахтер",                "emoji": "⛏️", "custom_emoji": '<tg-emoji emoji-id="5456456455634370613">⛏️</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
-    21: {"name": "Очаровашка",            "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="5938394329465756346">🎁</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
-    22: {"name": "Доверие",               "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="6021462012037437193">🎁</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
-    23: {"name": "На богатом",            "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="6021486768228940485">🎁</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
-    24: {"name": "Лучший в своем деле",   "emoji": "🏆", "custom_emoji": '<tg-emoji emoji-id="5312315739842026755">🏆</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
-    25: {"name": "Дизайнер",              "emoji": "🎨", "custom_emoji": '<tg-emoji emoji-id="5222021318378948590">🎨</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
+    17: {"name": "Руинер",                "emoji": "💣", "required_level": 1, "type": "unlock_chest"},
+    18: {"name": "Хакер",                 "emoji": "💻", "required_level": 1, "type": "unlock_chest"},
+    19: {"name": "Щедрый",                "emoji": "🤲", "required_level": 1, "type": "unlock_chest"},
+    20: {"name": "Шахтер",                "emoji": "⛏️", "required_level": 1, "type": "unlock_chest"},
+    21: {"name": "Очаровашка",            "emoji": "✨", "required_level": 1, "type": "unlock_chest"},
+    22: {"name": "Доверие",               "emoji": "🤝", "required_level": 1, "type": "unlock_chest"},
+    23: {"name": "На богатом",            "emoji": "💰", "required_level": 1, "type": "unlock_chest"},
+    24: {"name": "Лучший в своем деле",   "emoji": "🏆", "required_level": 1, "type": "unlock_chest"},
+    25: {"name": "Дизайнер",              "emoji": "🎨", "required_level": 1, "type": "unlock_chest"},
 }
 
 # ============== CHEST CONFIG ==============
@@ -899,11 +898,11 @@ CHEST_CONFIG = {
 }
 
 def get_player_status_emoji(player: dict) -> str:
-    """Вернуть кастомный HTML эмодзи статуса игрока"""
+    """Вернуть эмодзи статуса игрока"""
     status_name = player.get('status', 'Новичок')
     for s in STATUSES.values():
         if s['name'] == status_name:
-            return s.get('custom_emoji', s['emoji'])
+            return s['emoji']
     return '🔸'
 
 def set_player_status(user_id: int, status_name: str):
@@ -1427,11 +1426,11 @@ LOCATION_ENEMIES = {
 
 # Топоры (для магазина предметов)
 AXES = {
-    1: {"level": 1, "min_wood": 2,  "max_wood": 6,   "cost": 250,   "star_emoji": '<tg-emoji emoji-id="5204460680018666213">⭐️</tg-emoji>'},
-    2: {"level": 2, "min_wood": 8,  "max_wood": 14,  "cost": 900,   "star_emoji": '<tg-emoji emoji-id="5204221415980539813">⭐️</tg-emoji>'},
-    3: {"level": 3, "min_wood": 17, "max_wood": 35,  "cost": 3250,  "star_emoji": '<tg-emoji emoji-id="5204347567759956677">⭐️</tg-emoji>'},
-    4: {"level": 4, "min_wood": 30, "max_wood": 75,  "cost": 9500,  "star_emoji": '<tg-emoji emoji-id="5204141284775697953">⭐️</tg-emoji>'},
-    5: {"level": 5, "min_wood": 80, "max_wood": 115, "cost": 25300, "star_emoji": '<tg-emoji emoji-id="5217979901331644711">⭐️</tg-emoji>'},
+    1: {"level": 1, "min_wood": 2,  "max_wood": 6,   "cost": 250,   "star_emoji": '⭐️'},
+    2: {"level": 2, "min_wood": 8,  "max_wood": 14,  "cost": 900,   "star_emoji": '⭐️'},
+    3: {"level": 3, "min_wood": 17, "max_wood": 35,  "cost": 3250,  "star_emoji": '⭐️'},
+    4: {"level": 4, "min_wood": 30, "max_wood": 75,  "cost": 9500,  "star_emoji": '⭐️'},
+    5: {"level": 5, "min_wood": 80, "max_wood": 115, "cost": 25300, "star_emoji": '⭐️'},
 }
 
 # Враги леса (по силе игрока)
@@ -1662,12 +1661,12 @@ CLAN_BOSSES_CONFIG = {
     },
 }
 
-# Кастомные эмодзи для кланового босса
-E_CB_SKULL  = '<tg-emoji emoji-id="5298899451715275167">💀</tg-emoji>'
-E_CB_CROWN  = '<tg-emoji emoji-id="5357553616758528519">👑</tg-emoji>'
-E_CB_TICKET = '<tg-emoji emoji-id="5334666264319141034">📕</tg-emoji>'
-E_CB_DOWN   = '<tg-emoji emoji-id="5206510891247371052">🔽</tg-emoji>'
-E_CB_STAR   = '<tg-emoji emoji-id="5206476089127372379">⭐️</tg-emoji>'
+# Эмодзи для кланового босса
+E_CB_SKULL  = '💀'
+E_CB_CROWN  = '👑'
+E_CB_TICKET = '📕'
+E_CB_DOWN   = '🔽'
+E_CB_STAR   = '⭐️'
 
 def get_clan_boss(clan_id: int) -> dict:
     """Получить текущего кланового босса из БД. Создаёт запись если нет."""
@@ -1914,19 +1913,19 @@ def get_rating_league(rating_points: int) -> str:
     if rating_points < 100:
         return "🎗 Новичковая лига"
     elif rating_points < 200:
-        return "🌟 Серебряная лига"
+        return "🥈 Серебряная лига"
     elif rating_points < 350:
-        return "🌟 Любительская лига"
+        return "🎖 Любительская лига"
     elif rating_points < 500:
-        return "📕 Продвинутая лига"
+        return "🏅 Продвинутая лига"
     elif rating_points < 800:
-        return f"{E_GIFT} Избранная лига"
+        return "🏆 Избранная лига"
     elif rating_points < 1150:
-        return f"{E_GIFT} Профессиональная лига"
+        return "🥇 Профессиональная лига"
     elif rating_points < 1500:
-        return f"{E_GIFT} Киберспортивная лига"
+        return "🌐 Киберспортивная лига"
     else:
-        return f"{E_GIFT} Мировая лига"
+        return "🌍 Мировая лига"
 
 
 def get_pvp_league_points(rating_points: int) -> tuple:
@@ -2442,12 +2441,12 @@ def get_main_kb():
 def get_main_menu_text() -> str:
     """Текст главного меню"""
     return (
-        '<tg-emoji emoji-id="5265000876870761765">🔖</tg-emoji> Главное меню Hades:\n'
-        '<tg-emoji emoji-id="5267324424113124134">▫️</tg-emoji>Текущий сезон: Season 1 <tg-emoji emoji-id="5906478942885255780">⭐</tg-emoji>\n'
-        '<tg-emoji emoji-id="5267324424113124134">▫️</tg-emoji>├ <tg-emoji emoji-id="5906852613629941703">🟢</tg-emoji> the initial expedition\n\n'
-        '<tg-emoji emoji-id="5267324424113124134">▫️</tg-emoji> Версия обновления:\n'
-        '<tg-emoji emoji-id="5267324424113124134">▫️</tg-emoji>├ <tg-emoji emoji-id="5906800644525660990">🟡</tg-emoji> Beta 1.1\n\n'
-        '<tg-emoji emoji-id="5267324424113124134">▫️</tg-emoji><tg-emoji emoji-id="5354857360844152098">#️⃣</tg-emoji> Кнопки команд ниже:'
+        '🔖 Главное меню Hades:\n'
+        '▫️Текущий сезон: Season 1 ⭐\n'
+        '▫️├ 🟢 the initial expedition\n\n'
+        '▫️ Версия обновления:\n'
+        '▫️├ 🟡 Beta 1.1\n\n'
+        '▫️#️⃣ Кнопки команд ниже:'
     )
 
 async def show_main_menu(message, state: FSMContext = None):
@@ -2999,7 +2998,7 @@ def _format_statuses_text(player: dict, page: int = 0) -> str:
         owned = (player.get('status') == s['name'])
         lock = "" if can else f" {_get_status_requirement_text(s)}"
         check = " ✅" if owned else ""
-        text += f"{s.get('custom_emoji', s['emoji'])} | {s['name']}{lock}{check}\n"
+        text += f"{s['emoji']} | {s['name']}{lock}{check}\n"
     return text
 
 # ============== HELPER FUNCTIONS ==============
@@ -4313,7 +4312,7 @@ def _format_rating_page(leaderboard, page: int) -> str:
         status_emoji = '🔸'
         for s in STATUSES.values():
             if s['name'] == status:
-                status_emoji = s.get('custom_emoji', s['emoji'])
+                status_emoji = s['emoji']
                 break
         league = get_rating_league(rating_pts)
         
@@ -4677,8 +4676,8 @@ async def _send_friends_list(message, state: FSMContext, user_id: int, page: int
 
     if total == 0:
         text = (
-            f'<tg-emoji emoji-id="5386745190914482793">😢</tg-emoji> У вас пока нету друзей...\n'
-            f'{E_SQ}<tg-emoji emoji-id="5276240711795107620">⚠️</tg-emoji> вы можете добавить друзей во вкладке "Рейтинг"!'
+            f'😢 У вас пока нету друзей...\n'
+            f'{E_SQ}⚠️ вы можете добавить друзей во вкладке "Рейтинг"!'
         )
         kb = []
         if has_requests:
@@ -4687,7 +4686,7 @@ async def _send_friends_list(message, state: FSMContext, user_id: int, page: int
         await message.answer(text, reply_markup=ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True), parse_mode="HTML")
         return
 
-    text = f'<tg-emoji emoji-id="5298668674532538341">👥</tg-emoji> Всего в друзьях: {total}\n\n'
+    text = f'👥 Всего в друзьях: {total}\n\n'
     start_index = page * FRIENDS_PER_PAGE
     for i, friend in enumerate(friends_data):
         idx = start_index + i + 1
@@ -4951,7 +4950,7 @@ async def process_like_message_from_friend(message: types.Message, state: FSMCon
     request_ids = get_friend_requests(user_id)
 
     if not request_ids:
-        text = '<tg-emoji emoji-id="5206510891247371052">🔽</tg-emoji> 🔽 У вас нет новых заявок в друзья!'
+        text = '🔽 У вас нет новых заявок в друзья!'
         kb = [[KeyboardButton(text="⬅️ Назад в друзья")]]
         await message.answer(text, reply_markup=ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True), parse_mode="HTML")
         return
@@ -4962,7 +4961,7 @@ async def process_like_message_from_friend(message: types.Message, state: FSMCon
         if rp:
             requests_data.append(rp)
 
-    text = f'<tg-emoji emoji-id="5206510891247371052">🔽</tg-emoji> 🔽 Заявки в друзья: {len(requests_data)}\n\n'
+    text = f'🔽 Заявки в друзья: {len(requests_data)}\n\n'
     for req in requests_data:
         safe_nick = html.escape(req['nickname'])
         text += (
@@ -5095,8 +5094,8 @@ async def open_raid(message: types.Message, state: FSMContext):
         coop_info = f'\n{E_SWORD} Партнёр готов: {p_nick} — нажми <b>🤝 Начать совместный рейд</b>!'
 
     raid_menu_text = (
-        f'<tg-emoji emoji-id="5201888948091129713">🔗</tg-emoji> | Меню рейда {html.escape(player["nickname"])}:\n'
-        f'<tg-emoji emoji-id="5357471466919056181">🔘</tg-emoji> Рекорд этажа: {player["raid_max_floor"]} <tg-emoji emoji-id="5359669309058603132">🏆</tg-emoji>'
+        f'🔗 | Меню рейда {html.escape(player["nickname"])}:\n'
+        f'🔘 Рекорд этажа: {player["raid_max_floor"]} 🏆'
         f'{coop_info}'
     )
     await state.set_state(RaidState.viewing_menu)
@@ -7166,7 +7165,7 @@ def _format_clan_menu(clan: dict, leader_nickname: str) -> str:
         exp_display = f"{clan['clan_exp']}📈 (МАКС 🧬)"
     else:
         max_exp = CLAN_LEVEL_EXP[clan['clan_level']]
-        exp_display = f'<tg-emoji emoji-id="5267324424113124134">▫️</tg-emoji> {clan["clan_exp"]} / {max_exp} <tg-emoji emoji-id="6284926868026037181">🍾</tg-emoji>'
+        exp_display = f'▫️ {clan["clan_exp"]} / {max_exp} 🍾'
     co_leaders = get_clan_co_leaders(clan['clan_id'])
     co_str = ", ".join(nick for _, nick in co_leaders) if co_leaders else "—"
     return (
@@ -7262,11 +7261,11 @@ async def handle_clans_list(message: types.Message, state: FSMContext):
             joiner = get_player(user_id)
             joiner_name = joiner['nickname'] if joiner else "Игрок"
             join_notify_text = (
-                f"<tg-emoji emoji-id=\"5397916757333654639\">➕</tg-emoji> "
-                f"<tg-emoji emoji-id=\"5275979556308674886\">👤</tg-emoji> в клан {clan_name}, зашёл {joiner_name}\n"
-                f"<tg-emoji emoji-id=\"5267324424113124134\">▫️</tg-emoji>"
-                f"<tg-emoji emoji-id=\"5906800644525660990\">🟡</tg-emoji> Приветствуем в клане! "
-                f"<tg-emoji emoji-id=\"5233638274056083197\">🤩</tg-emoji>"
+                f"➕ "
+                f"👤 в клан {clan_name}, зашёл {joiner_name}\n"
+                f"▫️"
+                f"🟡 Приветствуем в клане! "
+                f"🤩"
             )
             clan_members_list = get_clan_members(clan_id)
             for member_uid, _, _, _ in clan_members_list:
@@ -8278,10 +8277,10 @@ _MARKET_SELL_BUTTONS = {
 def _get_market_category_text() -> str:
     """Сформировать текст категорий рынка"""
     return (
-        '<tg-emoji emoji-id="5906909964328245730">🗓</tg-emoji> Выбери категорию на рынке:\n\n'
-        '<tg-emoji emoji-id="5267324424113124134">▫️</tg-emoji>Продажа ресурсов <tg-emoji emoji-id="6284888960644682300">🥕</tg-emoji>\n'
-        '<tg-emoji emoji-id="5267324424113124134">▫️</tg-emoji>Расходники <tg-emoji emoji-id="5334859426178313935">📕</tg-emoji>\n'
-        '<tg-emoji emoji-id="5267324424113124134">▫️</tg-emoji>Предметы <tg-emoji emoji-id="5936238625250350064">🎁</tg-emoji>'
+        '🗓 Выбери категорию на рынке:\n\n'
+        '▫️Продажа ресурсов 🥕\n'
+        '▫️Расходники 📕\n'
+        '▫️Предметы 🎁'
     )
 
 def _get_market_text(player: dict) -> str:
