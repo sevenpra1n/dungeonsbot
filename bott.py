@@ -106,9 +106,9 @@ E_RATING   = '🏆'   # рейтинг заголовок
 E_GIFT_GOLD2 = '🥈' # 2 место
 E_GIFT_GOLD3 = '🥉' # 3 место
 
-# Rarity emoji
-E_RARITY_COMMON    = '🌑'  # обычный
-E_RARITY_UNCOMMON  = '🌿'  # необычный
+# Rarity emoji - clear visual progression from common to ultra
+E_RARITY_COMMON    = '⚪'  # обычный
+E_RARITY_UNCOMMON  = '🟢'  # необычный
 E_RARITY_RARE      = '🔵'  # редкий
 E_RARITY_EPIC      = '🟣'  # эпический
 E_RARITY_LEGENDARY = '🌟'  # легендарный
@@ -790,8 +790,8 @@ STATUSES = {
     # Page 2 - new statuses
     6:  {"name": "Сердцеед",     "emoji": "❤️", "required_level": 1, "type": "unlock_friends", "required_friends": 1},
     7:  {"name": "Стиляга",      "emoji": "👓", "required_level": 1, "type": "unlock_strength", "required_strength": 200},
-    8:  {"name": "Press F",      "emoji": "🎁", "required_level": 1, "type": "unlock_deaths", "required_deaths": 20},
-    9:  {"name": "Лидер",        "emoji": "🎁", "required_level": 1, "type": "unlock_strength", "required_strength": 1000},
+    8:  {"name": "Press F",      "emoji": "⚰️", "required_level": 1, "type": "unlock_deaths", "required_deaths": 20},
+    9:  {"name": "Лидер",        "emoji": "👑", "required_level": 1, "type": "unlock_strength", "required_strength": 1000},
     10: {"name": "Удачливый",    "emoji": "🍀", "required_level": 1, "type": "unlock_dodges", "required_dodges": 30},
     # Page 3 - new statuses
     11: {"name": "Гладиатор",    "emoji": "🏛", "required_level": 1, "type": "unlock_pve_wins", "required_pve_wins": 50},
@@ -1426,11 +1426,11 @@ LOCATION_ENEMIES = {
 
 # Топоры (для магазина предметов)
 AXES = {
-    1: {"level": 1, "min_wood": 2,  "max_wood": 6,   "cost": 250,   "star_emoji": '⭐️'},
-    2: {"level": 2, "min_wood": 8,  "max_wood": 14,  "cost": 900,   "star_emoji": '⭐️'},
-    3: {"level": 3, "min_wood": 17, "max_wood": 35,  "cost": 3250,  "star_emoji": '⭐️'},
-    4: {"level": 4, "min_wood": 30, "max_wood": 75,  "cost": 9500,  "star_emoji": '⭐️'},
-    5: {"level": 5, "min_wood": 80, "max_wood": 115, "cost": 25300, "star_emoji": '⭐️'},
+    1: {"level": 1, "min_wood": 2,  "max_wood": 6,   "cost": 250,   "star_emoji": '⭐'},
+    2: {"level": 2, "min_wood": 8,  "max_wood": 14,  "cost": 900,   "star_emoji": '🌟'},
+    3: {"level": 3, "min_wood": 17, "max_wood": 35,  "cost": 3250,  "star_emoji": '💫'},
+    4: {"level": 4, "min_wood": 30, "max_wood": 75,  "cost": 9500,  "star_emoji": '✨'},
+    5: {"level": 5, "min_wood": 80, "max_wood": 115, "cost": 25300, "star_emoji": '🌠'},
 }
 
 # Враги леса (по силе игрока)
