@@ -23,16 +23,16 @@ STATUSES = {
     14: {"name": "Пример для подражания", "emoji": "🌠", "custom_emoji": '<tg-emoji emoji-id="6021486768228940485">🎁</tg-emoji>', "required_level": 1, "type": "unlock_strength", "required_strength": 2000},
     15: {"name": "Какашка",      "emoji": "💩", "custom_emoji": '<tg-emoji emoji-id="6005662304824203821">💩</tg-emoji>', "required_level": 1, "type": "unlock_spam"},
     16: {"name": "багоюзер 777", "emoji": "💎", "custom_emoji": '<tg-emoji emoji-id="5354902509540370798">💎</tg-emoji>', "required_level": 1, "type": "unlock_bagouser"},
-    # Page 4 - chest statuses
-    17: {"name": "Руинер",                "emoji": "💣", "custom_emoji": '<tg-emoji emoji-id="5379649600852559913">💣</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
-    18: {"name": "Хакер",                 "emoji": "💻", "custom_emoji": '<tg-emoji emoji-id="5372981998306950966">💻</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
-    19: {"name": "Щедрый",                "emoji": "🤲", "custom_emoji": '<tg-emoji emoji-id="5465665476971471368">🤲</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
-    20: {"name": "Шахтер",                "emoji": "⛏️", "custom_emoji": '<tg-emoji emoji-id="5456456455634370613">⛏️</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
-    21: {"name": "Очаровашка",            "emoji": "✨", "custom_emoji": '<tg-emoji emoji-id="5434093219451276552">✨</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
-    22: {"name": "Доверие",               "emoji": "🤝", "custom_emoji": '<tg-emoji emoji-id="5466100772898795586">🤝</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
-    23: {"name": "На богатом",            "emoji": "💰", "custom_emoji": '<tg-emoji emoji-id="5215416430741459742">💰</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
-    24: {"name": "Лучший в своем деле",   "emoji": "🏆", "custom_emoji": '<tg-emoji emoji-id="5312315739842026755">🏆</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
-    25: {"name": "Дизайнер",              "emoji": "🎨", "custom_emoji": '<tg-emoji emoji-id="5222021318378948590">🎨</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
+    # Page 4 - chest statuses (Можно найти в сундуке)
+    17: {"name": "Руинер",                "emoji": "👎", "custom_emoji": '<tg-emoji emoji-id="5190798023977885109">👎</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
+    18: {"name": "Хакер",                 "emoji": "⚜️", "custom_emoji": '<tg-emoji emoji-id="6226472161264013189">⚜️</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
+    19: {"name": "Щедрый",                "emoji": "💸", "custom_emoji": '<tg-emoji emoji-id="6334525176130046798">💸</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
+    20: {"name": "Шахтер",                "emoji": "⛏️", "custom_emoji": '<tg-emoji emoji-id="6334475706696730571">⛏️</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
+    21: {"name": "Очаровашка",            "emoji": "🎀", "custom_emoji": '<tg-emoji emoji-id="6334663877803902384">🎀</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
+    22: {"name": "Доверие",               "emoji": "🤝", "custom_emoji": '<tg-emoji emoji-id="5906986955911993888">🤝</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
+    23: {"name": "На богатом",            "emoji": "💲", "custom_emoji": '<tg-emoji emoji-id="5906735026015313678">💲</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
+    24: {"name": "Лучший в своем деле",   "emoji": "✅", "custom_emoji": '<tg-emoji emoji-id="5906482735341377395">✅</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
+    25: {"name": "Дизайнер",              "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="5427011475682130336">🎁</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
 }
 
 STATUSES_PER_PAGE = 5
