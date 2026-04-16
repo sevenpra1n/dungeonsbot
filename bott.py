@@ -377,6 +377,20 @@ def init_database():
         INSERT OR IGNORE INTO player_components (user_id)
         SELECT user_id FROM players
     ''')
+    # Миграция: добавить колонки компонентов если их нет (для старых БД)
+    for comp_col in [
+        'ALTER TABLE player_components ADD COLUMN common INTEGER DEFAULT 0',
+        'ALTER TABLE player_components ADD COLUMN rare INTEGER DEFAULT 0',
+        'ALTER TABLE player_components ADD COLUMN epic INTEGER DEFAULT 0',
+        'ALTER TABLE player_components ADD COLUMN legendary INTEGER DEFAULT 0',
+        'ALTER TABLE player_components ADD COLUMN mythic INTEGER DEFAULT 0',
+    ]:
+        try:
+            cursor.execute(comp_col)
+            conn.commit()
+        except sqlite3.OperationalError as e:
+            if "duplicate column name" not in str(e).lower():
+                logging.warning(f"Components migration warning: {e}")
 
     # Таблица разблокированных сундучных статусов
     cursor.execute('''
@@ -3193,7 +3207,7 @@ async def handle_profile_menu(message: types.Message, state: FSMContext):
         return
 
     if text == "🎭 Статусы":
-        player = get_player(user_id)
+        player = get_player_with_chest_statuses(user_id)
         await state.set_state(ProfileMenu.viewing_statuses)
         await state.update_data(statuses_page=0)
         statuses_text = _format_statuses_text(player, 0)
@@ -3208,7 +3222,7 @@ async def handle_profile_menu(message: types.Message, state: FSMContext):
 @dp.message(ProfileMenu.viewing_statuses)
 async def handle_profile_statuses(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
-    player = get_player(user_id)
+    player = get_player_with_chest_statuses(user_id)
     text = message.text
     data = await state.get_data()
     current_page = data.get('statuses_page', 0)
@@ -3246,7 +3260,7 @@ async def handle_profile_statuses(message: types.Message, state: FSMContext):
                 await message.answer(f"{req_text} — условие не выполнено!", reply_markup=get_statuses_kb(player, current_page))
                 return
             set_player_status(user_id, s['name'])
-            updated = get_player(user_id)
+            updated = get_player_with_chest_statuses(user_id)
             await message.answer(f"✅ Статус изменён на «{s['name']}» {s['emoji']}!", reply_markup=get_statuses_kb(updated, current_page))
             return
 
@@ -3303,9 +3317,10 @@ async def _send_inventory(message, user_id: int, back_button: str = "⬅️ На
 async def _send_components(message, user_id: int):
     """Показать компоненты игрока"""
     comp = get_components(user_id)
+    total = comp["common"] + comp["rare"] + comp["epic"] + comp["legendary"] + comp["mythic"]
     text = (
         f'{E_SQ} Компоненты:\n\n'
-        f'{E_SQ} Компоненты\n'
+        f'{total} {E_SQ} Компоненты\n'
         f'├ Редкость: обычная\n'
         f'├ количество: {comp["common"]}\n\n'
         f'├ Редкость: редкая\n'
@@ -3325,16 +3340,16 @@ async def _send_chests(message, user_id: int):
     inv = get_inventory(user_id)
     text = (
         f'{E_INV_BOX} Твои сундуки:\n\n'
-        f'📦 Деревянный сундук:\n'
+        f'{E_CHEST_W} Деревянный сундук:\n'
         f'├ Количество: {inv.get("chest_wood", 0)}\n'
         f'├ Дроп: низкий\n\n'
-        f'🔩 Стальной сундук:\n'
+        f'{E_CHEST_S} Стальной сундук:\n'
         f'├ Количество: {inv.get("chest_steel", 0)}\n'
         f'├ Дроп: средний\n\n'
-        f'🌟 Золотой сундук:\n'
+        f'{E_CHEST_G} Золотой сундук:\n'
         f'├ Количество: {inv.get("chest_gold", 0)}\n'
         f'├ Дроп: высокий\n\n'
-        f'👑 Всевышний сундук:\n'
+        f'{E_CHEST_D} Всевышний сундук:\n'
         f'├ Количество: {inv.get("chest_divine", 0)}\n'
         f'├ Дроп: очень высокий\n'
     )
@@ -3403,7 +3418,7 @@ def _roll_chest_drops(user_id: int, chest_key: str) -> tuple[list[str], dict]:
             mat_emojis = {
                 'wood': E_WOOD, 'stone': E_STONE, 'food': E_FOOD,
                 'iron': E_IRON, 'gold': E_GOLD_M,
-                'copper': '🪙', 'steel': '🔩', 'amethyst': '🔮', 'gem': '💠',
+                'copper': E_COPPER, 'steel': E_STEEL, 'amethyst': E_AMETHYST, 'gem': E_GEM,
             }
             emoji = mat_emojis.get(resource, '📦')
             lines.append(f"{E_PLUS} +{amount} {emoji}")
@@ -3531,7 +3546,7 @@ async def handle_chests_menu(message: types.Message, state: FSMContext):
         chest_name = CHEST_CONFIG[chest_key]["name"]
         reward_text = "\n".join(lines) if lines else "Пусто…"
         result_text = (
-            f'🎁 Вы открыли <b>{chest_name}</b>:\n\n'
+            f'{E_GIFT} Вы открыли <b>{chest_name}</b>:\n\n'
             f'{reward_text}'
         )
         try:
