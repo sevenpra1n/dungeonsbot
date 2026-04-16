@@ -17,7 +17,7 @@ from bot.keyboards import get_profile_kb, get_statuses_kb, show_main_menu
 from bot.data.equipment import DEFAULT_WEAPON, DEFAULT_ARMOR
 from bot.data.statuses import STATUSES, is_status_available, _format_statuses_text, _get_status_requirement_text
 from bot.emojis import *
-from bot.database import get_rating_league
+from bot.data.leagues_config import get_league_label
 
 router = Router()
 
@@ -45,7 +45,7 @@ async def _send_profile(message, player: dict):
     damage = calculate_damage(display_strength)
     exp_info = get_experience_progress(player['user_id'])
     status_emoji = get_player_status_emoji(player)
-    league = get_rating_league(player.get('rating_points', 0))
+    league = get_league_label(player.get('rating_points', 0))
 
     safe_nick = html.escape(player["nickname"])
     safe_status = html.escape(player["status"])
