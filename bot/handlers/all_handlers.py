@@ -5192,10 +5192,13 @@ async def admin_chests_amount(message: types.Message, state: FSMContext):
     add_inventory_material(data['target_user_id'], chest_key, amount)
     chest_name = _ADMIN_CHEST_KEYS[chest_key]
     await message.answer(
-        f"✅ {amount} × «{chest_name}» добавлено игроку {html.escape(data['target_nickname'])}"
+        f"✅ {amount} × «{chest_name}» добавлено игроку {html.escape(data['target_nickname'])}",
+        parse_mode="HTML",
     )
     await state.set_state(AdminPanel.main_menu)
     await message.answer("🔐 Админ панель", reply_markup=get_admin_kb())
+
+async def activity_monitor_loop():
     """Фоновая задача: проверяет завершение активностей и отправляет награды"""
     while True:
         await asyncio.sleep(10)
