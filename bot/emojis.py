@@ -106,10 +106,10 @@ E_COPPER   = '<tg-emoji emoji-id="5215420556089776398">🪙</tg-emoji>'   # ме
 E_STEEL    = '<tg-emoji emoji-id="6280718212392816659">🔩</tg-emoji>'   # сталь
 E_AMETHYST = '<tg-emoji emoji-id="5429321386403327800">🔮</tg-emoji>'   # аметист
 E_GEM      = '<tg-emoji emoji-id="5442864569338838830">💠</tg-emoji>'   # самоцвет
-E_CHEST_W  = '<tg-emoji emoji-id="5854908544712707500">📦</tg-emoji>'   # деревянный сундук
-E_CHEST_S  = '<tg-emoji emoji-id="5854908544712707500">🔩</tg-emoji>'   # стальной сундук
-E_CHEST_G  = '<tg-emoji emoji-id="5854908544712707500">🌟</tg-emoji>'   # золотой сундук
-E_CHEST_D  = '<tg-emoji emoji-id="5854908544712707500">👑</tg-emoji>'   # всевышний сундук
+E_CHEST_W  = '<tg-emoji emoji-id="5206626000665868017">📦</tg-emoji>'   # деревянный сундук
+E_CHEST_S  = '<tg-emoji emoji-id="5278613311858959074">🔩</tg-emoji>'   # стальной сундук
+E_CHEST_G  = '<tg-emoji emoji-id="5276384644739129761">🌟</tg-emoji>'   # золотой сундук
+E_CHEST_D  = '<tg-emoji emoji-id="5217822164362739968">👑</tg-emoji>'   # всевышний сундук
 
 # Clan boss emoji
 E_CB_SKULL  = '<tg-emoji emoji-id="5298899451715275167">💀</tg-emoji>'
