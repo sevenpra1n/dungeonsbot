@@ -469,11 +469,19 @@ def init_database():
         CREATE TABLE IF NOT EXISTS player_likes (
             liker_id INTEGER NOT NULL,
             liked_id INTEGER NOT NULL,
+            message TEXT DEFAULT '',
             PRIMARY KEY (liker_id, liked_id),
             FOREIGN KEY (liker_id) REFERENCES players(user_id),
             FOREIGN KEY (liked_id) REFERENCES players(user_id)
         )
     ''')
+    # Migration: add message column if missing
+    try:
+        cursor.execute("ALTER TABLE player_likes ADD COLUMN message TEXT DEFAULT ''")
+        conn.commit()
+    except sqlite3.OperationalError as e:
+        if "duplicate column name" not in str(e).lower():
+            logging.warning(f"Migration warning: {e}")
 
     conn.commit()
     conn.close()
@@ -1101,15 +1109,15 @@ def has_liked_player(liker_id: int, liked_id: int) -> bool:
     conn.close()
     return result is not None
 
-def give_like_to_player(liker_id: int, liked_id: int) -> bool:
-    """Поставить лайк. Возвращает True если лайк добавлен, False если уже лайкал или сам себе."""
+def give_like_to_player(liker_id: int, liked_id: int, message: str = '') -> bool:
+    """Поставить лайк с посланием. Возвращает True если лайк добавлен, False если уже лайкал или сам себе."""
     if liker_id == liked_id:
         return False
     if has_liked_player(liker_id, liked_id):
         return False
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute('INSERT OR IGNORE INTO player_likes (liker_id, liked_id) VALUES (?, ?)', (liker_id, liked_id))
+    cursor.execute('INSERT OR IGNORE INTO player_likes (liker_id, liked_id, message) VALUES (?, ?, ?)', (liker_id, liked_id, message))
     cursor.execute('UPDATE players SET likes = COALESCE(likes, 0) + 1 WHERE user_id = ?', (liked_id,))
     conn.commit()
     conn.close()
@@ -2394,6 +2402,10 @@ class CoopRaidState(StatesGroup):
     waiting_invite = State()   # Приглашённый игрок решает принять/отклонить
     in_lobby = State()         # Принявший ожидает старта от организатора
     in_raid = State()          # Оба игрока в активном CO-OP рейде
+
+class LikeState(StatesGroup):
+    waiting_message_from_rating = State()  # Ввод послания при лайке из рейтинга
+    waiting_message_from_friend = State()  # Ввод послания при лайке из профиля друга
 
 # Словарь для отслеживания cooldown боевых действий (2 сек)
 battle_cooldowns: dict = {}
@@ -4509,20 +4521,78 @@ async def like_from_rating(message: types.Message, state: FSMContext):
     if message.text == "❤️ Лайкнуто":
         await message.answer("❤️ Вы уже ставили лайк этому игроку!", reply_markup=get_rating_player_kb(user_id, target_id))
         return
-    result = give_like_to_player(user_id, target_id)
+    if has_liked_player(user_id, target_id):
+        await message.answer("❤️ Вы уже ставили лайк этому игроку!", reply_markup=get_rating_player_kb(user_id, target_id))
+        return
+    # Ask for послание
+    await state.set_state(LikeState.waiting_message_from_rating)
+    await state.update_data(like_target_id=target_id, like_prev_player_id=target_id)
+    cancel_kb = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="❌ Отмена")]], resize_keyboard=True)
+    await message.answer(
+        f"{E_HP} Напишите послание для этого игрока:\n(оно будет отправлено вместе с лайком)",
+        reply_markup=cancel_kb
+    )
+
+@dp.message(LikeState.waiting_message_from_rating)
+async def process_like_message_from_rating(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text or ""
+    data = await state.get_data()
+    target_id = data.get('like_target_id')
+
+    if text == "❌ Отмена":
+        await state.set_state(RatingState.viewing_player)
+        target_player = get_player(target_id) if target_id else None
+        if target_player:
+            health = calculate_player_health(target_player['strength'])
+            exp_info = get_experience_progress(target_player['user_id'])
+            status_emoji = get_player_status_emoji(target_player)
+            league = get_rating_league(target_player.get('rating_points', 0))
+            safe_nick_t = html.escape(target_player["nickname"])
+            safe_status_t = html.escape(target_player["status"])
+            profile_text = (
+                f'{E_PROFILE} Профиль {safe_nick_t}:\n'
+                f'{E_LOCK}{E_HASHTAG} {safe_nick_t}\n\n'
+                f'{status_emoji} {safe_status_t}\n\n'
+                f'Уровень {E_CIRCLE} {target_player["player_level"]}{E_STAR}\n'
+                f'{E_SQ}{exp_info["current_exp"]} / {exp_info["needed_exp"]}{E_EXP_DOT}{E_EXP} Опыта\n\n'
+                f'Рейтинговая лига:\n'
+                f'{E_SQ}{target_player.get("rating_points", 0)} {E_STAR} Points\n'
+                f'{E_SQ}{league}\n\n'
+                f'{E_SQ}{target_player["wins"]} - {E_TROPHY} {E_YELLOW} Победы\n'
+                f'{E_SQ}{int(target_player["strength"])} - {E_ATK} {E_YELLOW} Сила\n'
+                f'{E_SQ}{health} - {E_HP} {E_YELLOW} Здоровье\n\n'
+                f'{E_SQ}{target_player["coins"]} - {E_COINS}{E_GREEN} Монеты  \n'
+                f'{E_SQ}{target_player["crystals"]} - {E_CRYSTALS}{E_GREEN} Кристаллы  \n'
+                f'{E_SQ}{target_player["raid_tickets"]} - {E_TICKET}{E_GREEN} Билеты рейда\n\n'
+                f'{E_SQ}{E_HP} {target_player.get("likes", 0)} лайков профиля\n'
+            )
+            await send_image_with_text(message, "images/profile.png", profile_text, reply_markup=get_rating_player_kb(user_id, target_id))
+        return
+
+    if not target_id:
+        await state.set_state(RatingState.viewing_rating)
+        await message.answer(f"{E_CROSS} Ошибка: игрок не найден.")
+        return
+
+    poslanie = text.strip()[:200]  # limit message length
+    result = give_like_to_player(user_id, target_id, poslanie)
+    await state.set_state(RatingState.viewing_player)
     if result:
+        liker = get_player(user_id)
         target = get_player(target_id)
-        if target:
-            safe_nick = html.escape(target['nickname'])
+        if liker and target:
+            safe_liker_nick = html.escape(liker['nickname'])
+            safe_poslanie = html.escape(poslanie)
             try:
                 await bot.send_message(
                     chat_id=target_id,
-                    text=f"{E_HP} Тебе поставили лайк профиля! Всего лайков: {target.get('likes', 0) + 1}",
+                    text=f"{E_HP} ваш профиль оценил {safe_liker_nick}!\n{safe_poslanie}",
                     parse_mode="HTML"
                 )
             except Exception:
                 pass
-        await message.answer(f"❤️ Лайк поставлен!", reply_markup=get_rating_player_kb(user_id, target_id))
+        await message.answer(f"❤️ Лайк и послание отправлены!", reply_markup=get_rating_player_kb(user_id, target_id))
     else:
         await message.answer("❤️ Вы уже ставили лайк этому игроку!", reply_markup=get_rating_player_kb(user_id, target_id))
 
@@ -4801,29 +4871,18 @@ async def handle_friend_profile(message: types.Message, state: FSMContext):
     if text in ("❤️ Лайк", "❤️ Лайкнуто"):
         data = await state.get_data()
         friend_id = data.get('viewing_friend_id')
-        if text == "❤️ Лайкнуто":
+        if text == "❤️ Лайкнуто" or (friend_id and has_liked_player(user_id, friend_id)):
             await message.answer("❤️ Вы уже ставили лайк этому игроку!")
             return
         if friend_id:
-            result = give_like_to_player(user_id, friend_id)
-            if result:
-                target = get_player(friend_id)
-                if target:
-                    try:
-                        await bot.send_message(
-                            chat_id=friend_id,
-                            text=f"{E_HP} Тебе поставили лайк профиля! Всего лайков: {target.get('likes', 0) + 1}",
-                            parse_mode="HTML"
-                        )
-                    except Exception:
-                        pass
-                await message.answer(f"❤️ Лайк поставлен!")
-                # Refresh profile
-                friend_player = get_player(friend_id)
-                if friend_player:
-                    await _send_friend_profile(message, friend_player, viewer_id=user_id)
-            else:
-                await message.answer("❤️ Вы уже ставили лайк этому игроку!")
+            # Enter послание state
+            await state.set_state(LikeState.waiting_message_from_friend)
+            await state.update_data(like_target_id=friend_id)
+            cancel_kb = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="❌ Отмена")]], resize_keyboard=True)
+            await message.answer(
+                f"{E_HP} Напишите послание для этого игрока:\n(оно будет отправлено вместе с лайком)",
+                reply_markup=cancel_kb
+            )
         return
 
     # fallback — перерисовать профиль
@@ -4839,7 +4898,55 @@ async def handle_friend_profile(message: types.Message, state: FSMContext):
     page = data.get('friends_page', 0)
     await _send_friends_list(message, state, user_id, page)
 
-async def _send_friend_requests(message, user_id: int):
+@dp.message(LikeState.waiting_message_from_friend)
+async def process_like_message_from_friend(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text or ""
+    data = await state.get_data()
+    target_id = data.get('like_target_id')
+    friends_page = data.get('friends_page', 0)
+
+    if text == "❌ Отмена":
+        await state.set_state(FriendsMenu.viewing_friend_profile)
+        target_player = get_player(target_id) if target_id else None
+        if target_player:
+            await _send_friend_profile(message, target_player, viewer_id=user_id)
+        else:
+            await state.set_state(FriendsMenu.viewing_friends)
+            await _send_friends_list(message, state, user_id, friends_page)
+        return
+
+    if not target_id:
+        await state.set_state(FriendsMenu.viewing_friends)
+        await message.answer(f"{E_CROSS} Ошибка: игрок не найден.")
+        await _send_friends_list(message, state, user_id, friends_page)
+        return
+
+    poslanie = text.strip()[:200]  # limit message length
+    result = give_like_to_player(user_id, target_id, poslanie)
+    await state.set_state(FriendsMenu.viewing_friend_profile)
+    if result:
+        liker = get_player(user_id)
+        if liker:
+            safe_liker_nick = html.escape(liker['nickname'])
+            safe_poslanie = html.escape(poslanie)
+            try:
+                await bot.send_message(
+                    chat_id=target_id,
+                    text=f"{E_HP} ваш профиль оценил {safe_liker_nick}!\n{safe_poslanie}",
+                    parse_mode="HTML"
+                )
+            except Exception:
+                pass
+        await message.answer(f"❤️ Лайк и послание отправлены!")
+    else:
+        await message.answer("❤️ Вы уже ставили лайк этому игроку!")
+    # Refresh friend profile
+    target_player = get_player(target_id)
+    if target_player:
+        await _send_friend_profile(message, target_player, viewer_id=user_id)
+
+
     """Показать заявки в друзья"""
     request_ids = get_friend_requests(user_id)
 
