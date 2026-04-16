@@ -229,7 +229,7 @@ def _roll_chest_drops(user_id: int, chest_key: str) -> tuple[list[str], dict]:
                 unlock_chest_status(user_id, sname)
                 # Сразу устанавливаем статус
                 set_player_status(user_id, sname)
-                lines.append(f"✨ Статус «{sname}» разблокирован!")
+                lines.append(f"{E_GIFT} Статус «{sname}» разблокирован!")
             continue
 
         resource = drop[0]
@@ -258,16 +258,22 @@ def _roll_chest_drops(user_id: int, chest_key: str) -> tuple[list[str], dict]:
             lines.append(f"{E_PLUS} +{amount} {E_CRYSTALS} кристаллов")
         elif resource == "experience":
             rewards['experience'] = rewards.get('experience', 0) + amount
-            lines.append(f"{E_PLUS} +{amount} {E_STAR} опыта")
+            lines.append(f"{E_PLUS} +{amount} {E_EXP} опыта профиля")
         else:
             rewards[resource] = rewards.get(resource, 0) + amount
             mat_emojis = {
-                'wood': E_WOOD, 'stone': E_STONE, 'food': E_FOOD,
-                'iron': E_IRON, 'gold': E_GOLD_M,
-                'copper': E_COPPER, 'steel': E_STEEL, 'amethyst': E_AMETHYST, 'gem': E_GEM,
+                'wood':     (E_WOOD,     'дерева'),
+                'stone':    (E_STONE,    'камня'),
+                'food':     (E_FOOD,     'еды'),
+                'iron':     (E_IRON,     'железа'),
+                'gold':     (E_GOLD_M,   'золота'),
+                'copper':   (E_COPPER,   'меди'),
+                'steel':    (E_STEEL,    'стали'),
+                'amethyst': (E_AMETHYST, 'аметиста'),
+                'gem':      (E_GEM,      'самоцвета'),
             }
-            emoji = mat_emojis.get(resource, '📦')
-            lines.append(f"{E_PLUS} +{amount} {emoji}")
+            emoji, mat_name = mat_emojis.get(resource, ('📦', resource))
+            lines.append(f"{E_PLUS} +{amount} {emoji} {mat_name}")
 
     return lines, rewards
 
@@ -373,15 +379,23 @@ async def handle_chests_menu(message: types.Message, state: FSMContext):
         await state.set_state(ProfileMenu.opening_chest)
         await state.update_data(opening_chest_key=chest_key)
 
+        chest_emoji_map = {
+            'chest_wood':   E_CHEST_W,
+            'chest_steel':  E_CHEST_S,
+            'chest_gold':   E_CHEST_G,
+            'chest_divine': E_CHEST_D,
+        }
+        chest_icon = chest_emoji_map.get(chest_key, E_INV_BOX)
+
         # Send animated open message
-        anim_msg = await message.answer("📦 открываем сундук…", parse_mode="HTML")
+        anim_msg = await message.answer(f"{chest_icon} открываем сундук…", parse_mode="HTML")
         await asyncio.sleep(2)
 
         steps = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
         for pct in steps:
             await asyncio.sleep(0.4)
             try:
-                await anim_msg.edit_text(f"⚙️ {pct}%")
+                await anim_msg.edit_text(f"{E_HOURGLASS} {pct}%", parse_mode="HTML")
             except Exception:
                 pass
 
@@ -4905,6 +4919,11 @@ async def admin_menu_handler(message: types.Message, state: FSMContext):
                              reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
         await state.set_state(AdminPanel.adding_materials_nickname)
         return
+    if text == "📦 Накрутить сундуки":
+        await message.answer("Введите никнейм игрока:",
+                             reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
+        await state.set_state(AdminPanel.adding_chests_nickname)
+        return
     if text == "⏩ Пропустить кд босса":
         admin_clan = get_player_clan(message.from_user.id)
         if not admin_clan:
@@ -5121,7 +5140,62 @@ async def admin_boss_tickets_amount(message: types.Message, state: FSMContext):
     await state.set_state(AdminPanel.main_menu)
     await message.answer("🔐 Админ панель", reply_markup=get_admin_kb())
 
-async def activity_monitor_loop():
+_ADMIN_CHEST_KEYS = {
+    "chest_wood":   "Деревянный сундук",
+    "chest_steel":  "Стальной сундук",
+    "chest_gold":   "Золотой сундук",
+    "chest_divine": "Всевышний сундук",
+}
+
+@router.message(AdminPanel.adding_chests_nickname)
+async def admin_chests_nickname(message: types.Message, state: FSMContext):
+    nickname = message.text.strip()
+    target = get_player_by_nickname(nickname)
+    if not target:
+        await message.answer(f"{E_CROSS} Игрок «{nickname}» не найден. Введите никнейм ещё раз:")
+        return
+    await state.update_data(target_user_id=target['user_id'], target_nickname=target['nickname'])
+    kb = ReplyKeyboardMarkup(keyboard=[
+        [KeyboardButton(text="Деревянный сундук")],
+        [KeyboardButton(text="Стальной сундук")],
+        [KeyboardButton(text="Золотой сундук")],
+        [KeyboardButton(text="Всевышний сундук")],
+    ], resize_keyboard=True)
+    await message.answer("Выберите тип сундука:", reply_markup=kb)
+    await state.set_state(AdminPanel.adding_chests_type)
+
+@router.message(AdminPanel.adding_chests_type)
+async def admin_chests_type(message: types.Message, state: FSMContext):
+    name_to_key = {v: k for k, v in _ADMIN_CHEST_KEYS.items()}
+    chest_key = name_to_key.get(message.text.strip())
+    if not chest_key:
+        await message.answer(f"{E_CROSS} Неверный тип сундука. Выберите из списка:")
+        return
+    await state.update_data(chest_key=chest_key)
+    await message.answer(
+        f"Введите количество сундуков «{_ADMIN_CHEST_KEYS[chest_key]}» для добавления:",
+        reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True),
+    )
+    await state.set_state(AdminPanel.adding_chests_amount)
+
+@router.message(AdminPanel.adding_chests_amount)
+async def admin_chests_amount(message: types.Message, state: FSMContext):
+    try:
+        amount = int(message.text.strip())
+        if amount <= 0:
+            raise ValueError
+    except ValueError:
+        await message.answer(f"{E_CROSS} Введите корректное положительное число:")
+        return
+    data = await state.get_data()
+    chest_key = data['chest_key']
+    add_inventory_material(data['target_user_id'], chest_key, amount)
+    chest_name = _ADMIN_CHEST_KEYS[chest_key]
+    await message.answer(
+        f"✅ {amount} × «{chest_name}» добавлено игроку {html.escape(data['target_nickname'])}"
+    )
+    await state.set_state(AdminPanel.main_menu)
+    await message.answer("🔐 Админ панель", reply_markup=get_admin_kb())
     """Фоновая задача: проверяет завершение активностей и отправляет награды"""
     while True:
         await asyncio.sleep(10)
