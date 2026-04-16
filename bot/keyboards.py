@@ -429,6 +429,7 @@ def get_admin_kb() -> ReplyKeyboardMarkup:
         [KeyboardButton(text="📕 Накрутить билеты рейда")],
         [KeyboardButton(text="🎟️ Накрутить билеты босса")],
         [KeyboardButton(text="🥕 Накрутить материалы")],
+        [KeyboardButton(text="📦 Накрутить сундуки")],
         [KeyboardButton(text="⏩ Пропустить кд босса")],
         [KeyboardButton(text="❌ Выход")],
     ]

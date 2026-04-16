@@ -64,6 +64,9 @@ class AdminPanel(StatesGroup):
     adding_materials_amount = State()
     adding_boss_tickets_nickname = State()
     adding_boss_tickets_amount = State()
+    adding_chests_nickname = State()
+    adding_chests_type = State()
+    adding_chests_amount = State()
 
 class LocationMenu(StatesGroup):
     viewing_map = State()
