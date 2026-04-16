@@ -2,6 +2,7 @@ import asyncio
 import html
 import logging
 import os
+import re
 import sqlite3
 import random
 from datetime import datetime, timezone
@@ -9,6 +10,7 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -791,24 +793,24 @@ STATUSES = {
     # Page 2 - new statuses
     6:  {"name": "Сердцеед",     "emoji": "❤️", "custom_emoji": '<tg-emoji emoji-id="5355174247826217637">❤️</tg-emoji>', "required_level": 1, "type": "unlock_friends", "required_friends": 1},
     7:  {"name": "Стиляга",      "emoji": "👓", "custom_emoji": '<tg-emoji emoji-id="5834901642155137299">👓</tg-emoji>', "required_level": 1, "type": "unlock_strength", "required_strength": 200},
-    8:  {"name": "Press F",      "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="5938394329465756346">🎁</tg-emoji>', "required_level": 1, "type": "unlock_deaths", "required_deaths": 20},
-    9:  {"name": "Лидер",        "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="5936238625250350064">🎁</tg-emoji>', "required_level": 1, "type": "unlock_strength", "required_strength": 1000},
-    10: {"name": "Удачливый",    "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="5960593366151337910">🎁</tg-emoji>', "required_level": 1, "type": "unlock_dodges", "required_dodges": 30},
+    8:  {"name": "Press F",      "emoji": "⚰️", "custom_emoji": '<tg-emoji emoji-id="5938394329465756346">🎁</tg-emoji>', "required_level": 1, "type": "unlock_deaths", "required_deaths": 20},
+    9:  {"name": "Лидер",        "emoji": "👑", "custom_emoji": '<tg-emoji emoji-id="5936238625250350064">🎁</tg-emoji>', "required_level": 1, "type": "unlock_strength", "required_strength": 1000},
+    10: {"name": "Удачливый",    "emoji": "🍀", "custom_emoji": '<tg-emoji emoji-id="5960593366151337910">🎁</tg-emoji>', "required_level": 1, "type": "unlock_dodges", "required_dodges": 30},
     # Page 3 - new statuses
-    11: {"name": "Гладиатор",    "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="6001349144046737619">🎁</tg-emoji>', "required_level": 1, "type": "unlock_pve_wins", "required_pve_wins": 50},
+    11: {"name": "Гладиатор",    "emoji": "🏛", "custom_emoji": '<tg-emoji emoji-id="6001349144046737619">🎁</tg-emoji>', "required_level": 1, "type": "unlock_pve_wins", "required_pve_wins": 50},
     12: {"name": "Убийца",       "emoji": "👹", "custom_emoji": '<tg-emoji emoji-id="5796297917752941521">👹</tg-emoji>', "required_level": 1, "type": "unlock_pve_wins", "required_pve_wins": 120},
-    13: {"name": "Творчество",   "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="6021462012037437193">🎁</tg-emoji>', "required_level": 1, "type": "unlock_clan_image"},
-    14: {"name": "Пример для подражания", "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="6021486768228940485">🎁</tg-emoji>', "required_level": 1, "type": "unlock_strength", "required_strength": 2000},
+    13: {"name": "Творчество",   "emoji": "🎨", "custom_emoji": '<tg-emoji emoji-id="6021462012037437193">🎁</tg-emoji>', "required_level": 1, "type": "unlock_clan_image"},
+    14: {"name": "Пример для подражания", "emoji": "🌠", "custom_emoji": '<tg-emoji emoji-id="6021486768228940485">🎁</tg-emoji>', "required_level": 1, "type": "unlock_strength", "required_strength": 2000},
     15: {"name": "Какашка",      "emoji": "💩", "custom_emoji": '<tg-emoji emoji-id="6005662304824203821">💩</tg-emoji>', "required_level": 1, "type": "unlock_spam"},
     16: {"name": "багоюзер 777", "emoji": "💎", "custom_emoji": '<tg-emoji emoji-id="5354902509540370798">💎</tg-emoji>', "required_level": 1, "type": "unlock_bagouser"},
     # Page 4 - chest statuses
-    17: {"name": "Руинер",                "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="5886484710481205789">🎁</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
-    18: {"name": "Хакер",                 "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="6021412890496473421">🎁</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
-    19: {"name": "Щедрый",                "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="6001349144046737619">🎁</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
+    17: {"name": "Руинер",                "emoji": "💣", "custom_emoji": '<tg-emoji emoji-id="5886484710481205789">🎁</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
+    18: {"name": "Хакер",                 "emoji": "💻", "custom_emoji": '<tg-emoji emoji-id="6021412890496473421">🎁</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
+    19: {"name": "Щедрый",                "emoji": "🤲", "custom_emoji": '<tg-emoji emoji-id="6001349144046737619">🎁</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
     20: {"name": "Шахтер",                "emoji": "⛏️", "custom_emoji": '<tg-emoji emoji-id="5456456455634370613">⛏️</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
-    21: {"name": "Очаровашка",            "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="5938394329465756346">🎁</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
-    22: {"name": "Доверие",               "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="6021462012037437193">🎁</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
-    23: {"name": "На богатом",            "emoji": "🎁", "custom_emoji": '<tg-emoji emoji-id="6021486768228940485">🎁</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
+    21: {"name": "Очаровашка",            "emoji": "✨", "custom_emoji": '<tg-emoji emoji-id="5938394329465756346">🎁</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
+    22: {"name": "Доверие",               "emoji": "🤝", "custom_emoji": '<tg-emoji emoji-id="6021462012037437193">🎁</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
+    23: {"name": "На богатом",            "emoji": "💰", "custom_emoji": '<tg-emoji emoji-id="6021486768228940485">🎁</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
     24: {"name": "Лучший в своем деле",   "emoji": "🏆", "custom_emoji": '<tg-emoji emoji-id="5312315739842026755">🏆</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
     25: {"name": "Дизайнер",              "emoji": "🎨", "custom_emoji": '<tg-emoji emoji-id="5222021318378948590">🎨</tg-emoji>', "required_level": 1, "type": "unlock_chest"},
 }
@@ -3047,29 +3049,57 @@ def roll_miss(extra_miss_chance: float = 0.0) -> bool:
 # Cache for Telegram file_id by image path (avoids re-uploading)
 _image_file_id_cache: dict = {}
 
+# Regex to strip <tg-emoji ...>fallback</tg-emoji> → fallback character
+_TG_EMOJI_RE = re.compile(r'<tg-emoji[^>]*>(.*?)</tg-emoji>', re.DOTALL)
+
+def _strip_tg_emoji(text: str) -> str:
+    """Убрать tg-emoji HTML-теги, оставив только символ-замену."""
+    return _TG_EMOJI_RE.sub(r'\1', text)
+
+
+async def safe_html_answer(message, text: str, **kwargs):
+    """Отправить HTML-сообщение. При DOCUMENT_INVALID автоматически убирает кастомные эмодзи и повторяет."""
+    try:
+        return await message.answer(text, parse_mode="HTML", **kwargs)
+    except TelegramBadRequest as e:
+        if "DOCUMENT_INVALID" in str(e):
+            return await message.answer(_strip_tg_emoji(text), parse_mode="HTML", **kwargs)
+        raise
+
+
 async def send_image_with_text(message, image_path: str, text: str, reply_markup=None):
     """Отправить изображение с текстом. Если файл не найден — отправить только текст."""
-    try:
-        if not os.path.exists(image_path):
-            print(f"⚠️ ФАЙЛ НЕ НАЙДЕН: {image_path}")
-            await message.answer(text, reply_markup=reply_markup, parse_mode="HTML")
-            return
+    async def _send_photo(caption: str):
         cached_id = _image_file_id_cache.get(image_path)
-        if cached_id:
-            photo = cached_id
-        else:
-            photo = FSInputFile(image_path)
+        photo = cached_id if cached_id else FSInputFile(image_path)
         result = await message.answer_photo(
             photo=photo,
-            caption=text,
+            caption=caption,
             reply_markup=reply_markup,
             parse_mode="HTML"
         )
         if not cached_id and result and result.photo:
             _image_file_id_cache[image_path] = result.photo[-1].file_id
+
+    try:
+        if not os.path.exists(image_path):
+            print(f"⚠️ ФАЙЛ НЕ НАЙДЕН: {image_path}")
+            await safe_html_answer(message, text, reply_markup=reply_markup)
+            return
+        try:
+            await _send_photo(text)
+        except TelegramBadRequest as e:
+            if "DOCUMENT_INVALID" in str(e):
+                # Retry with plain emoji fallback
+                try:
+                    await _send_photo(_strip_tg_emoji(text))
+                except Exception:
+                    await message.answer(_strip_tg_emoji(text), reply_markup=reply_markup, parse_mode="HTML")
+            else:
+                await safe_html_answer(message, text, reply_markup=reply_markup)
     except Exception as e:
         print(f"❌ Ошибка при отправке фото: {e}")
-        await message.answer(text, reply_markup=reply_markup, parse_mode="HTML")
+        await safe_html_answer(message, text, reply_markup=reply_markup)
 
 
 
@@ -3167,7 +3197,7 @@ async def handle_profile_menu(message: types.Message, state: FSMContext):
         await state.set_state(ProfileMenu.viewing_statuses)
         await state.update_data(statuses_page=0)
         statuses_text = _format_statuses_text(player, 0)
-        await message.answer(statuses_text, reply_markup=get_statuses_kb(player, 0))
+        await safe_html_answer(message, statuses_text, reply_markup=get_statuses_kb(player, 0))
         return
 
     # Refresh profile
@@ -3192,14 +3222,14 @@ async def handle_profile_statuses(message: types.Message, state: FSMContext):
         new_page = current_page + 1
         await state.update_data(statuses_page=new_page)
         statuses_text = _format_statuses_text(player, new_page)
-        await message.answer(statuses_text, reply_markup=get_statuses_kb(player, new_page))
+        await safe_html_answer(message, statuses_text, reply_markup=get_statuses_kb(player, new_page))
         return
 
     if text == "⬅️ Пред. страница":
         new_page = max(0, current_page - 1)
         await state.update_data(statuses_page=new_page)
         statuses_text = _format_statuses_text(player, new_page)
-        await message.answer(statuses_text, reply_markup=get_statuses_kb(player, new_page))
+        await safe_html_answer(message, statuses_text, reply_markup=get_statuses_kb(player, new_page))
         return
 
     # Check if player selected a status
