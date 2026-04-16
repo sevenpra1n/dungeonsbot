@@ -102,8 +102,12 @@ CLAN_BUFFS = {
     5: {"power_pct": 0.60, "click_bonus": 250},
 }
 
-# Emoji constant used by get_rating_league
+# Emoji constants used by get_rating_league (confirmed working IDs)
 E_GIFT     = '<tg-emoji emoji-id="5429203678529613915">🎁</tg-emoji>'
+E_LEAGUE_NEWBIE  = '<tg-emoji emoji-id="5323718538710491847">🎗</tg-emoji>'   # новичковая (id = E_DOT)
+E_LEAGUE_SILVER  = '<tg-emoji emoji-id="6284992018384950997">🌟</tg-emoji>'   # серебряная (id = E_CLAN_STAR)
+E_LEAGUE_AMATEUR = '<tg-emoji emoji-id="6284992018384950997">🌟</tg-emoji>'   # любительская
+E_LEAGUE_ADV     = '<tg-emoji emoji-id="5334859426178313935">📕</tg-emoji>'   # продвинутая (id = E_BOOK2)
 
 
 # ============== DATABASE INIT ==============
@@ -1270,13 +1274,13 @@ def update_rating_points(user_id: int, points: int):
 def get_rating_league(rating_points: int) -> str:
     """Получить название лиги по очкам рейтинга"""
     if rating_points < 100:
-        return "🎗 Новичковая лига"
+        return f"{E_LEAGUE_NEWBIE} Новичковая лига"
     elif rating_points < 200:
-        return "🌟 Серебряная лига"
+        return f"{E_LEAGUE_SILVER} Серебряная лига"
     elif rating_points < 350:
-        return "🌟 Любительская лига"
+        return f"{E_LEAGUE_AMATEUR} Любительская лига"
     elif rating_points < 500:
-        return "📕 Продвинутая лига"
+        return f"{E_LEAGUE_ADV} Продвинутая лига"
     elif rating_points < 800:
         return f"{E_GIFT} Избранная лига"
     elif rating_points < 1150:
