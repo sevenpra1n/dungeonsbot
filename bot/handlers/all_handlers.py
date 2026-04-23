@@ -13,7 +13,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
-from bot.loader import bot
+from bot.loader import bot, dp
 from bot.config import ADMIN_IDS, BAGOUSER_ID, DB_NAME
 from bot.emojis import *
 from bot.states import (
@@ -1200,10 +1200,10 @@ def _format_rating_page(leaderboard, page: int) -> str:
         
         response += (
             f"{prefix} {E_PROFILE} {safe_nick}:\n"
-            f"├ Статус: {status_emoji} {safe_status}\n\n"
-            f"{int(strength)} {E_POW}\n"
-            f"{wins} {E_TROPHY}\n"
-            f"{crystals} 💠\n"
+            f"├ Статус: {status_emoji} {safe_status}\n"
+            f"├ Сила: {int(strength)} {E_POW}\n"
+            f"├ Победы: {wins} {E_TROPHY}\n"
+            f"├ Кристаллы: {crystals} 💠\n"
             f"├ Лига: {league}\n"
             f"├ Points {rating_pts} {E_STAR}\n\n"
         )
