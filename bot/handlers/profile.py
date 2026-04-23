@@ -1,7 +1,6 @@
 from aiogram import Router, types, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-import html
 
 from bot.states import ProfileMenu
 from bot.database import (
@@ -10,8 +9,8 @@ from bot.database import (
     set_player_status,
 )
 from bot.utils import (
-    apply_clan_strength_buff, calculate_player_health, calculate_damage,
-    send_image_with_text, safe_html_answer,
+    apply_clan_strength_buff, calculate_player_health,
+    send_image_with_text, safe_html_answer, format_profile_text,
 )
 from bot.keyboards import get_profile_kb, get_statuses_kb, show_main_menu
 from bot.data.equipment import DEFAULT_WEAPON, DEFAULT_ARMOR
@@ -42,29 +41,25 @@ async def _send_profile(message, player: dict):
     clan_level = player_clan['clan_level'] if player_clan else 1
     display_strength = apply_clan_strength_buff(player['strength'], clan_level)
     health = calculate_player_health(display_strength)
-    damage = calculate_damage(display_strength)
     exp_info = get_experience_progress(player['user_id'])
     status_emoji = get_player_status_emoji(player)
     league = get_league_label(player.get('rating_points', 0))
 
-    safe_nick = html.escape(player["nickname"])
-    safe_status = html.escape(player["status"])
-    response = (
-        f'{E_PROFILE} Профиль {safe_nick}:\n'
-        f'{E_LOCK}{E_HASHTAG} {safe_nick}\n\n'
-        f'{status_emoji} {safe_status}\n\n'
-        f'Уровень {E_CIRCLE} {player["player_level"]}{E_STAR}\n'
-        f'{E_SQ}{exp_info["current_exp"]} / {exp_info["needed_exp"]}{E_EXP_DOT}{E_EXP} Опыта\n\n'
-        f'Рейтинговая лига:\n'
-        f'{E_SQ}{player.get("rating_points", 0)} {E_STAR} Points\n'
-        f'{E_SQ}{league}\n\n'
-        f'{E_SQ}{player["wins"]} - {E_TROPHY} {E_YELLOW} Победы\n'
-        f'{E_SQ}{int(display_strength)} - {E_ATK} {E_YELLOW} Сила\n'
-        f'{E_SQ}{health} - {E_HP} {E_YELLOW} Здоровье\n\n'
-        f'{E_SQ}{player["coins"]} - {E_COINS}{E_GREEN} Монеты  \n'
-        f'{E_SQ}{player["crystals"]} - {E_CRYSTALS}{E_GREEN} Кристаллы  \n'
-        f'{E_SQ}{player["raid_tickets"]} - {E_TICKET}{E_GREEN} Билеты рейда\n\n'
-        f'{E_SQ}{E_HP} {player.get("likes", 0)} лайков профиля\n'
+    response = format_profile_text(
+        nickname=player["nickname"],
+        status=f"{status_emoji} {player['status']}",
+        level=player["player_level"],
+        current_exp=exp_info["current_exp"],
+        needed_exp=exp_info["needed_exp"],
+        rating_points=player.get("rating_points", 0),
+        league=league,
+        wins=player["wins"],
+        strength=int(display_strength),
+        health=health,
+        coins=player["coins"],
+        crystals=player["crystals"],
+        raid_tickets=player["raid_tickets"],
+        likes=player.get("likes", 0),
     )
     await send_image_with_text(message, "images/profile.png", response, reply_markup=get_profile_kb())
 

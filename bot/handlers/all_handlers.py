@@ -68,7 +68,7 @@ from bot.utils import (
     calculate_player_health, calculate_damage, calculate_enemy_damage,
     can_battle_action, reset_battle_cooldown,
     apply_clan_strength_buff, get_clan_click_bonus, roll_miss,
-    safe_html_answer, send_image_with_text,
+    safe_html_answer, send_image_with_text, format_profile_text,
 )
 from bot.keyboards import (
     get_main_kb, get_main_menu_text, show_main_menu,
@@ -1273,25 +1273,22 @@ async def handle_rating_menu(message: types.Message, state: FSMContext):
                 damage = calculate_damage(full_player['strength'])
                 exp_info = get_experience_progress(full_player['user_id'])
                 status_emoji = get_player_status_emoji(full_player)
-                safe_nick = html.escape(full_player["nickname"])
-                safe_status = html.escape(full_player["status"])
                 league = get_league_label(full_player.get('rating_points', 0))
-                profile_text = (
-                    f'{E_PROFILE} Профиль {safe_nick}:\n'
-                    f'{E_LOCK}{E_HASHTAG} {safe_nick}\n\n'
-                    f'{status_emoji} {safe_status}\n\n'
-                    f'Уровень {E_CIRCLE} {full_player["player_level"]}{E_STAR}\n'
-                    f'{E_SQ}{exp_info["current_exp"]} / {exp_info["needed_exp"]}{E_EXP_DOT}{E_EXP} Опыта\n\n'
-                    f'Рейтинговая лига:\n'
-                    f'{E_SQ}{full_player.get("rating_points", 0)} {E_STAR} Points\n'
-                    f'{E_SQ}{league}\n\n'
-                    f'{E_SQ}{full_player["wins"]} - {E_TROPHY} {E_YELLOW} Победы\n'
-                    f'{E_SQ}{int(full_player["strength"])} - {E_ATK} {E_YELLOW} Сила\n'
-                    f'{E_SQ}{health} - {E_HP} {E_YELLOW} Здоровье\n\n'
-                    f'{E_SQ}{full_player["coins"]} - {E_COINS}{E_GREEN} Монеты  \n'
-                    f'{E_SQ}{full_player["crystals"]} - {E_CRYSTALS}{E_GREEN} Кристаллы  \n'
-                    f'{E_SQ}{full_player["raid_tickets"]} - {E_TICKET}{E_GREEN} Билеты рейда\n\n'
-                    f'{E_SQ}{E_HP} {full_player.get("likes", 0)} лайков профиля\n'
+                profile_text = format_profile_text(
+                    nickname=full_player["nickname"],
+                    status=f"{status_emoji} {full_player['status']}",
+                    level=full_player["player_level"],
+                    current_exp=exp_info["current_exp"],
+                    needed_exp=exp_info["needed_exp"],
+                    rating_points=full_player.get("rating_points", 0),
+                    league=league,
+                    wins=full_player["wins"],
+                    strength=int(full_player["strength"]),
+                    health=health,
+                    coins=full_player["coins"],
+                    crystals=full_player["crystals"],
+                    raid_tickets=full_player["raid_tickets"],
+                    likes=full_player.get("likes", 0),
                 )
                 viewer_id = message.from_user.id
                 await state.set_state(RatingState.viewing_player)
@@ -1346,24 +1343,21 @@ async def add_friend_from_rating(message: types.Message, state: FSMContext):
             exp_info = get_experience_progress(target_player['user_id'])
             status_emoji = get_player_status_emoji(target_player)
             league = get_league_label(target_player.get('rating_points', 0))
-            safe_nick_t = html.escape(target_player["nickname"])
-            safe_status_t = html.escape(target_player["status"])
-            profile_text = (
-                f'{E_PROFILE} Профиль {safe_nick_t}:\n'
-                f'{E_LOCK}{E_HASHTAG} {safe_nick_t}\n\n'
-                f'{status_emoji} {safe_status_t}\n\n'
-                f'Уровень {E_CIRCLE} {target_player["player_level"]}{E_STAR}\n'
-                f'{E_SQ}{exp_info["current_exp"]} / {exp_info["needed_exp"]}{E_EXP_DOT}{E_EXP} Опыта\n\n'
-                f'Рейтинговая лига:\n'
-                f'{E_SQ}{target_player.get("rating_points", 0)} {E_STAR} Points\n'
-                f'{E_SQ}{league}\n\n'
-                f'{E_SQ}{target_player["wins"]} - {E_TROPHY} {E_YELLOW} Победы\n'
-                f'{E_SQ}{int(target_player["strength"])} - {E_ATK} {E_YELLOW} Сила\n'
-                f'{E_SQ}{health} - {E_HP} {E_YELLOW} Здоровье\n\n'
-                f'{E_SQ}{target_player["coins"]} - {E_COINS}{E_GREEN} Монеты  \n'
-                f'{E_SQ}{target_player["crystals"]} - {E_CRYSTALS}{E_GREEN} Кристаллы  \n'
-                f'{E_SQ}{target_player["raid_tickets"]} - {E_TICKET}{E_GREEN} Билеты рейда\n\n'
-                f'{E_SQ}{E_HP} {target_player.get("likes", 0)} лайков профиля\n'
+            profile_text = format_profile_text(
+                nickname=target_player["nickname"],
+                status=f"{status_emoji} {target_player['status']}",
+                level=target_player["player_level"],
+                current_exp=exp_info["current_exp"],
+                needed_exp=exp_info["needed_exp"],
+                rating_points=target_player.get("rating_points", 0),
+                league=league,
+                wins=target_player["wins"],
+                strength=int(target_player["strength"]),
+                health=health,
+                coins=target_player["coins"],
+                crystals=target_player["crystals"],
+                raid_tickets=target_player["raid_tickets"],
+                likes=target_player.get("likes", 0),
             )
             await send_image_with_text(message, "images/profile.png", profile_text, reply_markup=get_rating_player_kb(user_id, target_id))
         else:
@@ -1420,24 +1414,21 @@ async def process_like_message_from_rating(message: types.Message, state: FSMCon
             exp_info = get_experience_progress(target_player['user_id'])
             status_emoji = get_player_status_emoji(target_player)
             league = get_league_label(target_player.get('rating_points', 0))
-            safe_nick_t = html.escape(target_player["nickname"])
-            safe_status_t = html.escape(target_player["status"])
-            profile_text = (
-                f'{E_PROFILE} Профиль {safe_nick_t}:\n'
-                f'{E_LOCK}{E_HASHTAG} {safe_nick_t}\n\n'
-                f'{status_emoji} {safe_status_t}\n\n'
-                f'Уровень {E_CIRCLE} {target_player["player_level"]}{E_STAR}\n'
-                f'{E_SQ}{exp_info["current_exp"]} / {exp_info["needed_exp"]}{E_EXP_DOT}{E_EXP} Опыта\n\n'
-                f'Рейтинговая лига:\n'
-                f'{E_SQ}{target_player.get("rating_points", 0)} {E_STAR} Points\n'
-                f'{E_SQ}{league}\n\n'
-                f'{E_SQ}{target_player["wins"]} - {E_TROPHY} {E_YELLOW} Победы\n'
-                f'{E_SQ}{int(target_player["strength"])} - {E_ATK} {E_YELLOW} Сила\n'
-                f'{E_SQ}{health} - {E_HP} {E_YELLOW} Здоровье\n\n'
-                f'{E_SQ}{target_player["coins"]} - {E_COINS}{E_GREEN} Монеты  \n'
-                f'{E_SQ}{target_player["crystals"]} - {E_CRYSTALS}{E_GREEN} Кристаллы  \n'
-                f'{E_SQ}{target_player["raid_tickets"]} - {E_TICKET}{E_GREEN} Билеты рейда\n\n'
-                f'{E_SQ}{E_HP} {target_player.get("likes", 0)} лайков профиля\n'
+            profile_text = format_profile_text(
+                nickname=target_player["nickname"],
+                status=f"{status_emoji} {target_player['status']}",
+                level=target_player["player_level"],
+                current_exp=exp_info["current_exp"],
+                needed_exp=exp_info["needed_exp"],
+                rating_points=target_player.get("rating_points", 0),
+                league=league,
+                wins=target_player["wins"],
+                strength=int(target_player["strength"]),
+                health=health,
+                coins=target_player["coins"],
+                crystals=target_player["crystals"],
+                raid_tickets=target_player["raid_tickets"],
+                likes=target_player.get("likes", 0),
             )
             await send_image_with_text(message, "images/profile.png", profile_text, reply_markup=get_rating_player_kb(user_id, target_id))
         return
@@ -1628,8 +1619,6 @@ async def _send_friend_profile(message, friend: dict, viewer_id: int = None):
     damage = calculate_damage(friend['strength'])
     exp_info = get_experience_progress(friend['user_id'])
     status_emoji = get_player_status_emoji(friend)
-    safe_nick = html.escape(friend["nickname"])
-    safe_status = html.escape(friend["status"])
     league = get_league_label(friend.get('rating_points', 0))
     # Кнопка "пригласить в рейд": только если viewer не занят co-op парой и нет уже
     # активного приглашения именно этому другу
@@ -1639,22 +1628,21 @@ async def _send_friend_profile(message, friend: dict, viewer_id: int = None):
         and viewer_id not in coop_raid_pairs
         and friend['user_id'] not in coop_raid_invites
     )
-    profile_text = (
-        f'{E_PROFILE} Профиль {safe_nick}:\n'
-        f'{E_LOCK}{E_HASHTAG} {safe_nick}\n\n'
-        f'{status_emoji} {safe_status}\n\n'
-        f'Уровень {E_CIRCLE} {friend["player_level"]}{E_STAR}\n'
-        f'{E_SQ}{exp_info["current_exp"]} / {exp_info["needed_exp"]}{E_EXP_DOT}{E_EXP} Опыта\n\n'
-        f'Рейтинговая лига:\n'
-        f'{E_SQ}{friend.get("rating_points", 0)} {E_STAR} Points\n'
-        f'{E_SQ}{league}\n\n'
-        f'{E_SQ}{friend["wins"]} - {E_TROPHY} {E_YELLOW} Победы\n'
-        f'{E_SQ}{int(friend["strength"])} - {E_ATK} {E_YELLOW} Сила\n'
-        f'{E_SQ}{health} - {E_HP} {E_YELLOW} Здоровье\n\n'
-        f'{E_SQ}{friend["coins"]} - {E_COINS}{E_GREEN} Монеты  \n'
-        f'{E_SQ}{friend["crystals"]} - {E_CRYSTALS}{E_GREEN} Кристаллы  \n'
-        f'{E_SQ}{friend["raid_tickets"]} - {E_TICKET}{E_GREEN} Билеты рейда\n\n'
-        f'{E_SQ}{E_HP} {friend.get("likes", 0)} лайков профиля\n'
+    profile_text = format_profile_text(
+        nickname=friend["nickname"],
+        status=f"{status_emoji} {friend['status']}",
+        level=friend["player_level"],
+        current_exp=exp_info["current_exp"],
+        needed_exp=exp_info["needed_exp"],
+        rating_points=friend.get("rating_points", 0),
+        league=league,
+        wins=friend["wins"],
+        strength=int(friend["strength"]),
+        health=health,
+        coins=friend["coins"],
+        crystals=friend["crystals"],
+        raid_tickets=friend["raid_tickets"],
+        likes=friend.get("likes", 0),
     )
     await send_image_with_text(message, "images/profile.png", profile_text,
                                reply_markup=get_friend_profile_kb(can_invite_raid=can_invite, viewer_id=viewer_id, friend_id=friend['user_id']))
@@ -5959,5 +5947,3 @@ async def clan_boss_ticket_refresh_loop():
                     pass
         except Exception as e:
             logging.warning(f"clan_boss_ticket_refresh_loop error: {e}")
-
-
