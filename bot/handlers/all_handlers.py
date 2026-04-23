@@ -1272,11 +1272,10 @@ async def handle_rating_menu(message: types.Message, state: FSMContext):
                 health = calculate_player_health(full_player['strength'])
                 damage = calculate_damage(full_player['strength'])
                 exp_info = get_experience_progress(full_player['user_id'])
-                status_emoji = get_player_status_emoji(full_player)
                 league = get_league_label(full_player.get('rating_points', 0))
                 profile_text = format_profile_text(
                     nickname=full_player["nickname"],
-                    status=f"{status_emoji} {full_player['status']}",
+                    status=full_player["status"],
                     level=full_player["player_level"],
                     current_exp=exp_info["current_exp"],
                     needed_exp=exp_info["needed_exp"],
@@ -1341,11 +1340,10 @@ async def add_friend_from_rating(message: types.Message, state: FSMContext):
         if target_player:
             health = calculate_player_health(target_player['strength'])
             exp_info = get_experience_progress(target_player['user_id'])
-            status_emoji = get_player_status_emoji(target_player)
             league = get_league_label(target_player.get('rating_points', 0))
             profile_text = format_profile_text(
                 nickname=target_player["nickname"],
-                status=f"{status_emoji} {target_player['status']}",
+                status=target_player["status"],
                 level=target_player["player_level"],
                 current_exp=exp_info["current_exp"],
                 needed_exp=exp_info["needed_exp"],
@@ -1412,11 +1410,10 @@ async def process_like_message_from_rating(message: types.Message, state: FSMCon
         if target_player:
             health = calculate_player_health(target_player['strength'])
             exp_info = get_experience_progress(target_player['user_id'])
-            status_emoji = get_player_status_emoji(target_player)
             league = get_league_label(target_player.get('rating_points', 0))
             profile_text = format_profile_text(
                 nickname=target_player["nickname"],
-                status=f"{status_emoji} {target_player['status']}",
+                status=target_player["status"],
                 level=target_player["player_level"],
                 current_exp=exp_info["current_exp"],
                 needed_exp=exp_info["needed_exp"],
@@ -1618,7 +1615,6 @@ async def _send_friend_profile(message, friend: dict, viewer_id: int = None):
     health = calculate_player_health(friend['strength'])
     damage = calculate_damage(friend['strength'])
     exp_info = get_experience_progress(friend['user_id'])
-    status_emoji = get_player_status_emoji(friend)
     league = get_league_label(friend.get('rating_points', 0))
     # Кнопка "пригласить в рейд": только если viewer не занят co-op парой и нет уже
     # активного приглашения именно этому другу
@@ -1630,7 +1626,7 @@ async def _send_friend_profile(message, friend: dict, viewer_id: int = None):
     )
     profile_text = format_profile_text(
         nickname=friend["nickname"],
-        status=f"{status_emoji} {friend['status']}",
+        status=friend["status"],
         level=friend["player_level"],
         current_exp=exp_info["current_exp"],
         needed_exp=exp_info["needed_exp"],

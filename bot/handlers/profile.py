@@ -5,7 +5,7 @@ from aiogram.fsm.context import FSMContext
 from bot.states import ProfileMenu
 from bot.database import (
     get_player, get_experience_progress, get_player_weapon, get_player_armor,
-    get_player_status_emoji, get_player_clan, get_player_with_chest_statuses,
+    get_player_clan, get_player_with_chest_statuses,
     set_player_status,
 )
 from bot.utils import (
@@ -42,12 +42,11 @@ async def _send_profile(message, player: dict):
     display_strength = apply_clan_strength_buff(player['strength'], clan_level)
     health = calculate_player_health(display_strength)
     exp_info = get_experience_progress(player['user_id'])
-    status_emoji = get_player_status_emoji(player)
     league = get_league_label(player.get('rating_points', 0))
 
     response = format_profile_text(
         nickname=player["nickname"],
-        status=f"{status_emoji} {player['status']}",
+        status=player["status"],
         level=player["player_level"],
         current_exp=exp_info["current_exp"],
         needed_exp=exp_info["needed_exp"],
