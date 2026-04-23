@@ -3,6 +3,7 @@
 import os
 import re
 import random
+import html
 from datetime import datetime
 
 from aiogram.exceptions import TelegramBadRequest
@@ -61,6 +62,45 @@ def get_clan_click_bonus(clan_level: int) -> float:
 def roll_miss(extra_miss_chance: float = 0.0) -> bool:
     """Вернуть True если атака промахивается (10% база + доп. шанс от ослепления)"""
     return random.random() < (0.10 + extra_miss_chance)
+
+
+def format_profile_text(
+    nickname: str,
+    status: str,
+    level: int,
+    current_exp: int,
+    needed_exp: int,
+    rating_points: int,
+    league: str,
+    wins: int,
+    strength: int,
+    health: int,
+    coins: int,
+    crystals: int,
+    raid_tickets: int,
+    likes: int,
+) -> str:
+    """Сформировать единый текст профиля без эмодзи."""
+    safe_nick = html.escape(str(nickname))
+    safe_status = html.escape(str(status))
+    safe_league = html.escape(str(league))
+    return (
+        f'Профиль {safe_nick}:\n'
+        f'{safe_nick}\n\n'
+        f'{safe_status}\n\n'
+        f'Уровень  {int(level)}\n'
+        f'{int(current_exp)} / {int(needed_exp)} Опыта\n\n'
+        f'Рейтинговая лига:\n'
+        f'{int(rating_points)}  Points\n'
+        f'{safe_league}\n\n'
+        f'{int(wins)} -   Победы\n'
+        f'{int(strength)} -   Сила\n'
+        f'{int(health)} -   Здоровье\n\n'
+        f'{int(coins)} -  Монеты  \n'
+        f'{int(crystals)} -  Кристаллы  \n'
+        f'{int(raid_tickets)} -  Билеты рейда\n\n'
+        f'{int(likes)} лайков профиля\n'
+    )
 
 
 # ============== MESSAGE SENDING HELPERS ==============
