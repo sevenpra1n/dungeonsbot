@@ -12,6 +12,11 @@ from aiogram.types import FSInputFile
 from bot.data.enemies import ENEMIES
 from bot.data.clans import CLAN_BUFFS
 from bot.global_state import battle_cooldowns, image_file_id_cache
+from bot.emojis import (
+    E_PROFILE, E_HASHTAG, E_CIRCLE, E_EXP_DOT,
+    E_TROPHY, E_ATK, E_HP, E_COINS, E_CRYSTALS, E_TICKET,
+)
+from bot.data.emojis import E_LEAGUE_POINTS, E_LIKE_THUMB
 
 
 # ============== BATTLE CALCULATIONS ==============
@@ -64,6 +69,15 @@ def roll_miss(extra_miss_chance: float = 0.0) -> bool:
     return random.random() < (0.10 + extra_miss_chance)
 
 
+def _get_status_emoji(status_name: str) -> str:
+    """Получить custom emoji статуса по его имени."""
+    from bot.data.statuses import STATUSES
+    for s in STATUSES.values():
+        if s['name'] == status_name:
+            return s.get('custom_emoji', '')
+    return ''
+
+
 def format_profile_text(
     nickname: str,
     status: str,
@@ -80,26 +94,26 @@ def format_profile_text(
     raid_tickets: int,
     likes: int,
 ) -> str:
-    """Сформировать единый текст профиля без эмодзи."""
+    """Сформировать единый текст профиля с эмодзи."""
     safe_nick = html.escape(str(nickname))
     safe_status = html.escape(str(status))
-    safe_league = html.escape(str(league))
+    status_emoji = _get_status_emoji(status)
     return (
-        f'Профиль {safe_nick}:\n'
-        f'{safe_nick}\n\n'
-        f'{safe_status}\n\n'
-        f'Уровень  {int(level)}\n'
-        f'{int(current_exp)} / {int(needed_exp)} Опыта\n\n'
+        f'{E_PROFILE} Профиль {safe_nick}:\n'
+        f'{E_HASHTAG} {safe_nick}\n\n'
+        f'{status_emoji} {safe_status}\n\n'
+        f'{E_CIRCLE} Уровень  {int(level)}\n'
+        f'{E_EXP_DOT} {int(current_exp)} / {int(needed_exp)} Опыта\n\n'
         f'Рейтинговая лига:\n'
-        f'{int(rating_points)}  Points\n'
-        f'{safe_league}\n\n'
-        f'{int(wins)} -   Победы\n'
-        f'{int(strength)} -   Сила\n'
-        f'{int(health)} -   Здоровье\n\n'
-        f'{int(coins)} -  Монеты  \n'
-        f'{int(crystals)} -  Кристаллы  \n'
-        f'{int(raid_tickets)} -  Билеты рейда\n\n'
-        f'{int(likes)} лайков профиля\n'
+        f'{E_LEAGUE_POINTS} {int(rating_points)}  Points\n'
+        f'{league}\n\n'
+        f'{E_TROPHY} {int(wins)} -   Победы\n'
+        f'{E_ATK} {int(strength)} -   Сила\n'
+        f'{E_HP} {int(health)} -   Здоровье\n\n'
+        f'{E_COINS} {int(coins)} -  Монеты  \n'
+        f'{E_CRYSTALS} {int(crystals)} -  Кристаллы  \n'
+        f'{E_TICKET} {int(raid_tickets)} -  Билеты рейда\n\n'
+        f'{E_LIKE_THUMB} {int(likes)} лайков профиля\n'
     )
 
 
