@@ -111,7 +111,7 @@ from bot.data.market import (
 )
 from bot.emojis import get_rarity_emoji
 from bot.data.inventory_config import format_inventory_text
-from bot.data.components_config import format_components_text
+from bot.data.components_config import format_components_text, COMPONENT_RARITIES
 from bot.data.chests_config import CHEST_DISPLAY, format_chest_opening, format_chest_reward
 from bot.data.leagues_config import get_league_label, format_all_leagues_info
 from bot.data.emojis import (
@@ -1237,7 +1237,7 @@ def _format_rating_page(leaderboard, page: int) -> str:
             f"├ Сила: {int(strength)} {E_ATK}\n"
             f"├ Победы: {wins} {E_TROPHY}\n"
             f"├ Лига: {league}\n"
-            f"├ {E_LEAGUE_POINTS} Points {rating_pts}\n\n"
+            f"├ Points: {rating_pts} {E_LEAGUE_POINTS}\n\n"
         )
     
     return response
@@ -5552,7 +5552,6 @@ async def handle_items(message: types.Message, state: FSMContext):
             comp = get_components(user_id)
             for rr, needed in total_comp_needed.items():
                 if comp.get(rr, 0) < needed:
-                    from bot.data.components_config import COMPONENT_RARITIES
                     rarity_name = next((r['name'] for r in COMPONENT_RARITIES if r['key'] == rr), rr)
                     await message.answer(
                         f"{E_CROSS} Недостаточно компонентов ({rarity_name})!\nТребуется: {needed}\nУ вас: {comp.get(rr, 0)}",
@@ -5594,7 +5593,6 @@ def _get_items_text(user_id: int) -> str:
 def _get_pickaxes_text(user_id: int) -> str:
     """Сформировать текст списка кирок"""
     current_pick = get_player_pickaxe_level(user_id)
-    from bot.data.emojis import E_RARITY_COMMON, E_RARITY_RARE, E_RARITY_EPIC, E_RARITY_LEGENDARY
     rarity_emoji_map = {
         "common": E_RARITY_COMMON,
         "rare": E_RARITY_RARE,
