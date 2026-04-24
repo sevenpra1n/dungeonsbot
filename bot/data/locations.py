@@ -1,11 +1,18 @@
 """Location, location enemies, forest enemies, axes and pickaxes data."""
 
 from bot.emojis import E_FOOD, E_MAP_E, E_IRON, E_SKULL
+from bot.data.emojis import E_MAT_STONE
 
-# Pickaxe emoji for mine ore activity display and shop
-E_PICKAXE = "⛏"
-# Iron ingot emoji for pickaxes shop (uses existing iron material emoji)
-E_IRON_INGOT = E_IRON
+# Pickaxe custom emoji for the LOCATION MENU (mine ore activity row)
+# TODO: replace emoji-id with your actual custom emoji ID for the location pickaxe
+E_PICKAXE_LOC  = '<tg-emoji emoji-id="5456456455634370613">⛏️</tg-emoji>'
+
+# Pickaxe custom emoji for the ITEMS SHOP listing
+# TODO: replace emoji-id with your actual custom emoji ID for the shop pickaxe
+E_PICKAXE_SHOP = '<tg-emoji emoji-id="5456456455634370614">⛏️</tg-emoji>'
+
+# Stone emoji used in pickaxe shop descriptions (taken from inventory config)
+E_STONE_MAT = E_MAT_STONE
 
 # ============== LOCATIONS ==============
 LOCATIONS = {
@@ -75,7 +82,7 @@ LOCATIONS = {
                 "name": "Добыча руды",
                 "time": 60,
                 "emoji": "⛏",
-                "display_emoji": E_PICKAXE,
+                "display_emoji": E_PICKAXE_LOC,
                 "rewards": {},
                 "monster_chance": 0
             },
@@ -140,11 +147,51 @@ AXES = {
 
 # Кирки (для магазина предметов)
 PICKAXES = {
-    1: {"level": 1, "min_iron": 1,  "max_iron": 3,   "cost": 850,   "comp_rarity": "common",    "comp_amount": 4,  "comp_name": "обычных",    "star_emoji": '<tg-emoji emoji-id="5204460680018666213">⭐️</tg-emoji>'},
-    2: {"level": 2, "min_iron": 2,  "max_iron": 9,   "cost": 1570,  "comp_rarity": "common",    "comp_amount": 35, "comp_name": "обычных",    "star_emoji": '<tg-emoji emoji-id="5204221415980539813">⭐️</tg-emoji>'},
-    3: {"level": 3, "min_iron": 5,  "max_iron": 18,  "cost": 6250,  "comp_rarity": "rare",      "comp_amount": 10, "comp_name": "редких",     "star_emoji": '<tg-emoji emoji-id="5204347567759956677">⭐️</tg-emoji>'},
-    4: {"level": 4, "min_iron": 10, "max_iron": 37,  "cost": 12500, "comp_rarity": "epic",      "comp_amount": 24, "comp_name": "эпических",  "star_emoji": '<tg-emoji emoji-id="5204141284775697953">⭐️</tg-emoji>'},
-    5: {"level": 5, "min_iron": 25, "max_iron": 115, "cost": 56300, "comp_rarity": "legendary", "comp_amount": 12, "comp_name": "легендарных","star_emoji": '<tg-emoji emoji-id="5217979901331644711">⭐️</tg-emoji>'},
+    1: {
+        "level": 1, "min_stone": 1,  "max_stone": 3,   "cost": 850,
+        "comp_rarity": "common",    "comp_amount": 4,  "comp_name": "обычных",
+        "star_emoji": '<tg-emoji emoji-id="5204460680018666213">⭐️</tg-emoji>',
+        "ore_chances": {
+            "copper": 0.10, "iron": 0.05, "gold": 0.01,
+            "steel": 0.0,  "amethyst": 0.0, "gem": 0.0,
+        },
+    },
+    2: {
+        "level": 2, "min_stone": 2,  "max_stone": 9,   "cost": 1570,
+        "comp_rarity": "common",    "comp_amount": 35, "comp_name": "обычных",
+        "star_emoji": '<tg-emoji emoji-id="5204221415980539813">⭐️</tg-emoji>',
+        "ore_chances": {
+            "copper": 0.20, "iron": 0.10, "gold": 0.03,
+            "steel": 0.001, "amethyst": 0.0, "gem": 0.0,
+        },
+    },
+    3: {
+        "level": 3, "min_stone": 5,  "max_stone": 18,  "cost": 6250,
+        "comp_rarity": "rare",      "comp_amount": 10, "comp_name": "редких",
+        "star_emoji": '<tg-emoji emoji-id="5204347567759956677">⭐️</tg-emoji>',
+        "ore_chances": {
+            "copper": 0.50, "iron": 0.25, "gold": 0.08,
+            "steel": 0.01,  "amethyst": 0.001, "gem": 0.0,
+        },
+    },
+    4: {
+        "level": 4, "min_stone": 10, "max_stone": 37,  "cost": 12500,
+        "comp_rarity": "epic",      "comp_amount": 24, "comp_name": "эпических",
+        "star_emoji": '<tg-emoji emoji-id="5204141284775697953">⭐️</tg-emoji>',
+        "ore_chances": {
+            "copper": 0.80, "iron": 0.40, "gold": 0.14,
+            "steel": 0.08,  "amethyst": 0.02, "gem": 0.0,
+        },
+    },
+    5: {
+        "level": 5, "min_stone": 25, "max_stone": 115, "cost": 56300,
+        "comp_rarity": "legendary", "comp_amount": 12, "comp_name": "легендарных",
+        "star_emoji": '<tg-emoji emoji-id="5217979901331644711">⭐️</tg-emoji>',
+        "ore_chances": {
+            "copper": 1.0,  "iron": 1.0,  "gold": 0.45,
+            "steel": 0.20,  "amethyst": 0.095, "gem": 0.03,
+        },
+    },
 }
 
 # Враги леса (по силе игрока)

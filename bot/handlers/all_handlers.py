@@ -93,7 +93,7 @@ from bot.data.equipment import EQUIPMENT, DEFAULT_WEAPON, DEFAULT_ARMOR, WEAPONS
 from bot.data.locations import (
     LOCATIONS, LOCATION_ENEMIES, AXES, PICKAXES, FOREST_ENEMIES, MINE_ENEMIES,
     get_location_enemy_for_player, get_forest_enemy_for_player, get_mine_enemy_for_player,
-    E_PICKAXE, E_IRON_INGOT,
+    E_PICKAXE_LOC, E_PICKAXE_SHOP, E_STONE_MAT,
 )
 from bot.data.clans import (
     CLAN_LEVEL_EXP, MAX_CLAN_LEVEL, CLAN_BUFFS, CLAN_CHAT_MAX_MSG_LEN,
@@ -122,6 +122,10 @@ from bot.data.emojis import (
     E_CHEST as E_CHEST_HEADER,
     E_CHEST_WOOD, E_CHEST_STEEL, E_CHEST_GOLD, E_CHEST_DIVINE,
     E_LEAGUE_POINTS,
+    E_MAT_STONE as _E_MAT_STONE, E_MAT_COPPER as _E_MAT_COPPER,
+    E_MAT_IRON as _E_MAT_IRON, E_MAT_GOLD as _E_MAT_GOLD,
+    E_MAT_STEEL as _E_MAT_STEEL, E_MAT_AMETHYST as _E_MAT_AMETHYST,
+    E_MAT_GEM as _E_MAT_GEM, E_MAT_WOOD as _E_MAT_WOOD, E_MAT_FOOD as _E_MAT_FOOD,
 )
 from bot.handlers.profile import _send_profile
 
@@ -699,7 +703,12 @@ async def _give_activity_rewards(user_id: int, activity: dict) -> bool:
         pickaxe_level = get_player_pickaxe_level(user_id)
         if pickaxe_level > 0:
             pickaxe_data = PICKAXES[pickaxe_level]
-            earned['iron'] = random.randint(pickaxe_data['min_iron'], pickaxe_data['max_iron'])
+            # Always mine some stone
+            earned['stone'] = random.randint(pickaxe_data['min_stone'], pickaxe_data['max_stone'])
+            # Chance-based ore drops
+            for ore, chance in pickaxe_data['ore_chances'].items():
+                if chance > 0 and random.random() < chance:
+                    earned[ore] = earned.get(ore, 0) + 1
     else:
         for rew_key, (min_v, max_v) in rewards.items():
             earned[rew_key] = random.randint(min_v, max_v)
@@ -710,19 +719,23 @@ async def _give_activity_rewards(user_id: int, activity: dict) -> bool:
     exp_result = {'leveled_up': False, 'new_level': 1}
     if 'experience' in earned:
         exp_result = add_experience_to_player(user_id, earned['experience'])
-    for mat in ('food', 'wood', 'stone', 'iron', 'gold'):
+    for mat in ('food', 'wood', 'stone', 'iron', 'gold', 'copper', 'steel', 'amethyst', 'gem'):
         if mat in earned:
             add_inventory_material(user_id, mat, earned[mat])
 
-    # Build reward lines with custom emojis
+    # Build reward lines with custom emojis (inventory tab emojis)
     mat_names = {
-        'food':       (E_FOOD,   'Еда'),
-        'wood':       (E_WOOD,   'Древесина'),
-        'stone':      (E_STONE,  'Камень'),
-        'iron':       (E_IRON,   'Железо'),
-        'gold':       (E_GOLD_M, 'Золото'),
-        'coins':      (E_COINS,  'Монеты'),
-        'experience': (E_EXP,    'Опыта'),
+        'food':       (_E_MAT_FOOD,     'Еда'),
+        'wood':       (_E_MAT_WOOD,     'Древесина'),
+        'stone':      (_E_MAT_STONE,    'Камень'),
+        'iron':       (_E_MAT_IRON,     'Железо'),
+        'gold':       (_E_MAT_GOLD,     'Золото'),
+        'copper':     (_E_MAT_COPPER,   'Медь'),
+        'steel':      (_E_MAT_STEEL,    'Сталь'),
+        'amethyst':   (_E_MAT_AMETHYST, 'Аметист'),
+        'gem':        (_E_MAT_GEM,      'Самоцвет'),
+        'coins':      (E_COINS,         'Монеты'),
+        'experience': (E_EXP,           'Опыта'),
     }
     reward_lines = []
     for k, v in earned.items():
@@ -5616,13 +5629,30 @@ def _get_pickaxes_text(user_id: int) -> str:
         "epic": E_RARITY_EPIC,
         "legendary": E_RARITY_LEGENDARY,
     }
+    ore_labels = {
+        'copper':   ('Медь',     _E_MAT_COPPER),
+        'iron':     ('Железо',   _E_MAT_IRON),
+        'gold':     ('Золото',   _E_MAT_GOLD),
+        'steel':    ('Сталь',    _E_MAT_STEEL),
+        'amethyst': ('Аметист',  _E_MAT_AMETHYST),
+        'gem':      ('Самоцвет', _E_MAT_GEM),
+    }
     lines = [f"{E_ITEMS_STAR} Список кирок:\n"]
     for pick_id, pick_data in PICKAXES.items():
         owned = "✅" if current_pick >= pick_id else "❌"
         comp_emoji = rarity_emoji_map.get(pick_data['comp_rarity'], '')
+        chance_lines = []
+        for ore_key, (ore_name, ore_emoji) in ore_labels.items():
+            chance = pick_data['ore_chances'].get(ore_key, 0)
+            if chance > 0:
+                pct = chance * 100
+                pct_str = f"{int(pct)}%" if pct == int(pct) else f"{pct:.1f}%"
+                chance_lines.append(f"├ {ore_emoji} {ore_name}: {pct_str}")
+        chances_text = ("\n" + "\n".join(chance_lines)) if chance_lines else ""
         lines.append(
-            f"{E_SQ}Кирка - {E_PICKAXE} {pick_id} level {pick_data['star_emoji']}\n"
-            f"├ добывает {pick_data['min_iron']}-{pick_data['max_iron']}{E_IRON_INGOT} железа\n"
+            f"{E_SQ}Кирка - {E_PICKAXE_SHOP} {pick_id} level {pick_data['star_emoji']}\n"
+            f"├ добывает {pick_data['min_stone']}-{pick_data['max_stone']}{E_STONE_MAT} камня"
+            f"{chances_text}\n"
             f"├ в наличии {owned}\n"
             f"{E_CIRCLE}Цена - {pick_data['cost']}{E_COINS}\n"
             f"{E_CIRCLE}Нужно - {pick_data['comp_amount']} {comp_emoji} ({pick_data['comp_name']} компонент)\n"
