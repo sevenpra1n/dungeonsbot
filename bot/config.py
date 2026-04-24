@@ -1,9 +1,17 @@
 """Bot configuration: token, proxy, admin IDs, DB name, and bot/dispatcher instances."""
 
 import logging
+import os
 
-# Ваш токен от BotFather
-TOKEN = "Ваш токен"
+# Токен от BotFather. Задайте переменную окружения BOT_TOKEN перед запуском:
+#   Windows:  set BOT_TOKEN=1234567890:AAFxxx...
+#   Linux/Mac: export BOT_TOKEN=1234567890:AAFxxx...
+TOKEN = os.environ.get("BOT_TOKEN", "")
+if not TOKEN:
+    raise ValueError(
+        "Токен бота не задан! Установите переменную окружения BOT_TOKEN.\n"
+        "Пример: set BOT_TOKEN=1234567890:AAFxxx..."
+    )
 
 # Прокси (опционально). Установите URL прокси для подключения без VPN,
 # например: "socks5://user:pass@host:port" или "http://user:pass@host:port".
