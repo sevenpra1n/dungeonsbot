@@ -111,6 +111,21 @@ def get_league_points(rating_points: int) -> tuple:
     return league["win_points"], league["loss_points"]
 
 
+def format_all_leagues_info() -> str:
+    """Build the full leagues-info block shown in the «О лигах» screen."""
+    lines = [f"{E_MARKER} О лигах:\n"]
+    for league in LEAGUES:
+        max_str = str(league["max_points"]) if league["max_points"] is not None else "∞"
+        threshold = f"(порог {league['min_points']}-{max_str} points)"
+        lines.append(
+            f"\n{league['emoji']} {league['name']} лига:\n"
+            f"{threshold}\n"
+            f"{E_PLUS} {league['win_points']} points за победу\n"
+            f"{E_MINUS} {league['loss_points']} points за поражение\n"
+        )
+    return "".join(lines)
+
+
 def format_league_info(rating_points: int) -> str:
     """Build a detailed league info block (used in league-info screens)."""
     league = get_league(rating_points)

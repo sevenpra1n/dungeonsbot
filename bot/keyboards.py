@@ -203,6 +203,7 @@ def get_online_menu_kb():
     """Главное меню онлайн-режима (лобби)"""
     kb = [
         [KeyboardButton(text="🔍 Поиск игрока")],
+        [KeyboardButton(text="📋 О лигах")],
         [KeyboardButton(text="❌ Выйти из онлайна")]
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)

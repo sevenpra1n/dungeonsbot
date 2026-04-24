@@ -5,10 +5,10 @@ the real Telegram custom-emoji IDs.
 """
 
 from bot.data.emojis import (
-    E_COMP_HEADER, E_RARITY_STAR,
+    E_COMP_HEADER, E_COMP_BOX,
     E_RARITY_COMMON, E_RARITY_RARE, E_RARITY_EPIC,
     E_RARITY_LEGENDARY, E_RARITY_MYTHIC,
-    E_MARKER, E_CALENDAR, E_CLIPBOARD, E_YELLOW,
+    E_CALENDAR, E_CLIPBOARD, E_YELLOW,
 )
 
 # Ordered list of component rarity tiers
@@ -47,12 +47,11 @@ def format_components_text(comp: dict, total: int) -> str:
     ``comp`` maps rarity key → amount, e.g. ``{"common": 3, "rare": 0, ...}``.
     ``total`` is the pre-computed sum of all components.
     """
-    lines = [f"{E_MARKER} Компоненты:\n\n{total} {E_MARKER} {E_COMP_HEADER} Компоненты\n"]
+    text = f"{E_COMP_HEADER} Компоненты:\n\n{total} {E_COMP_BOX} Компоненты\n"
     for rarity in COMPONENT_RARITIES:
         amount = comp.get(rarity["key"], 0)
-        lines.append(
-            f"├ {E_CALENDAR} Редкость:{E_RARITY_STAR}{rarity['name']}\n"
+        text += (
+            f"\n├ {E_CALENDAR} Редкость:{rarity['rarity_emoji']}{rarity['name']}\n"
             f"├ {E_CLIPBOARD} количество: {amount} {E_YELLOW}\n"
-            f"{rarity['rarity_emoji']}\n"
         )
-    return "\n".join(lines)
+    return text
