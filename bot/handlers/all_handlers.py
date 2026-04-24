@@ -5244,23 +5244,6 @@ async def activity_monitor_loop():
             logging.error(f"Activity monitor error: {e}")
 
 # ============== MARKET ==============
-# Material key -> display emoji and name (for message text display)
-_MARKET_MAT_INFO = {
-    'food':  (E_FOOD,   'Еду',       "Продать"),
-    'wood':  (E_WOOD,   'Древесину',  "Продать"),
-    'stone': (E_STONE,  'Камень',    "Продать"),
-    'iron':  (E_IRON,   'Железо',    "Продать"),
-    'gold':  (E_GOLD_M, 'Золото',    "Продать"),
-}
-
-# Button text -> material key (plain emoji for keyboard buttons)
-_MARKET_SELL_BUTTONS = {
-    "Продать еду🥕": 'food',
-    "Продать древесину🌳": 'wood',
-    "Продать камень🪨": 'stone',
-    "Продать железо⛰": 'iron',
-    "Продать золото🥇": 'gold',
-}
 
 def _get_market_category_text() -> str:
     """Сформировать текст категорий рынка"""
@@ -5278,11 +5261,14 @@ def _get_market_text(player: dict) -> str:
         f"{E_MARKET} <b>РЫНОК</b> | Продажа ресурсов.\n",
         f"{nickname}, курс ресурсов:\n",
         f"{E_TRASH} | Продажа:",
-        f"{E_FOOD} Еда | {MARKET_PRICES['food']}{E_COINS}",
-        f"{E_WOOD} Древесина | {MARKET_PRICES['wood']}{E_COINS}",
-        f"{E_STONE} Камень | {MARKET_PRICES['stone']}{E_COINS}",
-        f"{E_IRON} Железо | {MARKET_PRICES['iron']}{E_COINS}",
-        f"{E_GOLD_M} Золото | {MARKET_PRICES['gold']}{E_COINS}",
+        f"{_E_MAT_FOOD} Еда | {MARKET_PRICES['food']}{E_COINS}",
+        f"{_E_MAT_WOOD} Древесина | {MARKET_PRICES['wood']}{E_COINS}",
+        f"{_E_MAT_STONE} Камень | {MARKET_PRICES['stone']}{E_COINS}",
+        f"{_E_MAT_IRON} Железо | {MARKET_PRICES['iron']}{E_COINS}",
+        f"{_E_MAT_GOLD} Золото | {MARKET_PRICES['gold']}{E_COINS}",
+        f"{_E_MAT_STEEL} Сталь | {int(MARKET_PRICES['steel'])}{E_COINS}",
+        f"{_E_MAT_AMETHYST} Аметист | {int(MARKET_PRICES['amethyst'])}{E_COINS}",
+        f"{_E_MAT_GEM} Самоцвет | {int(MARKET_PRICES['gem'])}{E_COINS}",
     ]
     return "\n".join(lines)
 
