@@ -56,7 +56,8 @@ def get_market_kb() -> ReplyKeyboardMarkup:
     kb = [
         [KeyboardButton(text="Продать еду🥕"),        KeyboardButton(text="Продать древесину🌳")],
         [KeyboardButton(text="Продать камень🪨"),      KeyboardButton(text="Продать железо⛰")],
-        [KeyboardButton(text="Продать золото🥇")],
+        [KeyboardButton(text="Продать золото🥇"),      KeyboardButton(text="Продать сталь🌋")],
+        [KeyboardButton(text="Продать аметист🤩"),     KeyboardButton(text="Продать самоцвет🎁")],
         [KeyboardButton(text="⬅️ Назад к категориям")],
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
