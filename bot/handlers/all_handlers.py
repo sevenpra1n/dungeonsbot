@@ -93,6 +93,7 @@ from bot.data.equipment import EQUIPMENT, DEFAULT_WEAPON, DEFAULT_ARMOR, WEAPONS
 from bot.data.locations import (
     LOCATIONS, LOCATION_ENEMIES, AXES, PICKAXES, FOREST_ENEMIES, MINE_ENEMIES,
     get_location_enemy_for_player, get_forest_enemy_for_player, get_mine_enemy_for_player,
+    E_PICKAXE, E_IRON_INGOT,
 )
 from bot.data.clans import (
     CLAN_LEVEL_EXP, MAX_CLAN_LEVEL, CLAN_BUFFS, CLAN_CHAT_MAX_MSG_LEN,
@@ -122,6 +123,7 @@ from bot.data.emojis import (
     E_CHEST_WOOD, E_CHEST_STEEL, E_CHEST_GOLD, E_CHEST_DIVINE,
     E_LEAGUE_POINTS,
 )
+from bot.handlers.profile import _send_profile
 
 router = Router()
 
@@ -440,6 +442,18 @@ async def open_map(message: types.Message, state: FSMContext):
     await message.answer(map_text, reply_markup=get_map_kb())
     await state.set_state(LocationMenu.viewing_map)
 
+
+def _fmt_time(seconds: int) -> str:
+    """Convert seconds to human-readable time: 60→'1m', 90→'1.30m', 25→'25s'."""
+    if seconds < 60:
+        return f"{seconds}s"
+    mins = seconds // 60
+    secs = seconds % 60
+    if secs == 0:
+        return f"{mins}m"
+    return f"{mins}.{secs}m"
+
+
 @router.message(LocationMenu.viewing_map)
 async def handle_map(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
@@ -461,18 +475,21 @@ async def handle_map(message: types.Message, state: FSMContext):
     for loc_id, loc in LOCATIONS.items():
         if text == loc['name']:
             await state.update_data(selected_location=loc_id)
-            loc_text = f"{loc['emoji']} <b>{loc['name']}</b>:\n\n{E_BOOK2} Выбери действие:\n"
+            loc_text = f"<b>{loc['name']}</b>:\n\n{E_BOOK2} Выбери действие:\n"
             for act_key, act in loc['activities'].items():
                 disp_emoji = act.get('display_emoji', act['emoji'])
-                loc_text += f"\n{act['time']}s{E_HOURGLASS} │ {disp_emoji} │ {act['name']}\n"
+                loc_text += f"\n{_fmt_time(act['time'])}{E_HOURGLASS} │ {disp_emoji} │ {act['name']}\n"
+                if loc_id == 3 and act_key == 'mine_ore':
+                    pickaxe_level = get_player_pickaxe_level(user_id)
+                    if pickaxe_level <= 0:
+                        loc_text += f"{E_SQ}{E_WARN} (необходима кирка для добычи!)\n"
             if loc_id == 1:
-                loc_text += f"\n10s{E_HOURGLASS} | {E_SKULL} | Поиск врага\n"
+                loc_text += f"\n{_fmt_time(10)}{E_HOURGLASS} | {E_SKULL} | Поиск врага\n"
             if loc_id == 2:
                 loc_text += f"\n{E_SQ}{E_WARN} (необходим топор для добычи!)\n"
-                loc_text += f"\n30s{E_HOURGLASS} | {E_SKULL} | Поиск врага\n"
+                loc_text += f"\n{_fmt_time(30)}{E_HOURGLASS} | {E_SKULL} | Поиск врага\n"
             if loc_id == 3:
-                loc_text += f"\n{E_SQ}{E_WARN} (необходима кирка для добычи!)\n"
-                loc_text += f"\n60s{E_HOURGLASS} | {E_SKULL} | Поиск врага\n"
+                loc_text += f"\n{_fmt_time(60)}{E_HOURGLASS} | {E_SKULL} | Поиск врага\n"
             await send_image_with_text(message, loc.get('image', 'images/meadow.png'), loc_text, reply_markup=get_location_activities_kb(loc_id))
             await state.set_state(LocationMenu.viewing_location)
             return
@@ -5604,8 +5621,8 @@ def _get_pickaxes_text(user_id: int) -> str:
         owned = "✅" if current_pick >= pick_id else "❌"
         comp_emoji = rarity_emoji_map.get(pick_data['comp_rarity'], '')
         lines.append(
-            f"{E_SQ}Кирка - ⛏ {pick_id} level {pick_data['star_emoji']}\n"
-            f"├ добывает {pick_data['min_iron']}-{pick_data['max_iron']}{E_IRON} железа\n"
+            f"{E_SQ}Кирка - {E_PICKAXE} {pick_id} level {pick_data['star_emoji']}\n"
+            f"├ добывает {pick_data['min_iron']}-{pick_data['max_iron']}{E_IRON_INGOT} железа\n"
             f"├ в наличии {owned}\n"
             f"{E_CIRCLE}Цена - {pick_data['cost']}{E_COINS}\n"
             f"{E_CIRCLE}Нужно - {pick_data['comp_amount']} {comp_emoji} ({pick_data['comp_name']} компонент)\n"

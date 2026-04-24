@@ -2,6 +2,11 @@
 
 from bot.emojis import E_FOOD, E_MAP_E, E_IRON, E_SKULL
 
+# Pickaxe emoji for mine ore activity display and shop
+E_PICKAXE = "⛏"
+# Iron ingot emoji for pickaxes shop (uses existing iron material emoji)
+E_IRON_INGOT = E_IRON
+
 # ============== LOCATIONS ==============
 LOCATIONS = {
     1: {
@@ -70,7 +75,7 @@ LOCATIONS = {
                 "name": "Добыча руды",
                 "time": 60,
                 "emoji": "⛏",
-                "display_emoji": E_IRON,
+                "display_emoji": E_PICKAXE,
                 "rewards": {},
                 "monster_chance": 0
             },
