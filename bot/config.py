@@ -6,11 +6,18 @@ import os
 # Токен от BotFather. Задайте переменную окружения BOT_TOKEN перед запуском:
 #   Windows:  set BOT_TOKEN=1234567890:AAFxxx...
 #   Linux/Mac: export BOT_TOKEN=1234567890:AAFxxx...
-TOKEN = os.environ.get("BOT_TOKEN", "")
+TOKEN = os.environ.get("BOT_TOKEN", "").strip()
 if not TOKEN:
     raise ValueError(
         "Токен бота не задан! Установите переменную окружения BOT_TOKEN.\n"
         "Пример: set BOT_TOKEN=1234567890:AAFxxx..."
+    )
+# Простая проверка формата: токен должен содержать двоеточие, разделяющее числовой ID и секрет
+if ":" not in TOKEN or not TOKEN.split(":")[0].isdigit():
+    raise ValueError(
+        f"Токен бота имеет неверный формат: '{TOKEN}'.\n"
+        "Токен должен иметь вид: 1234567890:AAFxxx...\n"
+        "Получите токен у @BotFather и установите: set BOT_TOKEN=<ваш_токен>"
     )
 
 # Прокси (опционально). Установите URL прокси для подключения без VPN,
