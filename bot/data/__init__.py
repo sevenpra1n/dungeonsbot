@@ -16,6 +16,7 @@ from bot.data.leagues_config import (                          # noqa: F401
     get_league_label,
     get_league_points,
     format_league_info,
+    format_all_leagues_info,
 )
 from bot.data.chests_config import (                           # noqa: F401
     CHEST_DISPLAY,

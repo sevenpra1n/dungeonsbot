@@ -112,11 +112,13 @@ from bot.emojis import get_rarity_emoji
 from bot.data.inventory_config import format_inventory_text
 from bot.data.components_config import format_components_text
 from bot.data.chests_config import CHEST_DISPLAY, format_chest_opening, format_chest_reward
-from bot.data.leagues_config import get_league_label
+from bot.data.leagues_config import get_league_label, format_all_leagues_info
 from bot.data.emojis import (
     E_INV_HEADER, E_FRIENDS,
     E_GIFT as E_GIFT_NEW, E_GIFT2, E_GIFT3,
     E_RED,
+    E_CHEST as E_CHEST_HEADER,
+    E_CHEST_WOOD, E_CHEST_STEEL, E_CHEST_GOLD, E_CHEST_DIVINE,
 )
 
 router = Router()
@@ -138,7 +140,6 @@ def _get_chests_kb() -> ReplyKeyboardMarkup:
         [KeyboardButton(text="👑 Всевышний сундук")],
         [KeyboardButton(text="⬅️ Назад в инвентарь")],
     ], resize_keyboard=True)
-
 async def _send_inventory(message, user_id: int, back_button: str = "⬅️ Назад"):
     """Показать инвентарь игрока (ресурсы)"""
     player = get_player(user_id)
@@ -162,14 +163,14 @@ async def _send_components(message, user_id: int):
 async def _send_chests(message, user_id: int):
     """Показать сундуки игрока"""
     inv = get_inventory(user_id)
-    chest_icon = CHEST_DISPLAY["chest_wood"]["emoji"]
-    text = f'{chest_icon} Твои сундуки:\n\n'
+    text = f'{E_CHEST_HEADER} Твои сундуки:\n\n'
     for key, info in CHEST_DISPLAY.items():
         count = inv.get(key, 0)
+        drop_emoji = info.get("drop_emoji", "")
         text += (
             f'{info["emoji"]} {info["name"]}:\n'
             f'├ Количество: {count}\n'
-            f'├ Дроп: {info["drop_label"]}\n\n'
+            f'├ Дроп: {info["drop_label"]} {drop_emoji}\n\n'
         )
     await message.answer(text, reply_markup=_get_chests_kb(), parse_mode="HTML")
 
@@ -1201,7 +1202,7 @@ def _format_rating_page(leaderboard, page: int) -> str:
         response += (
             f"{prefix} {E_PROFILE} {safe_nick}:\n"
             f"├ Статус: {status_emoji} {safe_status}\n"
-            f"├ Сила: {int(strength)} {E_POW}\n"
+            f"├ Сила: {int(strength)} {E_ATK}\n"
             f"├ Победы: {wins} {E_TROPHY}\n"
             f"├ Кристаллы: {crystals} 💠\n"
             f"├ Лига: {league}\n"
@@ -1557,7 +1558,7 @@ async def _send_friends_list(message, state: FSMContext, user_id: int, page: int
         league = get_league_label(friend.get('rating_points', 0))
         text += (
             f'{idx}. {E_PROFILE} {safe_nick}\n'
-            f'  ├ Сила: {int(friend["strength"])} {E_POW}\n'
+            f'  ├ Сила: {int(friend["strength"])} {E_ATK}\n'
             f'  ├ Уровень: {friend["player_level"]} {E_STAR}\n'
             f'  ├ Статус: {status_emoji} {safe_status}\n'
             f'  ├ Лига: {league}\n\n'
@@ -3549,6 +3550,12 @@ async def open_online(message: types.Message, state: FSMContext):
 @router.message(OnlineState.viewing_menu, F.text == "❌ Выйти из онлайна")
 async def leave_online_menu(message: types.Message, state: FSMContext):
     await show_main_menu(message, state)
+
+
+@router.message(OnlineState.viewing_menu, F.text == "📋 О лигах")
+async def show_leagues_info(message: types.Message, state: FSMContext):
+    text = format_all_leagues_info()
+    await safe_html_answer(message, text, reply_markup=get_online_menu_kb())
 
 
 @router.message(OnlineState.viewing_menu, F.text == "🔍 Поиск игрока")

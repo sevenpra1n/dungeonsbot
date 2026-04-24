@@ -5,30 +5,36 @@ chest-opening messages (progress animation and reward summary).
 """
 
 from bot.data.emojis import (
-    E_CHEST, E_GEAR, E_REWARD, E_PLUS,
+    E_CHEST, E_CHEST_WOOD, E_CHEST_STEEL, E_CHEST_GOLD, E_CHEST_DIVINE,
+    E_GEAR, E_REWARD, E_PLUS,
+    E_RARITY_COMMON, E_RARITY_RARE, E_RARITY_EPIC, E_RARITY_MYTHIC,
 )
 
-# Display info for each chest type (name, emoji, drop label)
+# Display info for each chest type (name, emoji, drop label, drop emoji)
 CHEST_DISPLAY = {
     "chest_wood": {
         "name":       "Деревянный сундук",
-        "emoji":      E_CHEST,
+        "emoji":      E_CHEST_WOOD,
         "drop_label": "низкий",
+        "drop_emoji": E_RARITY_COMMON,
     },
     "chest_steel": {
         "name":       "Стальной сундук",
-        "emoji":      E_CHEST,
+        "emoji":      E_CHEST_STEEL,
         "drop_label": "средний",
+        "drop_emoji": E_RARITY_RARE,
     },
     "chest_gold": {
         "name":       "Золотой сундук",
-        "emoji":      E_CHEST,
+        "emoji":      E_CHEST_GOLD,
         "drop_label": "высокий",
+        "drop_emoji": E_RARITY_EPIC,
     },
     "chest_divine": {
         "name":       "Всевышний сундук",
-        "emoji":      E_CHEST,
+        "emoji":      E_CHEST_DIVINE,
         "drop_label": "очень высокий",
+        "drop_emoji": E_RARITY_MYTHIC,
     },
 }
 
