@@ -368,6 +368,15 @@ def init_database():
         )
     ''')
 
+    # Таблица купленных кирок
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS player_pickaxes (
+            user_id INTEGER PRIMARY KEY,
+            pickaxe_level INTEGER DEFAULT 0,
+            FOREIGN KEY (user_id) REFERENCES players(user_id)
+        )
+    ''')
+
     # Создать записи инвентаря для существующих игроков
     cursor.execute('''
         INSERT OR IGNORE INTO player_inventory (user_id)
@@ -1140,6 +1149,38 @@ def set_player_axe_level(user_id: int, level: int):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute('INSERT OR REPLACE INTO player_axes (user_id, axe_level) VALUES (?, ?)', (user_id, level))
+    conn.commit()
+    conn.close()
+
+def get_player_pickaxe_level(user_id: int) -> int:
+    """Получить уровень кирки игрока (0 = нет кирки)"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('SELECT pickaxe_level FROM player_pickaxes WHERE user_id = ?', (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] if row else 0
+
+def set_player_pickaxe_level(user_id: int, level: int):
+    """Установить уровень кирки игрока"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('INSERT OR REPLACE INTO player_pickaxes (user_id, pickaxe_level) VALUES (?, ?)', (user_id, level))
+    conn.commit()
+    conn.close()
+
+def remove_component(user_id: int, rarity: str, amount: int = 1):
+    """Убрать компонент нужной редкости (не ниже 0)"""
+    allowed = {'common', 'rare', 'epic', 'legendary', 'mythic'}
+    if rarity not in allowed:
+        return
+    col_map = {'common': 'common', 'rare': 'rare', 'epic': 'epic', 'legendary': 'legendary', 'mythic': 'mythic'}
+    col = col_map[rarity]
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    # Column name is validated against a known-safe set above
+    cursor.execute(f'UPDATE player_components SET {col} = MAX(0, COALESCE({col}, 0) - ?) WHERE user_id = ?',
+                   (amount, user_id))
     conn.commit()
     conn.close()
 

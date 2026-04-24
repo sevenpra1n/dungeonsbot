@@ -456,6 +456,8 @@ def get_location_activities_kb(location_id: int) -> ReplyKeyboardMarkup:
         kb.append([KeyboardButton(text="🔍 Поиск врага (10с)")])
     if location_id == 2:
         kb.append([KeyboardButton(text="💀 Поиск врага (30с)")])
+    if location_id == 3:
+        kb.append([KeyboardButton(text="💀 Поиск врага (60с)")])
     kb.append([KeyboardButton(text="⬅️ Назад на карту")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 

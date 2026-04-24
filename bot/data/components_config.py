@@ -47,7 +47,7 @@ def format_components_text(comp: dict, total: int) -> str:
     ``comp`` maps rarity key → amount, e.g. ``{"common": 3, "rare": 0, ...}``.
     ``total`` is the pre-computed sum of all components.
     """
-    text = f"{E_COMP_HEADER} Компоненты:\n\n{total} {E_COMP_BOX} Компоненты\n"
+    text = f"{E_COMP_HEADER} Компоненты:\n\n{E_COMP_BOX} Компоненты\n"
     for rarity in COMPONENT_RARITIES:
         amount = comp.get(rarity["key"], 0)
         text += (

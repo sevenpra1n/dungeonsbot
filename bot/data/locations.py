@@ -1,6 +1,6 @@
-"""Location, location enemies, forest enemies, and axes data."""
+"""Location, location enemies, forest enemies, axes and pickaxes data."""
 
-from bot.emojis import E_FOOD, E_MAP_E
+from bot.emojis import E_FOOD, E_MAP_E, E_IRON, E_SKULL
 
 # ============== LOCATIONS ==============
 LOCATIONS = {
@@ -60,7 +60,34 @@ LOCATIONS = {
                 "monster_chance": 0
             }
         }
-    }
+    },
+    3: {
+        "name": "⛏ Шахта",
+        "emoji": "⛏",
+        "image": "images/mine.png",
+        "activities": {
+            "mine_ore": {
+                "name": "Добыча руды",
+                "time": 60,
+                "emoji": "⛏",
+                "display_emoji": E_IRON,
+                "rewards": {},
+                "monster_chance": 0
+            },
+            "search": {
+                "name": "Обыскать локацию",
+                "time": 90,
+                "emoji": "🗺️",
+                "display_emoji": E_MAP_E,
+                "rewards": {
+                    "coins": (15, 45),
+                    "experience": (12, 20),
+                    "iron": (1, 4),
+                },
+                "monster_chance": 0
+            }
+        }
+    },
 }
 
 # Враги в локациях: порог определяется силой игрока
@@ -106,6 +133,15 @@ AXES = {
     5: {"level": 5, "min_wood": 80, "max_wood": 115, "cost": 25300, "star_emoji": '<tg-emoji emoji-id="5217979901331644711">⭐️</tg-emoji>'},
 }
 
+# Кирки (для магазина предметов)
+PICKAXES = {
+    1: {"level": 1, "min_iron": 1,  "max_iron": 3,   "cost": 850,   "comp_rarity": "common",    "comp_amount": 4,  "comp_name": "обычных",    "star_emoji": '<tg-emoji emoji-id="5204460680018666213">⭐️</tg-emoji>'},
+    2: {"level": 2, "min_iron": 2,  "max_iron": 9,   "cost": 1570,  "comp_rarity": "common",    "comp_amount": 35, "comp_name": "обычных",    "star_emoji": '<tg-emoji emoji-id="5204221415980539813">⭐️</tg-emoji>'},
+    3: {"level": 3, "min_iron": 5,  "max_iron": 18,  "cost": 6250,  "comp_rarity": "rare",      "comp_amount": 10, "comp_name": "редких",     "star_emoji": '<tg-emoji emoji-id="5204347567759956677">⭐️</tg-emoji>'},
+    4: {"level": 4, "min_iron": 10, "max_iron": 37,  "cost": 12500, "comp_rarity": "epic",      "comp_amount": 24, "comp_name": "эпических",  "star_emoji": '<tg-emoji emoji-id="5204141284775697953">⭐️</tg-emoji>'},
+    5: {"level": 5, "min_iron": 25, "max_iron": 115, "cost": 56300, "comp_rarity": "legendary", "comp_amount": 12, "comp_name": "легендарных","star_emoji": '<tg-emoji emoji-id="5217979901331644711">⭐️</tg-emoji>'},
+}
+
 # Враги леса (по силе игрока)
 FOREST_ENEMIES = {
     "lizard": {
@@ -148,6 +184,62 @@ FOREST_ENEMIES = {
     },
 }
 
+# Враги шахты (по силе игрока) — сильнее врагов леса
+MINE_ENEMIES = {
+    "mine_rat": {
+        "name": "Шахтная крыса",
+        "emoji": "🐀",
+        "strength": 110,
+        "min_player_strength": 0,
+        "max_player_strength": 149,
+        "rewards": {
+            "coins": (20, 50),
+            "iron": (1, 3),
+            "experience": (8, 15),
+            "clan_exp": (8, 12),
+        },
+    },
+    "cave_troll": {
+        "name": "Пещерный тролль",
+        "emoji": "👾",
+        "strength": 240,
+        "min_player_strength": 150,
+        "max_player_strength": 399,
+        "rewards": {
+            "coins": (55, 120),
+            "iron": (2, 7),
+            "experience": (18, 28),
+            "clan_exp": (12, 18),
+        },
+    },
+    "stone_golem": {
+        "name": "Каменный голем",
+        "emoji": "🪨",
+        "strength": 650,
+        "min_player_strength": 400,
+        "max_player_strength": 899,
+        "rewards": {
+            "coins": (150, 300),
+            "iron": (5, 15),
+            "experience": (25, 40),
+            "clan_exp": (15, 22),
+        },
+    },
+    "iron_giant": {
+        "name": "Железный великан",
+        "emoji": "🤖",
+        "strength": 1500,
+        "min_player_strength": 900,
+        "max_player_strength": 999999,
+        "rewards": {
+            "coins": (300, 600),
+            "iron": (10, 30),
+            "experience": (40, 65),
+            "clan_exp": (20, 30),
+        },
+    },
+}
+
 
 def get_location_enemy_for_player(player_strength: float) -> dict:
     """Вернуть врага локации по силе игрока"""
@@ -165,3 +257,12 @@ def get_forest_enemy_for_player(player_strength: float) -> dict:
             return enemy
     # fallback to strongest
     return FOREST_ENEMIES["forest_brute"]
+
+
+def get_mine_enemy_for_player(player_strength: float) -> dict:
+    """Вернуть врага шахты по силе игрока"""
+    for enemy in MINE_ENEMIES.values():
+        if enemy['min_player_strength'] <= player_strength <= enemy['max_player_strength']:
+            return enemy
+    # fallback to strongest
+    return MINE_ENEMIES["iron_giant"]
