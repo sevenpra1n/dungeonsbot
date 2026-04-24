@@ -14,7 +14,7 @@ from bot.data.clans import CLAN_BUFFS
 from bot.global_state import battle_cooldowns, image_file_id_cache
 from bot.emojis import (
     E_PROFILE, E_HASHTAG, E_CIRCLE, E_EXP_DOT,
-    E_TROPHY, E_ATK, E_HP, E_COINS, E_CRYSTALS, E_TICKET,
+    E_TROPHY, E_ATK, E_HP, E_COINS, E_CRYSTALS, E_TICKET, E_STAR,
 )
 from bot.data.emojis import E_LEAGUE_POINTS, E_LIKE_THUMB
 
