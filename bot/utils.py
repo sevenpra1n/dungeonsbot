@@ -102,7 +102,7 @@ def format_profile_text(
         f'{E_PROFILE} Профиль {safe_nick}:\n'
         f'{E_HASHTAG} {safe_nick}\n\n'
         f'{status_emoji} {safe_status}\n\n'
-        f'{E_CIRCLE} Уровень  {int(level)}\n'
+        f'{E_CIRCLE} Уровень  {int(level)} {E_STAR}\n'
         f'{E_EXP_DOT} {int(current_exp)} / {int(needed_exp)} Опыта\n\n'
         f'Рейтинговая лига:\n'
         f'{E_LEAGUE_POINTS} {int(rating_points)}  Points\n'
