@@ -3,7 +3,16 @@
 import logging
 import os
 
-# Токен от BotFather. Задайте переменную окружения BOT_TOKEN перед запуском:
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv not installed — fall back to plain env variables
+
+# Токен от BotFather.
+# Способ 1 (рекомендуется): создайте файл .env рядом с main.py и добавьте строку:
+#   BOT_TOKEN=1234567890:AAFxxx...
+# Способ 2: задайте переменную окружения в терминале:
 #   Windows:  set BOT_TOKEN=1234567890:AAFxxx...
 #   Linux/Mac: export BOT_TOKEN=1234567890:AAFxxx...
 TOKEN = os.environ.get("BOT_TOKEN", "").strip()
