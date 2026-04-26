@@ -741,17 +741,15 @@ async def _give_activity_rewards(user_id: int, activity: dict) -> bool:
     reward_lines = []
     for k, v in earned.items():
         emoji, name = mat_names.get(k, ('', k))
-        reward_lines.append(f"{E_PLUS} {v} {emoji} {name}")
+        reward_lines.append(f"{E_SQ} {emoji} {v} {name}")
 
     loc_name = loc.get('name', '?')
     act_name = act_cfg.get('name', act_type)
     act_emoji = act_cfg.get('emoji', '')
 
     text = (
-        f"{E_BELL} <b>Добыча окончена!</b>\n\n"
-        f"Локация: {loc_name}\n"
-        f"Действие: {act_emoji} {act_name}\n\n"
-        f"{E_GIFT} <b>Получено:</b>\n"
+        f"{E_BELL}{E_PICKAXE_LOC} Добыча закончена:\n"
+        f"{E_GIFT}{E_PLUS} Получено:\n\n"
         + "\n".join(reward_lines)
     )
     if exp_result.get('leveled_up'):
@@ -1866,6 +1864,7 @@ async def process_like_message_from_friend(message: types.Message, state: FSMCon
         await _send_friend_profile(message, target_player, viewer_id=user_id)
 
 
+async def _send_friend_requests(message, user_id: int):
     """Показать заявки в друзья"""
     request_ids = get_friend_requests(user_id)
 
@@ -4944,6 +4943,11 @@ async def admin_menu_handler(message: types.Message, state: FSMContext):
                              reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
         await state.set_state(AdminPanel.adding_chests_nickname)
         return
+    if text == "⚙️ Накрутить компоненты":
+        await message.answer("Введите никнейм игрока:",
+                             reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
+        await state.set_state(AdminPanel.adding_components_nickname)
+        return
     if text == "⏩ Пропустить кд босса":
         admin_clan = get_player_clan(message.from_user.id)
         if not admin_clan:
@@ -5213,6 +5217,37 @@ async def admin_chests_amount(message: types.Message, state: FSMContext):
     chest_name = _ADMIN_CHEST_KEYS[chest_key]
     await message.answer(
         f"✅ {amount} × «{chest_name}» добавлено игроку {html.escape(data['target_nickname'])}",
+        parse_mode="HTML",
+    )
+    await state.set_state(AdminPanel.main_menu)
+    await message.answer("🔐 Админ панель", reply_markup=get_admin_kb())
+
+@router.message(AdminPanel.adding_components_nickname)
+async def admin_components_nickname(message: types.Message, state: FSMContext):
+    nickname = message.text.strip()
+    target = get_player_by_nickname(nickname)
+    if not target:
+        await message.answer(f"{E_CROSS} Игрок «{nickname}» не найден. Введите никнейм ещё раз:")
+        return
+    await state.update_data(target_user_id=target['user_id'], target_nickname=target['nickname'])
+    await message.answer("Введите количество компонентов каждого вида для добавления:")
+    await state.set_state(AdminPanel.adding_components_amount)
+
+@router.message(AdminPanel.adding_components_amount)
+async def admin_components_amount(message: types.Message, state: FSMContext):
+    try:
+        amount = int(message.text.strip())
+        if amount <= 0:
+            raise ValueError
+    except ValueError:
+        await message.answer(f"{E_CROSS} Введите корректное положительное число:")
+        return
+    data = await state.get_data()
+    target_uid = data['target_user_id']
+    for rarity in ('common', 'rare', 'epic', 'legendary', 'mythic'):
+        add_component(target_uid, rarity, amount)
+    await message.answer(
+        f"✅ {amount} компонентов каждого вида добавлено игроку {html.escape(data['target_nickname'])}",
         parse_mode="HTML",
     )
     await state.set_state(AdminPanel.main_menu)

@@ -378,10 +378,8 @@ def format_axes_shop_text(current_pickaxe_level: int = 0) -> str:
         pickaxe_name = data.get('name', f'Кирка {pick_id}')
         lines.append(
             f"{_E_MARKER_MD}{pickaxe_name} \\- {_E_PICKAXE_MD} {pick_id} level {star_md}\n"
-            f"├ добывает {data['min_stone']}\\-{data['max_stone']} {_E_IRON_MD} железа\n"
             f"├ в наличии {owned}\n"
             f"🔘Цена \\- {cost_md}{_E_COINS_MD}\n"
-            f"🔘Нужно \\- {comp_amount} {_E_COMP_MD}{rarity_md} "
-            f"\\(\\# {comp_amount} {comp_name} {comp_word}\\)\n"
+            f"🔘Нужно \\- {comp_amount} {_E_COMP_MD}{rarity_md}\n"
         )
     return "\n".join(lines)
