@@ -94,6 +94,7 @@ from bot.data.locations import (
     LOCATIONS, LOCATION_ENEMIES, AXES, PICKAXES, FOREST_ENEMIES, MINE_ENEMIES,
     get_location_enemy_for_player, get_forest_enemy_for_player, get_mine_enemy_for_player,
     E_PICKAXE_LOC, E_PICKAXE_SHOP, E_STONE_MAT,
+    format_axes_shop_text,
 )
 from bot.data.clans import (
     CLAN_LEVEL_EXP, MAX_CLAN_LEVEL, CLAN_BUFFS, CLAN_CHAT_MAX_MSG_LEN,
@@ -5493,7 +5494,8 @@ async def handle_items(message: types.Message, state: FSMContext):
     # Toggle between axes and pickaxes view
     if text == "⛏ Кирки":
         await state.update_data(items_mode="pickaxes")
-        await message.answer(_get_pickaxes_text(user_id), reply_markup=_get_items_kb(user_id, mode="pickaxes"), parse_mode="HTML")
+        current_pick = get_player_pickaxe_level(user_id)
+        await message.answer(format_axes_shop_text(current_pick), reply_markup=_get_items_kb(user_id, mode="pickaxes"), parse_mode="MarkdownV2")
         return
 
     if text == "🪓 Топоры":
@@ -5586,7 +5588,8 @@ async def handle_items(message: types.Message, state: FSMContext):
 
     # Fallback — refresh current mode
     if items_mode == "pickaxes":
-        await message.answer(_get_pickaxes_text(user_id), reply_markup=_get_items_kb(user_id, mode="pickaxes"), parse_mode="HTML")
+        current_pick = get_player_pickaxe_level(user_id)
+        await message.answer(format_axes_shop_text(current_pick), reply_markup=_get_items_kb(user_id, mode="pickaxes"), parse_mode="MarkdownV2")
     else:
         await message.answer(_get_items_text(user_id), reply_markup=_get_items_kb(user_id, mode="axes"), parse_mode="HTML")
 
