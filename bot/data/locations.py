@@ -353,11 +353,15 @@ def get_mine_enemy_for_player(player_strength: float) -> dict:
 def _format_cost_md(cost: int) -> str:
     """Форматировать стоимость с точкой как разделителем тысяч (MarkdownV2-safe)."""
     s = str(cost)
-    if len(s) == 4:
-        return f"{s[0]}\\.{s[1:]}"
-    if len(s) == 5:
-        return f"{s[:2]}\\.{s[2:]}"
-    return s
+    length = len(s)
+    if length <= 3:
+        return s
+    # Insert escaped dots as thousands separators from the right
+    groups = []
+    while s:
+        groups.append(s[-3:])
+        s = s[:-3]
+    return '\\.'.join(reversed(groups))
 
 
 def format_axes_shop_text(current_pickaxe_level: int = 0) -> str:
@@ -371,9 +375,9 @@ def format_axes_shop_text(current_pickaxe_level: int = 0) -> str:
         comp_amount = data['comp_amount']
         comp_name = data['comp_name']
         comp_word = data.get('comp_word', 'компонента')
-        name = data.get('name', f'Кирка {pick_id}')
+        pickaxe_name = data.get('name', f'Кирка {pick_id}')
         lines.append(
-            f"{_E_MARKER_MD}{name} \\- {_E_PICKAXE_MD} {pick_id} level {star_md}\n"
+            f"{_E_MARKER_MD}{pickaxe_name} \\- {_E_PICKAXE_MD} {pick_id} level {star_md}\n"
             f"├ добывает {data['min_stone']}\\-{data['max_stone']} {_E_IRON_MD} железа\n"
             f"├ в наличии {owned}\n"
             f"🔘Цена \\- {cost_md}{_E_COINS_MD}\n"
