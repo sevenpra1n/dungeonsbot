@@ -4,15 +4,35 @@ from bot.emojis import E_FOOD, E_MAP_E, E_IRON, E_SKULL
 from bot.data.emojis import E_MAT_STONE
 
 # Pickaxe custom emoji for the LOCATION MENU (mine ore activity row)
-# TODO: replace emoji-id with your actual custom emoji ID for the location pickaxe
-E_PICKAXE_LOC  = '<tg-emoji emoji-id="5456456455634370613">⛏️</tg-emoji>'
+E_PICKAXE_LOC  = '<tg-emoji emoji-id="5469636217186303242">⛏️</tg-emoji>'
 
-# Pickaxe custom emoji for the ITEMS SHOP listing
-# TODO: replace emoji-id with your actual custom emoji ID for the shop pickaxe
-E_PICKAXE_SHOP = '<tg-emoji emoji-id="5456456455634370614">⛏️</tg-emoji>'
+# Pickaxe custom emoji for the ITEMS SHOP listing (HTML format, kept for legacy use)
+E_PICKAXE_SHOP = '<tg-emoji emoji-id="5469636217186303242">⛏️</tg-emoji>'
 
 # Stone emoji used in pickaxe shop descriptions (taken from inventory config)
 E_STONE_MAT = E_MAT_STONE
+
+# ── MarkdownV2 emoji constants for the pickaxes shop ────────────────────────
+_E_MARKER_MD  = '![▫️](tg://emoji?id=5267324424113124134)'
+_E_PICKAXE_MD = '![⛏️](tg://emoji?id=5469636217186303242)'
+_E_IRON_MD    = '![⛰](tg://emoji?id=6278216436892570592)'
+_E_COINS_MD   = '![👛](tg://emoji?id=5215420556089776398)'
+_E_COMP_MD    = '![⚙️](tg://emoji?id=5398095118735521227)'
+
+_PICKAXE_STAR_MD = {
+    1: '![⭐️](tg://emoji?id=5204460680018666213)',
+    2: '![⭐️](tg://emoji?id=5204221415980539813)',
+    3: '![⭐️](tg://emoji?id=5204347567759956677)',
+    4: '![⭐️](tg://emoji?id=5204141284775697953)',
+    5: '![⭐️](tg://emoji?id=5217979901331644711)',
+}
+
+_PICKAXE_RARITY_MD = {
+    "common":    '![🌟](tg://emoji?id=5395855331945392566)',
+    "rare":      '![🌟](tg://emoji?id=5395316601312548706)',
+    "epic":      '![🌟](tg://emoji?id=5395550054259921224)',
+    "legendary": '![🌟](tg://emoji?id=5395487888903280719)',
+}
 
 # ============== LOCATIONS ==============
 LOCATIONS = {
@@ -148,8 +168,10 @@ AXES = {
 # Кирки (для магазина предметов)
 PICKAXES = {
     1: {
+        "name": "Деревянная кирка",
         "level": 1, "min_stone": 1,  "max_stone": 3,   "cost": 850,
         "comp_rarity": "common",    "comp_amount": 4,  "comp_name": "обычных",
+        "comp_word": "компонента",
         "star_emoji": '<tg-emoji emoji-id="5204460680018666213">⭐️</tg-emoji>',
         "ore_chances": {
             "copper": 0.10, "iron": 0.05, "gold": 0.01,
@@ -157,8 +179,10 @@ PICKAXES = {
         },
     },
     2: {
+        "name": "Каменная кирка",
         "level": 2, "min_stone": 2,  "max_stone": 9,   "cost": 1570,
         "comp_rarity": "common",    "comp_amount": 35, "comp_name": "обычных",
+        "comp_word": "компонента",
         "star_emoji": '<tg-emoji emoji-id="5204221415980539813">⭐️</tg-emoji>',
         "ore_chances": {
             "copper": 0.20, "iron": 0.10, "gold": 0.03,
@@ -166,8 +190,10 @@ PICKAXES = {
         },
     },
     3: {
+        "name": "Железная кирка",
         "level": 3, "min_stone": 5,  "max_stone": 18,  "cost": 6250,
         "comp_rarity": "rare",      "comp_amount": 10, "comp_name": "редких",
+        "comp_word": "компонента",
         "star_emoji": '<tg-emoji emoji-id="5204347567759956677">⭐️</tg-emoji>',
         "ore_chances": {
             "copper": 0.50, "iron": 0.25, "gold": 0.08,
@@ -175,8 +201,10 @@ PICKAXES = {
         },
     },
     4: {
+        "name": "Алмазная кирка",
         "level": 4, "min_stone": 10, "max_stone": 37,  "cost": 12500,
         "comp_rarity": "epic",      "comp_amount": 24, "comp_name": "эпических",
+        "comp_word": "компонентов",
         "star_emoji": '<tg-emoji emoji-id="5204141284775697953">⭐️</tg-emoji>',
         "ore_chances": {
             "copper": 0.80, "iron": 0.40, "gold": 0.14,
@@ -184,8 +212,10 @@ PICKAXES = {
         },
     },
     5: {
+        "name": "Незеритовая кирка",
         "level": 5, "min_stone": 25, "max_stone": 115, "cost": 56300,
         "comp_rarity": "legendary", "comp_amount": 12, "comp_name": "легендарных",
+        "comp_word": "компонентов",
         "star_emoji": '<tg-emoji emoji-id="5217979901331644711">⭐️</tg-emoji>',
         "ore_chances": {
             "copper": 1.0,  "iron": 1.0,  "gold": 0.45,
@@ -318,3 +348,36 @@ def get_mine_enemy_for_player(player_strength: float) -> dict:
             return enemy
     # fallback to strongest
     return MINE_ENEMIES["iron_giant"]
+
+
+def _format_cost_md(cost: int) -> str:
+    """Форматировать стоимость с точкой как разделителем тысяч (MarkdownV2-safe)."""
+    s = str(cost)
+    if len(s) == 4:
+        return f"{s[0]}\\.{s[1:]}"
+    if len(s) == 5:
+        return f"{s[:2]}\\.{s[2:]}"
+    return s
+
+
+def format_axes_shop_text(current_pickaxe_level: int = 0) -> str:
+    """Сформировать текст магазина кирок в формате MarkdownV2."""
+    lines = []
+    for pick_id, data in PICKAXES.items():
+        owned = "✅" if current_pickaxe_level >= pick_id else "❌"
+        star_md = _PICKAXE_STAR_MD[pick_id]
+        rarity_md = _PICKAXE_RARITY_MD.get(data['comp_rarity'], '')
+        cost_md = _format_cost_md(data['cost'])
+        comp_amount = data['comp_amount']
+        comp_name = data['comp_name']
+        comp_word = data.get('comp_word', 'компонента')
+        name = data.get('name', f'Кирка {pick_id}')
+        lines.append(
+            f"{_E_MARKER_MD}{name} \\- {_E_PICKAXE_MD} {pick_id} level {star_md}\n"
+            f"├ добывает {data['min_stone']}\\-{data['max_stone']} {_E_IRON_MD} железа\n"
+            f"├ в наличии {owned}\n"
+            f"🔘Цена \\- {cost_md}{_E_COINS_MD}\n"
+            f"🔘Нужно \\- {comp_amount} {_E_COMP_MD}{rarity_md} "
+            f"\\(\\# {comp_amount} {comp_name} {comp_word}\\)\n"
+        )
+    return "\n".join(lines)
