@@ -37,9 +37,11 @@ _PICKAXE_RARITY_MD = {
 # ============== LOCATIONS ==============
 LOCATIONS = {
     1: {
-        "name": "🌾 Ясная Поляна",
+        "name": "🌾 Ясная поляна",
         "emoji": "🌾",
         "image": "images/meadow.png",
+        "min_level": 1,
+        "enemy_search_time": 10,
         "activities": {
             "gather": {
                 "name": "Добыча еды",
@@ -71,6 +73,8 @@ LOCATIONS = {
         "name": "🌳 Лес",
         "emoji": "🌳",
         "image": "images/les.png",
+        "min_level": 1,
+        "enemy_search_time": 30,
         "activities": {
             "chop_wood": {
                 "name": "Добыча древесины",
@@ -97,6 +101,8 @@ LOCATIONS = {
         "name": "⛏ Шахта",
         "emoji": "⛏",
         "image": "images/mine.png",
+        "min_level": 3,
+        "enemy_search_time": 60,
         "activities": {
             "mine_ore": {
                 "name": "Добыча руды",
@@ -113,6 +119,81 @@ LOCATIONS = {
                 "display_emoji": E_MAP_E,
                 "rewards": {},
                 "monster_chance": 0.25
+            }
+        }
+    },
+    4: {
+        "name": "🦂 Дикие пустоши",
+        "emoji": "🦂",
+        "image": "images/pustosh.png",
+        "min_level": 10,
+        "enemy_search_time": 120,
+        "activities": {
+            "search": {
+                "name": "Обыскать локацию",
+                "time": 150,
+                "emoji": "🗺️",
+                "display_emoji": E_MAP_E,
+                "rewards": {},
+                "monster_chance": 0.35
+            },
+            "loot_all": {
+                "name": "Обчистить всю локацию",
+                "time": 600,
+                "emoji": "🧹",
+                "display_emoji": "🧹",
+                "rewards": {},
+                "monster_chance": 1.0
+            }
+        }
+    },
+    5: {
+        "name": "🏜 Далёкие земли",
+        "emoji": "🏜",
+        "image": "images/dalekie.png",
+        "min_level": 18,
+        "enemy_search_time": 210,
+        "activities": {
+            "search": {
+                "name": "Обыскать локацию",
+                "time": 240,
+                "emoji": "🗺️",
+                "display_emoji": E_MAP_E,
+                "rewards": {},
+                "monster_chance": 0.5
+            },
+            "loot_all": {
+                "name": "Обчистить всю локацию",
+                "time": 1200,
+                "emoji": "🧹",
+                "display_emoji": "🧹",
+                "rewards": {},
+                "monster_chance": 1.0
+            }
+        }
+    },
+    6: {
+        "name": "🔥 Преисподня",
+        "emoji": "🔥",
+        "image": "images/preispodnya.png",
+        "min_level": 25,
+        "enemy_search_time": 600,
+        "activities": {
+            "search": {
+                "name": "Обыскать локацию",
+                "time": 600,
+                "emoji": "🗺️",
+                "display_emoji": E_MAP_E,
+                "rewards": {},
+                "monster_chance": 0.65
+            },
+            "loot_all": {
+                "name": "Обчистить всю локацию",
+                "time": 2100,
+                "emoji": "🧹",
+                "display_emoji": "🧹",
+                "rewards": {},
+                "monster_chance": 1.0
             }
         }
     },
@@ -347,6 +428,233 @@ MINE_ENEMIES = {
     },
 }
 
+# Враги диких пустошей (по силе игрока)
+WASTELAND_ENEMIES = {
+    "dust_scavenger": {
+        "name": "Пылевой мародёр",
+        "emoji": "🪓",
+        "strength": 95,
+        "min_player_strength": 0,
+        "max_player_strength": 99,
+        "rewards": {
+            "coins": (20, 60),
+            "experience": (10, 18),
+            "clan_exp": (6, 12),
+        },
+    },
+    "rabid_hyena": {
+        "name": "Бешеная гиена",
+        "emoji": "🐺",
+        "strength": 185,
+        "min_player_strength": 100,
+        "max_player_strength": 399,
+        "rewards": {
+            "coins": (45, 110),
+            "experience": (18, 30),
+            "clan_exp": (10, 16),
+            "iron": (1, 2),
+        },
+    },
+    "ash_stalker": {
+        "name": "Пепельный охотник",
+        "emoji": "🦂",
+        "strength": 520,
+        "min_player_strength": 400,
+        "max_player_strength": 899,
+        "rewards": {
+            "coins": (130, 240),
+            "experience": (32, 50),
+            "clan_exp": (14, 22),
+            "iron": (2, 5),
+            "gold": (1, 2),
+        },
+    },
+    "waste_reaver": {
+        "name": "Разоритель пустошей",
+        "emoji": "☠️",
+        "strength": 1150,
+        "min_player_strength": 900,
+        "max_player_strength": 1699,
+        "rewards": {
+            "coins": (260, 420),
+            "experience": (50, 75),
+            "clan_exp": (20, 28),
+            "iron": (4, 9),
+            "gold": (1, 3),
+            "steel": (1, 1),
+        },
+    },
+    "sand_titan": {
+        "name": "Песчаный титан",
+        "emoji": "🗿",
+        "strength": 1900,
+        "min_player_strength": 1700,
+        "max_player_strength": 999999,
+        "rewards": {
+            "coins": (420, 700),
+            "experience": (75, 110),
+            "clan_exp": (26, 38),
+            "iron": (6, 14),
+            "gold": (2, 5),
+            "steel": (1, 2),
+        },
+    },
+}
+
+# Враги дальних земель (по силе игрока)
+FARLANDS_ENEMIES = {
+    "nomad_saboteur": {
+        "name": "Кочевой диверсант",
+        "emoji": "🗡️",
+        "strength": 210,
+        "min_player_strength": 0,
+        "max_player_strength": 149,
+        "rewards": {
+            "coins": (40, 100),
+            "experience": (18, 28),
+            "clan_exp": (8, 14),
+            "iron": (1, 3),
+        },
+    },
+    "storm_raider": {
+        "name": "Штормовой налётчик",
+        "emoji": "🌪",
+        "strength": 540,
+        "min_player_strength": 150,
+        "max_player_strength": 499,
+        "rewards": {
+            "coins": (110, 220),
+            "experience": (30, 48),
+            "clan_exp": (14, 20),
+            "iron": (2, 6),
+            "gold": (1, 2),
+        },
+    },
+    "rift_hunter": {
+        "name": "Охотник разлома",
+        "emoji": "🕳",
+        "strength": 980,
+        "min_player_strength": 500,
+        "max_player_strength": 1099,
+        "rewards": {
+            "coins": (220, 420),
+            "experience": (48, 72),
+            "clan_exp": (20, 28),
+            "iron": (4, 10),
+            "gold": (2, 4),
+            "steel": (1, 1),
+        },
+    },
+    "obsidian_keeper": {
+        "name": "Обсидиановый страж",
+        "emoji": "🛡️",
+        "strength": 1680,
+        "min_player_strength": 1100,
+        "max_player_strength": 1999,
+        "rewards": {
+            "coins": (420, 700),
+            "experience": (72, 105),
+            "clan_exp": (26, 36),
+            "iron": (7, 16),
+            "gold": (2, 6),
+            "steel": (1, 2),
+        },
+    },
+    "ancient_warden": {
+        "name": "Древний надзиратель",
+        "emoji": "👹",
+        "strength": 2450,
+        "min_player_strength": 2000,
+        "max_player_strength": 999999,
+        "rewards": {
+            "coins": (720, 1150),
+            "experience": (110, 160),
+            "clan_exp": (34, 48),
+            "iron": (10, 22),
+            "gold": (4, 8),
+            "steel": (1, 3),
+        },
+    },
+}
+
+# Враги преисподни (по силе игрока)
+HELL_ENEMIES = {
+    "ember_hound": {
+        "name": "Угольная гончая",
+        "emoji": "🔥",
+        "strength": 380,
+        "min_player_strength": 0,
+        "max_player_strength": 249,
+        "rewards": {
+            "coins": (70, 160),
+            "experience": (25, 40),
+            "clan_exp": (10, 16),
+            "iron": (2, 5),
+            "gold": (1, 2),
+        },
+    },
+    "soul_reaper": {
+        "name": "Жнец душ",
+        "emoji": "💀",
+        "strength": 920,
+        "min_player_strength": 250,
+        "max_player_strength": 799,
+        "rewards": {
+            "coins": (190, 360),
+            "experience": (45, 70),
+            "clan_exp": (18, 26),
+            "iron": (5, 11),
+            "gold": (2, 4),
+            "steel": (1, 1),
+        },
+    },
+    "infernal_knight": {
+        "name": "Инфернальный рыцарь",
+        "emoji": "🛡",
+        "strength": 1800,
+        "min_player_strength": 800,
+        "max_player_strength": 1699,
+        "rewards": {
+            "coins": (360, 620),
+            "experience": (72, 105),
+            "clan_exp": (26, 36),
+            "iron": (8, 18),
+            "gold": (3, 7),
+            "steel": (1, 2),
+        },
+    },
+    "pit_overseer": {
+        "name": "Надзиратель ямы",
+        "emoji": "👿",
+        "strength": 2900,
+        "min_player_strength": 1700,
+        "max_player_strength": 2899,
+        "rewards": {
+            "coins": (650, 1050),
+            "experience": (110, 160),
+            "clan_exp": (34, 46),
+            "iron": (12, 26),
+            "gold": (5, 10),
+            "steel": (2, 4),
+        },
+    },
+    "lord_of_ashes": {
+        "name": "Повелитель пепла",
+        "emoji": "👑",
+        "strength": 4200,
+        "min_player_strength": 2900,
+        "max_player_strength": 999999,
+        "rewards": {
+            "coins": (1100, 1800),
+            "experience": (170, 240),
+            "clan_exp": (44, 60),
+            "iron": (16, 34),
+            "gold": (7, 14),
+            "steel": (3, 5),
+        },
+    },
+}
+
 
 def get_location_enemy_for_player(player_strength: float) -> dict:
     """Вернуть врага локации по силе игрока"""
@@ -373,6 +681,30 @@ def get_mine_enemy_for_player(player_strength: float) -> dict:
             return enemy
     # fallback to strongest
     return MINE_ENEMIES["iron_giant"]
+
+
+def get_wasteland_enemy_for_player(player_strength: float) -> dict:
+    """Вернуть врага диких пустошей по силе игрока"""
+    for enemy in WASTELAND_ENEMIES.values():
+        if enemy['min_player_strength'] <= player_strength <= enemy['max_player_strength']:
+            return enemy
+    return WASTELAND_ENEMIES["sand_titan"]
+
+
+def get_farlands_enemy_for_player(player_strength: float) -> dict:
+    """Вернуть врага дальних земель по силе игрока"""
+    for enemy in FARLANDS_ENEMIES.values():
+        if enemy['min_player_strength'] <= player_strength <= enemy['max_player_strength']:
+            return enemy
+    return FARLANDS_ENEMIES["ancient_warden"]
+
+
+def get_hell_enemy_for_player(player_strength: float) -> dict:
+    """Вернуть врага преисподни по силе игрока"""
+    for enemy in HELL_ENEMIES.values():
+        if enemy['min_player_strength'] <= player_strength <= enemy['max_player_strength']:
+            return enemy
+    return HELL_ENEMIES["lord_of_ashes"]
 
 
 def _format_cost_md(cost: int) -> str:

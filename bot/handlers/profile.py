@@ -7,7 +7,7 @@ from bot.states import ProfileMenu
 from bot.database import (
     get_player, get_experience_progress, get_player_weapon, get_player_armor,
     get_player_clan, get_player_with_chest_statuses,
-    set_player_status, set_player_block_invites,
+    set_player_status, set_player_block_invites, delete_player_data,
 )
 from bot.utils import (
     apply_clan_strength_buff, calculate_player_health,
@@ -165,6 +165,7 @@ def _get_settings_kb(block_invites: bool) -> ReplyKeyboardMarkup:
     label = "🔓 Включить приглашения" if block_invites else "🔒 Заблокировать приглашения"
     return ReplyKeyboardMarkup(keyboard=[
         [KeyboardButton(text=label)],
+        [KeyboardButton(text="🗑️ Удалить данные")],
         [KeyboardButton(text="⬅️ Назад в профиль")],
     ], resize_keyboard=True)
 
@@ -201,5 +202,50 @@ async def handle_profile_settings(message, state: FSMContext):
                 await _send_settings(message, updated)
         return
 
+    if text == "🗑️ Удалить данные":
+        await state.set_state(ProfileMenu.waiting_delete_data_confirm)
+        await message.answer(
+            f"{E_WARN}{E_WARN} Вы точно хотите сбросить данные аккаунта?\n"
+            f"{E_WARN}Весь прогресс потеряется и вы начнете заного!\n\n"
+            f"{E_WARN} Ниже напишите \"ПОДТВЕРДИТЬ\" чтобы удалить аккаунт.",
+            reply_markup=ReplyKeyboardMarkup(
+                keyboard=[[KeyboardButton(text="❌ Отмена")]],
+                resize_keyboard=True
+            ),
+            parse_mode="HTML"
+        )
+        return
+
     if player:
         await _send_settings(message, player)
+
+
+@router.message(ProfileMenu.waiting_delete_data_confirm)
+async def handle_delete_data_confirm(message, state: FSMContext):
+    user_id = message.from_user.id
+    text = (message.text or "").strip()
+
+    if text == "❌ Отмена":
+        player = get_player(user_id)
+        await state.set_state(ProfileMenu.viewing_settings)
+        if player:
+            await _send_settings(message, player)
+        return
+
+    if text != "ПОДТВЕРДИТЬ":
+        await message.answer(
+            f"{E_WARN} Для удаления аккаунта отправьте точный текст: ПОДТВЕРДИТЬ\n"
+            f"Или нажмите «❌ Отмена».",
+            reply_markup=ReplyKeyboardMarkup(
+                keyboard=[[KeyboardButton(text="❌ Отмена")]],
+                resize_keyboard=True
+            )
+        )
+        return
+
+    delete_player_data(user_id)
+    await state.clear()
+    await message.answer(
+        "✅ Данные аккаунта удалены.\nЧтобы начать новую игру, напиши /start",
+        reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True)
+    )

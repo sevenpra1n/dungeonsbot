@@ -2,7 +2,7 @@ import sqlite3
 import random
 import logging
 from datetime import datetime, timezone
-from bot.config import DB_NAME
+from bot.config import DB_NAME, ADMIN_IDS
 
 # ============== DATA CONSTANTS ==============
 # These data constants are here temporarily; they will be imported from bot.data modules later.
@@ -485,6 +485,57 @@ def add_player(user_id: int, nickname: str):
         pass
     finally:
         conn.close()
+
+
+def delete_player_data(user_id: int):
+    """Полностью удалить данные игрока для начала новой игры."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+
+    # Если игрок лидер клана — удаляем клан целиком
+    cursor.execute('SELECT clan_id FROM clans WHERE leader_id = ?', (user_id,))
+    leader_clans = [row[0] for row in cursor.fetchall()]
+    for clan_id in leader_clans:
+        cursor.execute('DELETE FROM clan_members WHERE clan_id = ?', (clan_id,))
+        cursor.execute('DELETE FROM clan_stats WHERE clan_id = ?', (clan_id,))
+        cursor.execute('DELETE FROM clan_bosses WHERE clan_id = ?', (clan_id,))
+        cursor.execute('DELETE FROM clan_boss_tickets WHERE clan_id = ?', (clan_id,))
+        cursor.execute('DELETE FROM clan_boss_damage WHERE clan_id = ?', (clan_id,))
+        cursor.execute('DELETE FROM clans WHERE clan_id = ?', (clan_id,))
+
+    # Если игрок был обычным участником клана — убрать его и обновить счётчик
+    cursor.execute('SELECT clan_id FROM clan_members WHERE user_id = ?', (user_id,))
+    member_clans = [row[0] for row in cursor.fetchall() if row[0] not in leader_clans]
+    for clan_id in member_clans:
+        cursor.execute('DELETE FROM clan_members WHERE user_id = ? AND clan_id = ?', (user_id, clan_id))
+        cursor.execute('UPDATE clans SET members_count = MAX(0, members_count - 1) WHERE clan_id = ?', (clan_id,))
+
+    # Удаление всех персональных записей
+    for query in (
+        'DELETE FROM active_activities WHERE user_id = ?',
+        'DELETE FROM equipment_purchases WHERE user_id = ?',
+        'DELETE FROM player_weapons WHERE user_id = ?',
+        'DELETE FROM player_armor WHERE user_id = ?',
+        'DELETE FROM player_inventory WHERE user_id = ?',
+        'DELETE FROM player_components WHERE user_id = ?',
+        'DELETE FROM player_chest_statuses WHERE user_id = ?',
+        'DELETE FROM player_axes WHERE user_id = ?',
+        'DELETE FROM player_pickaxes WHERE user_id = ?',
+        'DELETE FROM player_skills WHERE user_id = ?',
+        'DELETE FROM friendships WHERE user_id = ? OR friend_id = ?',
+        'DELETE FROM player_likes WHERE liker_id = ? OR liked_id = ?',
+        'DELETE FROM clan_chat WHERE sender_id = ?',
+        'DELETE FROM clan_boss_tickets WHERE user_id = ?',
+        'DELETE FROM clan_boss_damage WHERE user_id = ?',
+        'DELETE FROM players WHERE user_id = ?',
+    ):
+        if 'OR friend_id' in query or 'OR liked_id' in query:
+            cursor.execute(query, (user_id, user_id))
+        else:
+            cursor.execute(query, (user_id,))
+
+    conn.commit()
+    conn.close()
 
 def get_player(user_id: int):
     """Получить данные игрока"""
@@ -1108,9 +1159,9 @@ def start_activity(user_id: int, activity_type: str, location_id: int, duration_
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     now = datetime.now(timezone.utc)
-    end = datetime.now(timezone.utc).replace(microsecond=0)
+    duration = 0 if user_id in ADMIN_IDS else max(0, int(duration_seconds))
     import datetime as dt
-    end_time = now + dt.timedelta(seconds=duration_seconds)
+    end_time = now + dt.timedelta(seconds=duration)
     cursor.execute('''
         INSERT OR REPLACE INTO active_activities (user_id, activity_type, location_id, start_time, end_time)
         VALUES (?, ?, ?, ?, ?)

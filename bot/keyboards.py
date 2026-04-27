@@ -1,4 +1,7 @@
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import (
+    ReplyKeyboardMarkup, KeyboardButton,
+    InlineKeyboardMarkup, InlineKeyboardButton,
+)
 from aiogram.fsm.context import FSMContext
 
 from bot.data.equipment import WEAPONS, ARMOR, EQUIPMENT
@@ -462,13 +465,13 @@ def get_admin_kb() -> ReplyKeyboardMarkup:
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
-def get_map_kb() -> ReplyKeyboardMarkup:
-    """Клавиатура карты"""
+def get_map_kb() -> InlineKeyboardMarkup:
+    """Inline-клавиатура карты"""
     kb = []
     for loc_id, loc in LOCATIONS.items():
-        kb.append([KeyboardButton(text=loc['name'])])
-    kb.append([KeyboardButton(text="❌ Вернуться")])
-    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+        kb.append([InlineKeyboardButton(text=loc['name'], callback_data=f"map_loc:{loc_id}")])
+    kb.append([InlineKeyboardButton(text="❌ Вернуться", callback_data="map_close")])
+    return InlineKeyboardMarkup(inline_keyboard=kb)
 
 def get_location_activities_kb(location_id: int) -> ReplyKeyboardMarkup:
     """Клавиатура активностей локации"""
@@ -478,12 +481,9 @@ def get_location_activities_kb(location_id: int) -> ReplyKeyboardMarkup:
     kb = []
     for act_key, act in loc['activities'].items():
         kb.append([KeyboardButton(text=f"{act['emoji']} {act['name']} ({act['time']}с)")])
-    if location_id == 1:
-        kb.append([KeyboardButton(text="🔍 Поиск врага (10с)")])
-    if location_id == 2:
-        kb.append([KeyboardButton(text="💀 Поиск врага (30с)")])
-    if location_id == 3:
-        kb.append([KeyboardButton(text="💀 Поиск врага (60с)")])
+    enemy_search_time = loc.get('enemy_search_time', 0)
+    if enemy_search_time > 0:
+        kb.append([KeyboardButton(text=f"💀 Поиск врага ({enemy_search_time}с)")])
     kb.append([KeyboardButton(text="⬅️ Назад на карту")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
