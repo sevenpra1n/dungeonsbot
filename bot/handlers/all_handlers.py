@@ -182,8 +182,8 @@ async def _send_chests(message, user_id: int):
         count = inv.get(key, 0)
         drop_emoji = info.get("drop_emoji", "")
         text += (
-            f'{info["emoji"]} {info["name"]}:\n'
-            f'├ Количество: {count}\n'
+            f'{info["emoji"]}{info["emoji"]} {info["name"]}:\n'
+            f'├{info["emoji"]} Количество: {count} {info["emoji"]}\n'
             f'├ Дроп: {info["drop_label"]} {drop_emoji}\n\n'
         )
     await message.answer(text, reply_markup=_get_chests_kb(), parse_mode="HTML")
@@ -1066,7 +1066,7 @@ async def handle_weapons_menu(message: types.Message, state: FSMContext):
     armor = _get_armor_info(armor_id)
     new_weapon_strength = new_weapon['strength']
     new_total_strength = new_weapon_strength + armor['strength']
-    new_coins = player['coins'] - new_weapon['cost']
+    new_coins = int(round(player['coins'] - new_weapon['cost']))
 
     set_player_weapon(user_id, chosen_weapon_id)
     update_player_strength(user_id, new_total_strength)
@@ -1145,7 +1145,7 @@ async def handle_armor_menu(message: types.Message, state: FSMContext):
     weapon = _get_weapon_info(weapon_id)
     new_armor_strength = new_armor['strength']
     new_total_strength = weapon['strength'] + new_armor_strength
-    new_coins = player['coins'] - new_armor['cost']
+    new_coins = int(round(player['coins'] - new_armor['cost']))
 
     set_player_armor(user_id, chosen_armor_id)
     update_player_strength(user_id, new_total_strength)
@@ -1205,7 +1205,7 @@ async def handle_skills_menu(message: types.Message, state: FSMContext):
             updated = get_player(user_id)
             await message.answer(
                 f'✅ Скилл «{skill["name"]}» куплен!\n'
-                f'- {skill["price"]} монет\nОсталось: {updated["coins"]} монет\n\n'
+                f'- {skill["price"]} монет\nОсталось: {int(round(updated["coins"]))} монет\n\n'
                 f'{skill["desc"]}\nТребует маны: {skill["mana_cost"]}{E_MANA}',
                 reply_markup=get_skills_kb(user_id)
             )
@@ -1268,17 +1268,41 @@ async def handle_craft_choice(message: types.Message, state: FSMContext):
     recipe = CRAFTING_RECIPES[rarity_key]
     inv = get_inventory(user_id)
 
-    # Check if player has enough materials
+    # Check if player has enough materials — collect ALL missing resources
+    missing = []
     for mat, required in recipe["materials"].items():
         have = inv.get(mat, 0)
         if have < required:
-            await message.answer(
-                f"❌ Недостаточно ресурсов для крафта\\!\n"
-                f"Нужно: {mat} \\— {required}, у вас: {have}",
-                reply_markup=get_craft_choice_kb(),
-                parse_mode="MarkdownV2"
+            missing.append((mat, required, have))
+
+    if missing:
+        from bot.data.crafting import _MAT_EMOJIS, _MAT_NAMES, _E_WARN, _E_BOX_REQ, _E_MARKER
+        lines = [
+            f"{_E_WARN} Недостаточно ресурсов для крафта\\!\n",
+            f"{_E_BOX_REQ} Необходимо:\n",
+        ]
+        for mat, required, have in missing:
+            mat_emoji = _MAT_EMOJIS.get(mat, "")
+            mat_name_ru = {
+                "wood":     "Древесина",
+                "stone":    "Камень",
+                "copper":   "Медь",
+                "iron":     "Железо",
+                "gold":     "Золото",
+                "steel":    "Сталь",
+                "amethyst": "Аметист",
+                "gem":      "Самоцвет",
+            }.get(mat, mat)
+            lines.append(
+                f"{_E_MARKER}{mat_emoji} {mat_name_ru} \\({required} {mat_emoji}\\)\n"
+                f"{_E_MARKER} У вас: \\({have} {mat_emoji}\\)\n"
             )
-            return
+        await message.answer(
+            "\n".join(lines),
+            reply_markup=get_craft_choice_kb(),
+            parse_mode="MarkdownV2"
+        )
+        return
 
     # Deduct materials regardless of success
     for mat, required in recipe["materials"].items():
@@ -1509,6 +1533,11 @@ async def add_friend_from_rating(message: types.Message, state: FSMContext):
     target_id = data.get('viewing_player_id')
     if not target_id:
         await message.answer("❌ Ошибка: игрок не найден.")
+        return
+    # Check if target has blocked invites
+    target_player_chk = get_player(target_id)
+    if target_player_chk and target_player_chk.get('block_invites', 0):
+        await message.answer(f"{E_CROSS} Этот игрок заблокировал приглашения в друзья.")
         return
     result = send_friend_request(user_id, target_id)
     if result == 'sent':
@@ -1877,6 +1906,10 @@ async def handle_friend_profile(message: types.Message, state: FSMContext):
         friend = get_player(friend_id)
         if not friend:
             await message.answer(f"{E_CROSS} Игрок не найден.")
+            return
+        # Проверка: заблокированы ли приглашения у друга
+        if friend.get('block_invites', 0):
+            await message.answer(f"{E_CROSS} Этот игрок заблокировал приглашения в рейд.")
             return
         # Сохраняем приглашение (nickname хранится raw, эскейп при отображении)
         coop_raid_invites[friend_id] = {
@@ -2462,7 +2495,6 @@ async def handle_raid_menu(message: types.Message, state: FSMContext):
 
         if new_player_health <= 0:
             update_player_raid_floor(user_id, 0)
-            update_rating_points(user_id, -10)
             increment_player_deaths(user_id)
             log += _fmt_defeat(html.escape(player['nickname']), enemy_info['name'])
             log += f"\n\nРекорд: {player['raid_max_floor']} этаж."
@@ -2590,7 +2622,6 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
                 if new_max > player['raid_max_floor']:
                     update_player_raid_max_floor(user_id, new_max)
                 update_player_raid_floor(user_id, 0)
-                update_rating_points(user_id, -10)
                 increment_player_deaths(user_id)
                 log += _fmt_defeat(html.escape(player['nickname']), enemy_info['name'])
                 log += f"\n\nПройдено этажей: {floors_completed}. Рекорд: {new_max}."
@@ -2634,7 +2665,6 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
         # Победа на этаже
         reward = enemy_info['reward']
         add_coins_to_player(user_id, reward)
-        update_rating_points(user_id, 5)
         increment_player_pve_wins(user_id)
         if floor_id > player['raid_max_floor']:
             update_player_raid_max_floor(user_id, floor_id)
@@ -2644,7 +2674,6 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
 
         reward_lines = [
             f"{E_PLUS} {reward} {E_COINS} монет",
-            f"{E_PLUS} 5 {E_LEAGUE_POINTS} Points",
         ]
         if player_clan:
             reward_lines.append(f"{E_PLUS} 10 опыта клану")
@@ -2719,7 +2748,6 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
         if new_max > player['raid_max_floor']:
             update_player_raid_max_floor(user_id, new_max)
         update_player_raid_floor(user_id, 0)
-        update_rating_points(user_id, -10)
         increment_player_deaths(user_id)
         log += _fmt_defeat(html.escape(player['nickname']), enemy_info['name'])
         log += f"\n\nПройдено этажей: {floors_completed}. Рекорд: {new_max}."
@@ -2846,7 +2874,6 @@ async def _coop_floor_victory(
     for uid in (my_id, partner_id):
         add_coins_to_player(uid, reward_coins)
         increment_player_pve_wins(uid)
-        update_rating_points(uid, 5)
         p = get_player(uid)
         if p and floor_id > p.get('raid_max_floor', 0):
             update_player_raid_max_floor(uid, floor_id)
@@ -2864,7 +2891,6 @@ async def _coop_floor_victory(
         f"{E_PROFILE} {par_nick} {E_CHECK}\n\n"
         f"{E_GIFT} Каждый получил:\n"
         f"{E_PLUS} {reward_coins} {E_COINS} монет\n"
-        f"{E_PLUS} 5 {E_LEAGUE_POINTS} Points\n"
         f"{E_PLUS} 15 {E_CLAN_BOTTLE} опыта клана\n"
     )
 
@@ -2999,13 +3025,12 @@ async def _coop_raid_player_died(
     my_data = await my_state.get_data()
     par_nick = my_data.get('coop_partner_nickname', 'Партнёр')
 
-    for uid, pts in ((my_id, -10), (partner_id, -5)):
+    for uid, _ in ((my_id, None), (partner_id, None)):
         p = get_player(uid)
         if p:
             new_max = max(p.get('raid_max_floor', 0), floors_done)
             if new_max > p.get('raid_max_floor', 0):
                 update_player_raid_max_floor(uid, new_max)
-        update_rating_points(uid, pts)
     increment_player_deaths(my_id)
 
     defeat_text = (
@@ -3014,7 +3039,6 @@ async def _coop_raid_player_died(
         + f"{E_BOOK_LOSS}{E_RED_C} <b>CO-OP РЕЙД ПРОВАЛЕН!</b>\n\n"
         + f"{E_PROFILE} {my_nick} пал! {E_SKULL}\n\n"
         + f"{E_BAN} Потери:\n"
-        + f"{E_CROSS} -10 {E_LEAGUE_POINTS} Points\n"
         + f"{E_CROSS} Пройдено этажей: {floors_done}\n"
     )
     partner_defeat = (
@@ -3022,7 +3046,6 @@ async def _coop_raid_player_died(
         f"{E_BOOK_LOSS}{E_RED_C} <b>CO-OP РЕЙД ПРОВАЛЕН!</b>\n\n"
         f"{E_SKULL} {my_nick} был повержён — рейд завершён.\n\n"
         f"{E_BAN} Потери:\n"
-        f"{E_CROSS} -5 {E_LEAGUE_POINTS} Points\n"
         f"{E_CROSS} Пройдено этажей: {floors_done}\n"
     )
 
@@ -3457,8 +3480,6 @@ async def start_battle(message: types.Message, state: FSMContext):
         )
         
         if new_player_health <= 0:
-            if not data.get('is_location_battle'):
-                update_rating_points(user_id, -10)
             increment_player_deaths(user_id)
             battle_log += _fmt_defeat(html.escape(player['nickname']), enemy_info['name'], data.get('is_location_battle'))
             
@@ -3591,19 +3612,19 @@ async def battle_round(message: types.Message, state: FSMContext):
                 f"{E_SKULL} {enemy_info['name']} атакует тебя! {E_ARROW_DN}\n"
                 f"{E_DMG}{E_HEART_B} Урон тебе: {enemy_damage}\n\n"
             )
-            if new_player_health <= 0:
-                if not data.get('is_location_battle'):
-                    update_rating_points(user_id, -10)
-                increment_player_deaths(user_id)
-                battle_log += _fmt_defeat(html.escape(player['nickname']), enemy_info['name'], data.get('is_location_battle'))
-                await message.answer(battle_log, reply_markup=get_end_battle_kb())
-                if data.get('is_location_battle'):
-                    try:
-                        await message.answer(_apply_location_defeat_losses(user_id), parse_mode="HTML")
-                    except Exception:
-                        pass
-                await state.clear()
-                return
+        if new_player_health <= 0:
+            if not data.get('is_location_battle'):
+                pass  # no rating penalty for dungeon battles
+            increment_player_deaths(user_id)
+            battle_log += _fmt_defeat(html.escape(player['nickname']), enemy_info['name'], data.get('is_location_battle'))
+            await message.answer(battle_log, reply_markup=get_end_battle_kb())
+            if data.get('is_location_battle'):
+                try:
+                    await message.answer(_apply_location_defeat_losses(user_id), parse_mode="HTML")
+                except Exception:
+                    pass
+            await state.clear()
+            return
             battle_log += (
                 f"{_fmt_player_stats(html.escape(player['nickname']), new_player_health, data['player_damage'], new_mana)}\n\n"
                 f"{_fmt_enemy_stats(enemy_info['name'], new_enemy_health, data['enemy_damage'])}"
@@ -3645,10 +3666,6 @@ async def battle_round(message: types.Message, state: FSMContext):
                 coin_earned = random.randint(*loc_rewards['coins'])
                 add_coins_to_player(user_id, coin_earned)
                 reward_lines.append(f"{E_PLUS} {coin_earned} {E_COINS} монет")
-            if 'rating_points' in loc_rewards:
-                rp = loc_rewards['rating_points']
-                update_rating_points(user_id, rp)
-                reward_lines.append(f"{E_PLUS} {rp} {E_LEAGUE_POINTS} Points")
             if 'food' in loc_rewards:
                 food_chance = loc_rewards.get('food_chance', 1.0)
                 if random.random() < food_chance:
@@ -3681,8 +3698,6 @@ async def battle_round(message: types.Message, state: FSMContext):
             return
         reward = enemy_info['reward']
         add_coins_to_player(user_id, reward)
-        rating_pts = enemy_info.get('rating_points', 5)
-        update_rating_points(user_id, rating_pts)
         increment_player_pve_wins(user_id)
         player_clan = get_player_clan(user_id)
         if player_clan:
@@ -3690,7 +3705,6 @@ async def battle_round(message: types.Message, state: FSMContext):
         
         reward_lines = [
             f"{E_PLUS} {reward} {E_COINS} монет",
-            f"{E_PLUS} {rating_pts} {E_LEAGUE_POINTS} Points",
         ]
         if player_clan:
             reward_lines.append(f"{E_PLUS} 10 опыта клану")
@@ -3719,8 +3733,6 @@ async def battle_round(message: types.Message, state: FSMContext):
             )
     
     if new_player_health <= 0:
-        if not data.get('is_location_battle'):
-            update_rating_points(user_id, -10)
         increment_player_deaths(user_id)
         battle_log += _fmt_defeat(html.escape(player['nickname']), enemy_info['name'], data.get('is_location_battle'))
         await message.answer(battle_log, reply_markup=get_end_battle_kb())
@@ -4141,17 +4153,37 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
         my_rating = my_player.get('rating_points', 0) if my_player else 0
         win_pts, _ = get_pvp_league_points(my_rating)
         update_rating_points(user_id, win_pts)
+        new_my_rating = my_rating + win_pts
         add_online_match(user_id)
+        opp_loss_pts = 0
         if opponent_id:
             add_online_match(opponent_id)
             increment_player_deaths(opponent_id)
             opp_p = get_player(opponent_id)
             if opp_p:
-                _, loss_pts = get_pvp_league_points(opp_p['rating_points'])
-                update_rating_points(opponent_id, -loss_pts)
+                _, opp_loss_pts = get_pvp_league_points(opp_p['rating_points'])
+                update_rating_points(opponent_id, -opp_loss_pts)
         winner_clan = get_player_clan(user_id)
         if winner_clan:
             add_clan_exp(winner_clan['clan_id'], 2)
+
+        # Check for league promotion
+        from bot.data.leagues_config import get_league
+        old_league = get_league(my_rating)
+        new_league = get_league(new_my_rating)
+        league_up = new_league['key'] != old_league['key'] and new_my_rating >= new_league['min_points']
+
+        rating_msg = (
+            f"{E_TROPHY} Ваш рейтинг изменился!\n\n"
+            f"{E_PLUS} + {win_pts} {E_LEAGUE_POINTS} Points\n"
+        )
+        if league_up:
+            rating_msg += (
+                f"\n{E_BELL} Вы переходите на новую лигу!\n"
+                f"({new_league['emoji']} {new_league['name']} лига)\n"
+            )
+        rating_msg += f"\nОбщие points: {new_my_rating} {E_LEAGUE_POINTS} Points"
+
         battle_log += (
             f"{E_CHART} Результаты боя:\n\n"
             f"{E_TROPHY}{E_GREEN} ВЫ ПОБЕДИЛИ!\n\n"
@@ -4160,6 +4192,7 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
             f"{E_PLUS} +{win_pts} {E_LEAGUE_POINTS} Points\n"
         )
         await message.answer(battle_log, reply_markup=get_end_battle_kb())
+        await message.answer(rating_msg, parse_mode="HTML")
         pvp_pairs.pop(user_id, None)
         pvp_pairs.pop(opponent_id, None)
         await state.clear()
@@ -4184,6 +4217,19 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
                     reply_markup=get_end_battle_kb(),
                     parse_mode="HTML"
                 )
+                if opp_loss_pts > 0:
+                    opp_p_fresh = get_player(opponent_id)
+                    opp_new_rating = opp_p_fresh.get('rating_points', 0) if opp_p_fresh else 0
+                    opp_rating_msg = (
+                        f"{E_TROPHY} Ваш рейтинг изменился!\n\n"
+                        f"{E_CROSS} - {opp_loss_pts} {E_LEAGUE_POINTS} Points\n\n"
+                        f"Общие points: {opp_new_rating} {E_LEAGUE_POINTS} Points"
+                    )
+                    await bot.send_message(
+                        chat_id=opponent_id,
+                        text=opp_rating_msg,
+                        parse_mode="HTML"
+                    )
             except Exception:
                 pass
         return
@@ -5639,8 +5685,8 @@ async def handle_market_sell(message: types.Message, state: FSMContext):
         )
         return
 
-    # Calculate earnings (round to avoid floating point noise)
-    earned = round(qty * price, 2)
+    # Calculate earnings (round to integer to avoid floating point noise)
+    earned = int(round(qty * price))
 
     ok = remove_inventory_material(user_id, mat_key, qty)
     if not ok:
@@ -5656,7 +5702,7 @@ async def handle_market_sell(message: types.Message, state: FSMContext):
     await message.answer(
         f"{E_PLUS} Продано: {qty} {emoji} {mat_name}\n"
         f"{E_PLUS} Получено: {earned}{E_COINS}\n\n"
-        f"Монет теперь: {updated['coins']}{E_COINS}\n"
+        f"Монет теперь: {int(round(updated['coins']))}{E_COINS}\n"
         f"Осталось {emoji}: {updated_inv[mat_key]}",
         reply_markup=get_sell_qty_kb(mat_key, updated_inv[mat_key])
     )
@@ -6269,12 +6315,10 @@ async def _handle_clan_boss_victory(message, state: FSMContext, clan_id: int, bo
             p_crystals += boss_cfg['rewards']['crystals_bonus']
         p_coins = _get_boss_coins_reward(p['strength'], boss_cfg)
         p_exp_profile = random.randint(*boss_cfg['rewards']['exp_profile'])
-        p_rating = boss_cfg['rewards']['rating']
 
         add_crystals_to_player(participant_uid, p_crystals)
         add_coins_to_player(participant_uid, p_coins)
         add_experience_to_player(participant_uid, p_exp_profile)
-        update_rating_points(participant_uid, p_rating)
 
         p_victory_text = (
             f"{E_SQ}{E_CB_CROWN} БОСС КЛАНА ПОВЕРЖЕН!\n\n"
@@ -6283,8 +6327,7 @@ async def _handle_clan_boss_victory(message, state: FSMContext, clan_id: int, bo
             f"{E_PLUS} {p_crystals} {E_CRYSTALS} кристаллов\n"
             f"{E_PLUS} {p_coins} {E_COINS} монет\n"
             f"{E_PLUS} {p_exp_profile} {E_EXP} опыта профиля\n"
-            f"{E_PLUS} {exp_clan} {E_CLAN_BOTTLE} опыта клана\n"
-            f"{E_PLUS} {p_rating} {E_LEAGUE_POINTS} Points\n\n"
+            f"{E_PLUS} {exp_clan} {E_CLAN_BOTTLE} опыта клана\n\n"
             f"{E_SQ}{E_WARN} Новый босс появится через {E_HOURGLASS}{cooldown_text}\n"
             f"{E_ONLINE2} Благодарность всем игрокам за помощь!"
         )

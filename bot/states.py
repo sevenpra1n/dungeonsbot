@@ -80,6 +80,7 @@ class LocationMenu(StatesGroup):
 class ProfileMenu(StatesGroup):
     viewing_profile = State()
     viewing_statuses = State()
+    viewing_settings = State()
     viewing_inventory = State()
     viewing_components = State()
     viewing_chests = State()

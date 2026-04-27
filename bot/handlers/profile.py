@@ -6,7 +6,7 @@ from bot.states import ProfileMenu
 from bot.database import (
     get_player, get_experience_progress, get_player_weapon, get_player_armor,
     get_player_clan, get_player_with_chest_statuses,
-    set_player_status,
+    set_player_status, set_player_block_invites,
 )
 from bot.utils import (
     apply_clan_strength_buff, calculate_player_health,
@@ -78,6 +78,13 @@ async def handle_profile_menu(message: types.Message, state: FSMContext):
         await _send_inventory(message, user_id)
         return
 
+    if text == "⚙️ Настройки":
+        player = get_player(user_id)
+        if player:
+            await state.set_state(ProfileMenu.viewing_settings)
+            await _send_settings(message, player)
+        return
+
     if text == "🎭 Статусы":
         player = get_player_with_chest_statuses(user_id)
         await state.set_state(ProfileMenu.viewing_statuses)
@@ -137,3 +144,61 @@ async def handle_profile_statuses(message: types.Message, state: FSMContext):
             return
 
     await message.answer("Выбери статус из списка!", reply_markup=get_statuses_kb(player, current_page))
+
+
+def _send_settings_text(player: dict) -> str:
+    """Build the settings message text."""
+    block_invites = bool(player.get('block_invites', 0))
+    status_emoji = "✅" if block_invites else "❌"
+    return (
+        "⚙️ <b>Настройки бота:</b>\n\n"
+        "🔒 Заблокировать приглашения в друзья от игроков и выключить оповещения:\n"
+        "ℹ️ <i>Обычно это приглашения в рейд и т.д</i>\n"
+        f"Статус: ({status_emoji})\n\n"
+        "Нажми кнопку ниже, чтобы изменить настройку."
+    )
+
+
+def _get_settings_kb(block_invites: bool) -> ReplyKeyboardMarkup:
+    from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+    label = "🔓 Включить приглашения" if block_invites else "🔒 Заблокировать приглашения"
+    return ReplyKeyboardMarkup(keyboard=[
+        [KeyboardButton(text=label)],
+        [KeyboardButton(text="⬅️ Назад в профиль")],
+    ], resize_keyboard=True)
+
+
+async def _send_settings(message, player: dict):
+    """Отправить сообщение с настройками"""
+    block_invites = bool(player.get('block_invites', 0))
+    await message.answer(
+        _send_settings_text(player),
+        reply_markup=_get_settings_kb(block_invites),
+        parse_mode="HTML"
+    )
+
+
+@router.message(ProfileMenu.viewing_settings)
+async def handle_profile_settings(message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+    player = get_player(user_id)
+
+    if text == "⬅️ Назад в профиль" or text == "🏠 Назад":
+        await state.set_state(ProfileMenu.viewing_profile)
+        if player:
+            await _send_profile(message, player)
+        return
+
+    if text in ("🔒 Заблокировать приглашения", "🔓 Включить приглашения"):
+        if player:
+            current = bool(player.get('block_invites', 0))
+            new_val = not current
+            set_player_block_invites(user_id, new_val)
+            updated = get_player(user_id)
+            if updated:
+                await _send_settings(message, updated)
+        return
+
+    if player:
+        await _send_settings(message, player)
