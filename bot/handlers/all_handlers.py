@@ -493,7 +493,7 @@ async def _map_activity_countdown_loop(user_id: int, chat_id: int, message_id: i
                 remaining = max(0, int((end_time - datetime.now(timezone.utc)).total_seconds()))
             except Exception:
                 remaining = 0
-            should_refresh = remaining <= 10 or remaining % 5 == 0
+            should_refresh = remaining <= 10 or (remaining > 10 and remaining % 5 == 0)
             if not should_refresh and remaining > 0:
                 await asyncio.sleep(1)
                 continue
@@ -695,15 +695,15 @@ async def handle_map_close_callback(callback: types.CallbackQuery, state: FSMCon
 
 @router.callback_query(LocationMenu.viewing_map, F.data.startswith("map_loc:"))
 async def handle_map_location_callback(callback: types.CallbackQuery, state: FSMContext):
-    await callback.answer()
     user_id = callback.from_user.id
     data = callback.data or ""
     try:
         loc_id = int(data.split(":", 1)[1])
     except Exception:
-        await callback.message.answer("Локация не найдена.", reply_markup=get_map_kb())
+        await callback.answer("Локация не найдена.", show_alert=True)
         return
     _cancel_map_timer(user_id)
+    await callback.answer()
     await _open_location_view(callback.message, state, user_id, loc_id)
 
 @router.message(LocationMenu.viewing_location)
