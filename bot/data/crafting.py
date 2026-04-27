@@ -5,7 +5,7 @@ _E_MARKER    = '![▫️](tg://emoji?id=5267324424113124134)'
 _E_WARN      = '![⚠️](tg://emoji?id=5276240711795107620)'
 _E_GEAR      = '![⚙️](tg://emoji?id=5398095118735521227)'
 _E_BOX_HDR   = '![📦](tg://emoji?id=5278540791336165644)'
-_E_HASHTAG   = '![\#️⃣](tg://emoji?id=5354857360844152098)'
+_E_HASHTAG   = r'![\#️⃣](tg://emoji?id=5354857360844152098)'
 _E_CHART     = '![📊](tg://emoji?id=5278778882848220741)'
 _E_BOX_REQ   = '![📦](tg://emoji?id=5206702193385700709)'
 _E_CLOCK     = '![🕓](tg://emoji?id=5276412364458059956)'
@@ -139,7 +139,7 @@ def format_crafting_menu_text(comp: dict) -> str:
         rarity_emoji = _RARITY_EMOJIS[rarity_key]
         amount = comp.get(rarity_key, 0)
         lines.append(f"{_E_MARKER}{rarity_emoji}{comp_name} \\({amount}\\){_E_YELLOW}")
-    lines.append(f"\n{_E_CHART} Ниже можете изготовить их!")
+    lines.append(f"\n{_E_CHART} Ниже можете изготовить их\\!")
     return "\n".join(lines)
 
 
