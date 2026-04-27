@@ -67,6 +67,8 @@ class AdminPanel(StatesGroup):
     adding_chests_nickname = State()
     adding_chests_type = State()
     adding_chests_amount = State()
+    adding_components_nickname = State()
+    adding_components_amount = State()
 
 class LocationMenu(StatesGroup):
     viewing_map = State()
