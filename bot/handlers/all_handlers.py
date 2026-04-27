@@ -721,6 +721,32 @@ async def _give_activity_rewards(user_id: int, activity: dict) -> bool:
             # Profile experience for mining
             exp_min, exp_max = pickaxe_data.get('experience', (1, 1))
             earned['experience'] = random.randint(exp_min, exp_max)
+    # Special handling for Mine search (tiered by player strength)
+    elif loc_id == 3 and act_type == 'search':
+        _player = get_player(user_id)
+        strength = float(_player['strength']) if _player else 0.0
+        if strength < 100:
+            earned['experience'] = random.randint(10, 30)
+            earned['stone'] = random.randint(1, 3)
+            if random.random() < 0.20:
+                earned['copper'] = 1
+            earned['coins'] = random.randint(5, 15)
+        elif strength < 800:
+            earned['experience'] = random.randint(25, 70)
+            earned['stone'] = random.randint(4, 8)
+            if random.random() < 0.20:
+                earned['copper'] = 6
+            if random.random() < 0.10:
+                earned['iron'] = 2
+            earned['coins'] = random.randint(20, 65)
+        else:
+            earned['experience'] = random.randint(60, 165)
+            earned['stone'] = 22
+            if random.random() < 0.20:
+                earned['copper'] = 14
+            if random.random() < 0.10:
+                earned['iron'] = 10
+            earned['coins'] = random.randint(100, 300)
     else:
         for rew_key, (min_v, max_v) in rewards.items():
             earned[rew_key] = random.randint(min_v, max_v)
@@ -2088,6 +2114,48 @@ def _fmt_defeat(nickname: str, enemy_name: str, is_location: bool = False) -> st
         text += f"\n\n{E_BAN} Потеряно:\n{E_CROSS} 10 {E_LEAGUE_POINTS} Points"
     return text
 
+
+def _apply_location_defeat_losses(user_id: int) -> str:
+    """Steal a small amount of resources from the player after a location defeat.
+
+    Returns formatted HTML text describing what was lost.
+    If the player has no resources, returns an 'empty' notice.
+    """
+    inv = get_inventory(user_id)
+    # (material_key, steal_chance, min_amount, max_amount, emoji, display_name)
+    steal_cfg = [
+        ('food',     0.50, 1, 2, _E_MAT_FOOD,     'Еда'),
+        ('wood',     0.40, 1, 3, _E_MAT_WOOD,     'Древесина'),
+        ('stone',    0.30, 1, 3, _E_MAT_STONE,    'Камень'),
+        ('copper',   0.25, 1, 2, _E_MAT_COPPER,   'Медь'),
+        ('iron',     0.20, 1, 1, _E_MAT_IRON,     'Железо'),
+        ('gold',     0.10, 1, 1, _E_MAT_GOLD,     'Золото'),
+        ('steel',    0.05, 1, 1, _E_MAT_STEEL,    'Сталь'),
+        ('amethyst', 0.02, 1, 1, _E_MAT_AMETHYST, 'Аметист'),
+        ('gem',      0.01, 1, 1, _E_MAT_GEM,      'Самоцвет'),
+    ]
+    lost = []
+    for mat, chance, min_amt, max_amt, emoji, name in steal_cfg:
+        amount = inv.get(mat, 0)
+        if amount > 0 and random.random() < chance:
+            steal_amt = min(random.randint(min_amt, max_amt), amount)
+            if steal_amt > 0:
+                remove_inventory_material(user_id, mat, steal_amt)
+                lost.append((emoji, steal_amt, name))
+
+    if not lost:
+        return (
+            f"{E_WARN}{E_SKULL} Враг хотел украсть ресурсы...\n"
+            f"{E_BAN} Но у тебя ничего нет — пусто!"
+        )
+    lines = [
+        f"{E_WARN}{E_SKULL} Вот неудача! Ресурсы были украдены!\n",
+        f"{E_BAN} Вы потеряли ресурсы:\n",
+    ]
+    for emoji, amount, name in lost:
+        lines.append(f"{E_SQ}{emoji} {amount} {name}")
+    return "\n".join(lines)
+
 @router.message(F.text == "🐉 Рейд")
 async def open_raid(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
@@ -3395,6 +3463,11 @@ async def start_battle(message: types.Message, state: FSMContext):
             battle_log += _fmt_defeat(html.escape(player['nickname']), enemy_info['name'], data.get('is_location_battle'))
             
             await message.answer(battle_log, reply_markup=get_end_battle_kb())
+            if data.get('is_location_battle'):
+                try:
+                    await message.answer(_apply_location_defeat_losses(user_id), parse_mode="HTML")
+                except Exception:
+                    pass
             await state.clear()
             return
         
@@ -3524,6 +3597,11 @@ async def battle_round(message: types.Message, state: FSMContext):
                 increment_player_deaths(user_id)
                 battle_log += _fmt_defeat(html.escape(player['nickname']), enemy_info['name'], data.get('is_location_battle'))
                 await message.answer(battle_log, reply_markup=get_end_battle_kb())
+                if data.get('is_location_battle'):
+                    try:
+                        await message.answer(_apply_location_defeat_losses(user_id), parse_mode="HTML")
+                    except Exception:
+                        pass
                 await state.clear()
                 return
             battle_log += (
@@ -3646,6 +3724,11 @@ async def battle_round(message: types.Message, state: FSMContext):
         increment_player_deaths(user_id)
         battle_log += _fmt_defeat(html.escape(player['nickname']), enemy_info['name'], data.get('is_location_battle'))
         await message.answer(battle_log, reply_markup=get_end_battle_kb())
+        if data.get('is_location_battle'):
+            try:
+                await message.answer(_apply_location_defeat_losses(user_id), parse_mode="HTML")
+            except Exception:
+                pass
         await state.clear()
         return
     
@@ -5403,6 +5486,7 @@ def _get_market_text(player: dict) -> str:
         f"{_E_MAT_FOOD} Еда | {MARKET_PRICES['food']}{E_COINS}",
         f"{_E_MAT_WOOD} Древесина | {MARKET_PRICES['wood']}{E_COINS}",
         f"{_E_MAT_STONE} Камень | {MARKET_PRICES['stone']}{E_COINS}",
+        f"{_E_MAT_COPPER} Медь | {MARKET_PRICES['copper']}{E_COINS}",
         f"{_E_MAT_IRON} Железо | {MARKET_PRICES['iron']}{E_COINS}",
         f"{_E_MAT_GOLD} Золото | {MARKET_PRICES['gold']}{E_COINS}",
         f"{_E_MAT_STEEL} Сталь | {int(MARKET_PRICES['steel'])}{E_COINS}",

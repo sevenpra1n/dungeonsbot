@@ -63,7 +63,7 @@ LOCATIONS = {
                     "experience": (5, 15),
                     "food": (1, 3)
                 },
-                "monster_chance": 0.05
+                "monster_chance": 0.10
             }
         }
     },
@@ -89,7 +89,7 @@ LOCATIONS = {
                     "coins": (10, 30),
                     "experience": (9, 9),
                 },
-                "monster_chance": 0
+                "monster_chance": 0.18
             }
         }
     },
@@ -111,12 +111,8 @@ LOCATIONS = {
                 "time": 90,
                 "emoji": "🗺️",
                 "display_emoji": E_MAP_E,
-                "rewards": {
-                    "coins": (15, 45),
-                    "experience": (12, 20),
-                    "iron": (1, 4),
-                },
-                "monster_chance": 0
+                "rewards": {},
+                "monster_chance": 0.25
             }
         }
     },
