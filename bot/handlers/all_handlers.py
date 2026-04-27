@@ -99,6 +99,9 @@ from bot.data.locations import (
     get_wasteland_enemy_for_player, get_farlands_enemy_for_player, get_hell_enemy_for_player,
     E_PICKAXE_LOC, E_PICKAXE_SHOP, E_STONE_MAT,
     format_axes_shop_text,
+    format_map_text, format_location_wildlands_text,
+    format_location_distant_text, format_location_hell_text,
+    format_account_delete_warning,
 )
 from bot.data.clans import (
     CLAN_LEVEL_EXP, MAX_CLAN_LEVEL, CLAN_BUFFS, CLAN_CHAT_MAX_MSG_LEN,
@@ -444,48 +447,18 @@ async def handle_opening_chest(message: types.Message, state: FSMContext):
     pass
 
 # ============== MAP / LOCATIONS ==============
-def _build_map_text(activity: dict | None = None, remaining: int = 0) -> str:
+def _build_map_text(activity: dict | None = None, remaining: int = 0, user_id: int = 0) -> str:
     """Сформировать текст карты с опциональным блоком активной активности."""
-    lines = [f"{E_MAP_E} <b>КАРТА</b>", ""]
-
+    current_activity = None
     if activity:
         loc = LOCATIONS.get(activity['location_id'], {})
         act_cfg = loc.get('activities', {}).get(activity['activity_type'], {})
         act_name = act_cfg.get('name', activity['activity_type'])
-        act_emoji = act_cfg.get('display_emoji', act_cfg.get('emoji', E_HOURGLASS))
-        lines.extend([
-            f"{E_YELLOW} Идёт активность:",
-            f"{E_SQ}{act_emoji}{act_name}",
-            f"{E_SQ}Осталось: {E_HOURGLASS}{max(0, remaining)} секунд...",
-            "",
-        ])
-
-    lines.extend([
-        "Выбери локацию для исследования:",
-        "",
-        f"{E_SQ}🌾 Ясная поляна:",
-        f"{E_SQ}Здесь можно добыть еду",
-        "",
-        f"{E_SQ}{E_TREE} Лес:",
-        f"{E_SQ}Здесь можно добыть древесину",
-        "",
-        f"{E_SQ}{E_PICKAXE_LOC} Шахта:",
-        f"{E_SQ}Здесь можно добыть кучу ресурсов!",
-        f"{E_SQ} Минимальный порог входа: 3 {E_EXP} уровень опыта",
-        "",
-        f"{E_SQ}🦂 Дикие пустоши:",
-        f"{E_SQ}Опасная локация, только для опытных",
-        f"{E_SQ} Минимальный порог входа: 10 {E_EXP} уровень опыта",
-        "",
-        f"{E_SQ}🏜 Далёкие земли:",
-        f"{E_SQ}Здесь очень ценные ресурсы, но высокий шанс умереть..",
-        f"{E_SQ} Минимальный порог входа: 18 {E_EXP} уровень опыта",
-        "",
-        f"{E_SQ}🔥 Преисподня:",
-        f"{E_SQ}Последняя локация, для тех кто хочет пройти игру.",
-        f"{E_SQ} Минимальный порог входа: 25 {E_EXP} уровень опыта",
-    ])
-    return "\n".join(lines)
+        current_activity = {
+            "name": act_name,
+            "remaining_seconds": max(0, remaining),
+        }
+    return format_map_text(user_id, current_activity)
 
 
 def _cancel_map_timer(user_id: int):
@@ -512,7 +485,7 @@ async def _map_activity_countdown_loop(user_id: int, chat_id: int, message_id: i
                 if text != last_text:
                     await bot.edit_message_text(
                         text=text, chat_id=chat_id, message_id=message_id,
-                        reply_markup=get_map_kb(), parse_mode="HTML"
+                        reply_markup=get_map_kb(), parse_mode="MarkdownV2"
                     )
                 break
             try:
@@ -525,7 +498,7 @@ async def _map_activity_countdown_loop(user_id: int, chat_id: int, message_id: i
                 try:
                     await bot.edit_message_text(
                         text=text, chat_id=chat_id, message_id=message_id,
-                        reply_markup=get_map_kb(), parse_mode="HTML"
+                        reply_markup=get_map_kb(), parse_mode="MarkdownV2"
                     )
                 except Exception:
                     break
@@ -576,6 +549,35 @@ async def _open_location_view(message: types.Message, state: FSMContext, user_id
         return
 
     await state.update_data(selected_location=loc_id)
+
+    # Use dedicated text formatters for advanced locations
+    if loc_id == 4:
+        loc_text = format_location_wildlands_text()
+        await send_image_with_text(
+            message, loc.get('image', 'images/meadow.png'), loc_text,
+            reply_markup=get_location_activities_kb(loc_id), parse_mode="MarkdownV2"
+        )
+        await state.set_state(LocationMenu.viewing_location)
+        return
+
+    if loc_id == 5:
+        loc_text = format_location_distant_text()
+        await send_image_with_text(
+            message, loc.get('image', 'images/meadow.png'), loc_text,
+            reply_markup=get_location_activities_kb(loc_id), parse_mode="MarkdownV2"
+        )
+        await state.set_state(LocationMenu.viewing_location)
+        return
+
+    if loc_id == 6:
+        loc_text = format_location_hell_text()
+        await send_image_with_text(
+            message, loc.get('image', 'images/meadow.png'), loc_text,
+            reply_markup=get_location_activities_kb(loc_id), parse_mode="MarkdownV2"
+        )
+        await state.set_state(LocationMenu.viewing_location)
+        return
+
     loc_text = f"<b>{loc['name']}</b>:\n\n{E_BOOK2} Выбери действие:\n"
     for act_key, act in loc['activities'].items():
         disp_emoji = act.get('display_emoji', act['emoji'])
@@ -614,7 +616,7 @@ async def open_map(message: types.Message, state: FSMContext):
         monster = await _give_activity_rewards(user_id, completed)
         if not monster:
             await state.set_state(LocationMenu.viewing_map)
-            sent = await message.answer(_build_map_text(), reply_markup=get_map_kb(), parse_mode="HTML")
+            sent = await message.answer(_build_map_text(), reply_markup=get_map_kb(), parse_mode="MarkdownV2")
             _cancel_map_timer(user_id)
         return
 
@@ -628,13 +630,13 @@ async def open_map(message: types.Message, state: FSMContext):
         sent = await message.answer(
             _build_map_text(activity, remaining),
             reply_markup=get_map_kb(),
-            parse_mode="HTML",
+            parse_mode="MarkdownV2",
         )
         _schedule_map_timer(user_id, sent.chat.id, sent.message_id)
         await state.set_state(LocationMenu.viewing_map)
         return
 
-    sent = await message.answer(_build_map_text(), reply_markup=get_map_kb(), parse_mode="HTML")
+    sent = await message.answer(_build_map_text(), reply_markup=get_map_kb(), parse_mode="MarkdownV2")
     _cancel_map_timer(user_id)
     await state.set_state(LocationMenu.viewing_map)
 
@@ -665,7 +667,7 @@ async def handle_map(message: types.Message, state: FSMContext):
     if completed:
         monster = await _give_activity_rewards(user_id, completed)
         if not monster:
-            sent = await message.answer(_build_map_text(), reply_markup=get_map_kb(), parse_mode="HTML")
+            sent = await message.answer(_build_map_text(), reply_markup=get_map_kb(), parse_mode="MarkdownV2")
             _cancel_map_timer(user_id)
         return
 
@@ -727,11 +729,11 @@ async def handle_location(message: types.Message, state: FSMContext):
             sent = await message.answer(
                 _build_map_text(activity, remaining),
                 reply_markup=get_map_kb(),
-                parse_mode="HTML",
+                parse_mode="MarkdownV2",
             )
             _schedule_map_timer(user_id, sent.chat.id, sent.message_id)
         else:
-            await message.answer(_build_map_text(), reply_markup=get_map_kb(), parse_mode="HTML")
+            await message.answer(_build_map_text(), reply_markup=get_map_kb(), parse_mode="MarkdownV2")
             _cancel_map_timer(user_id)
         await state.set_state(LocationMenu.viewing_map)
         return
@@ -1183,7 +1185,7 @@ async def flee_location_monster(message: types.Message, state: FSMContext):
     loss_text = _apply_location_defeat_losses(user_id)
     await message.answer("🏃 Ты убежал от монстра!", parse_mode="HTML")
     await message.answer(loss_text, parse_mode="HTML")
-    await message.answer(_build_map_text(), reply_markup=get_map_kb(), parse_mode="HTML")
+    await message.answer(_build_map_text(), reply_markup=get_map_kb(), parse_mode="MarkdownV2")
     await state.set_state(LocationMenu.viewing_map)
 
 # ============== FORGE (КУЗНЯ) ==============
