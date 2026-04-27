@@ -204,16 +204,16 @@ async def _send_chests(message, user_id: int):
 
     text = (
         f"{MD_CHEST} Твои сундуки:\n\n"
-        f"{MD_CHEST_WOOD}{MD_CHEST_WOOD} Деревянный сундук:\n"
+        f"{MD_CHEST_WOOD}{MD_GIFT} Деревянный сундук:\n"
         f"├{MD_COUNT} Количество: {wood_count} {MD_YELLOW}\n"
         f"├ Дроп: низкий {MD_RARITY_COMMON}\n\n"
-        f"{MD_CHEST_STEEL}{MD_CHEST_STEEL} Стальной сундук:\n"
+        f"{MD_CHEST_STEEL}{MD_GIFT} Стальной сундук:\n"
         f"├{MD_COUNT} Количество: {steel_count} {MD_YELLOW}\n"
         f"├ Дроп: средний {MD_RARITY_RARE}\n\n"
-        f"{MD_CHEST_GOLD}{MD_CHEST_GOLD} Золотой сундук:\n"
+        f"{MD_CHEST_GOLD}{MD_GIFT} Золотой сундук:\n"
         f"├{MD_COUNT} Количество: {gold_count} {MD_YELLOW}\n"
         f"├ Дроп: высокий {MD_RARITY_EPIC}\n\n"
-        f"{MD_CHEST_DIVINE}{MD_CHEST_DIVINE} Всевышний сундук:\n"
+        f"{MD_CHEST_DIVINE}{MD_GIFT} Всевышний сундук:\n"
         f"├{MD_COUNT} Количество: {divine_count} {MD_YELLOW}\n"
         f"├ Дроп: очень высокий {MD_RARITY_MYTHIC}\n\n"
     )
