@@ -70,6 +70,7 @@ from bot.utils import (
     can_battle_action, reset_battle_cooldown,
     apply_clan_strength_buff, get_clan_click_bonus, roll_miss,
     safe_html_answer, send_image_with_text, format_profile_text,
+    md_escape,
 )
 from bot.keyboards import (
     get_main_kb, get_main_menu_text, show_main_menu,
@@ -134,6 +135,9 @@ from bot.data.emojis import (
     E_MAT_IRON as _E_MAT_IRON, E_MAT_GOLD as _E_MAT_GOLD,
     E_MAT_STEEL as _E_MAT_STEEL, E_MAT_AMETHYST as _E_MAT_AMETHYST,
     E_MAT_GEM as _E_MAT_GEM, E_MAT_WOOD as _E_MAT_WOOD, E_MAT_FOOD as _E_MAT_FOOD,
+    MD_INV_HEADER,
+    MD_CHEST, MD_CHEST_WOOD, MD_CHEST_STEEL, MD_CHEST_GOLD, MD_CHEST_DIVINE,
+    MD_RARITY_COMMON, MD_RARITY_RARE, MD_RARITY_EPIC, MD_RARITY_MYTHIC,
 )
 from bot.handlers.profile import _send_profile
 
@@ -172,13 +176,14 @@ async def _send_inventory(message, user_id: int, back_button: str = "⬅️ На
     """Показать инвентарь игрока (ресурсы)"""
     player = get_player(user_id)
     inv = get_inventory(user_id)
-    nickname = html.escape(player['nickname']) if player else "Игрок"
+    nickname = md_escape(player['nickname']) if player else "Игрок"
     text = (
-        f'{E_INV_HEADER} | Инвентарь {nickname}:\n'
+        f'{MD_INV_HEADER} \\| Инвентарь {nickname}:\n'
         + format_inventory_text(inv)
     )
     await send_image_with_text(message, "images/inventory.png", text,
-                               reply_markup=_get_inventory_kb(back_button))
+                               reply_markup=_get_inventory_kb(back_button),
+                               parse_mode="MarkdownV2")
 
 async def _send_components(message, user_id: int):
     """Показать компоненты игрока"""
@@ -191,16 +196,22 @@ async def _send_components(message, user_id: int):
 async def _send_chests(message, user_id: int):
     """Показать сундуки игрока"""
     inv = get_inventory(user_id)
-    text = f'{E_CHEST_HEADER} Твои сундуки:\n\n'
+    _CHEST_MD = {
+        "chest_wood":   (MD_CHEST_WOOD,   MD_RARITY_COMMON),
+        "chest_steel":  (MD_CHEST_STEEL,  MD_RARITY_RARE),
+        "chest_gold":   (MD_CHEST_GOLD,   MD_RARITY_EPIC),
+        "chest_divine": (MD_CHEST_DIVINE, MD_RARITY_MYTHIC),
+    }
+    text = f'{MD_CHEST} Твои сундуки:\n\n'
     for key, info in CHEST_DISPLAY.items():
         count = inv.get(key, 0)
-        drop_emoji = info.get("drop_emoji", "")
+        em, drop_em = _CHEST_MD.get(key, (MD_CHEST_WOOD, MD_RARITY_COMMON))
         text += (
-            f'{info["emoji"]}{info["emoji"]} {info["name"]}:\n'
-            f'├{info["emoji"]} Количество: {count} {info["emoji"]}\n'
-            f'├ Дроп: {info["drop_label"]} {drop_emoji}\n\n'
+            f'{em}{em} {info["name"]}:\n'
+            f'├{em} Количество: {count} {em}\n'
+            f'├ Дроп: {info["drop_label"]} {drop_em}\n\n'
         )
-    await message.answer(text, reply_markup=_get_chests_kb(), parse_mode="HTML")
+    await message.answer(text, reply_markup=_get_chests_kb(), parse_mode="MarkdownV2")
 
 
 def _roll_chest_drops(user_id: int, chest_key: str) -> tuple[list[str], dict]:

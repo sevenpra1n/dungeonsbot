@@ -122,6 +122,17 @@ def format_profile_text(
 # Regex to strip <tg-emoji ...>fallback</tg-emoji> → fallback character
 _TG_EMOJI_RE = re.compile(r'<tg-emoji[^>]*>(.*?)</tg-emoji>', re.DOTALL)
 
+# Regex to strip MarkdownV2 custom emoji syntax ![fallback](tg://...) → fallback
+_MD_EMOJI_RE = re.compile(r'!\[([^\]]*)\]\(tg://emoji\?id=\d+\)')
+
+# Special characters that must be escaped in MarkdownV2
+_MD_SPECIAL_RE = re.compile(r'([_*\[\]()~`>#+\-=|{}.!\\])')
+
+
+def md_escape(text: str) -> str:
+    """Escape all MarkdownV2 special characters in plain text."""
+    return _MD_SPECIAL_RE.sub(r'\\\1', text)
+
 
 def _strip_tg_emoji(text: str) -> str:
     """Убрать tg-emoji HTML-теги, оставив только символ-замену."""
@@ -138,7 +149,7 @@ async def safe_html_answer(message, text: str, **kwargs):
         raise
 
 
-async def send_image_with_text(message, image_path: str, text: str, reply_markup=None):
+async def send_image_with_text(message, image_path: str, text: str, reply_markup=None, parse_mode: str = "HTML"):
     """Отправить изображение с текстом. Если файл не найден — отправить только текст."""
     async def _send_photo(caption: str):
         cached_id = image_file_id_cache.get(image_path)
@@ -147,27 +158,33 @@ async def send_image_with_text(message, image_path: str, text: str, reply_markup
             photo=photo,
             caption=caption,
             reply_markup=reply_markup,
-            parse_mode="HTML"
+            parse_mode=parse_mode
         )
         if not cached_id and result and result.photo:
             image_file_id_cache[image_path] = result.photo[-1].file_id
 
+    async def _fallback_text(caption: str):
+        if parse_mode == "HTML":
+            await safe_html_answer(message, caption, reply_markup=reply_markup)
+        else:
+            await message.answer(caption, reply_markup=reply_markup, parse_mode=parse_mode)
+
     try:
         if not os.path.exists(image_path):
             print(f"⚠️ ФАЙЛ НЕ НАЙДЕН: {image_path}")
-            await safe_html_answer(message, text, reply_markup=reply_markup)
+            await _fallback_text(text)
             return
         try:
             await _send_photo(text)
         except TelegramBadRequest as e:
-            if "DOCUMENT_INVALID" in str(e):
-                # Retry with plain emoji fallback
+            if "DOCUMENT_INVALID" in str(e) and parse_mode == "HTML":
+                # Retry with plain emoji fallback (HTML only)
                 try:
                     await _send_photo(_strip_tg_emoji(text))
                 except Exception:
                     await message.answer(_strip_tg_emoji(text), reply_markup=reply_markup, parse_mode="HTML")
             else:
-                await safe_html_answer(message, text, reply_markup=reply_markup)
+                await _fallback_text(text)
     except Exception as e:
         print(f"❌ Ошибка при отправке фото: {e}")
-        await safe_html_answer(message, text, reply_markup=reply_markup)
+        await _fallback_text(text)
