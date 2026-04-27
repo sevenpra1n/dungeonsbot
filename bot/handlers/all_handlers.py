@@ -208,7 +208,7 @@ async def _send_chests(message, user_id: int):
         em, drop_em = _CHEST_MD.get(key, (MD_CHEST_WOOD, MD_RARITY_COMMON))
         text += (
             f'{em}{em} {info["name"]}:\n'
-            f'├{em} Количество: {count} {em}\n'
+            f'├{drop_em} Количество: {count} {drop_em}\n'
             f'├ Дроп: {info["drop_label"]} {drop_em}\n\n'
         )
     await message.answer(text, reply_markup=_get_chests_kb(), parse_mode="MarkdownV2")
