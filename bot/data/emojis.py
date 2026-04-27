@@ -113,9 +113,9 @@ MD_MAT_GEM      = '![🎁](tg://emoji?id=5429387443000341439)'
 # Chests
 MD_CHEST        = '![📦](tg://emoji?id=6334602442591700514)'
 MD_CHEST_WOOD   = '![📦](tg://emoji?id=5854908544712707500)'
-MD_CHEST_STEEL  = '![🔩](tg://emoji?id=5201888948091129713)'
-MD_CHEST_GOLD   = '![🌟](tg://emoji?id=5276111746812112286)'
-MD_CHEST_DIVINE = '![👑](tg://emoji?id=5217822164362739968)'
+MD_CHEST_STEEL  = '![🔩](tg://emoji?id=5854908544712707500)'
+MD_CHEST_GOLD   = '![🌟](tg://emoji?id=5854908544712707500)'
+MD_CHEST_DIVINE = '![👑](tg://emoji?id=5854908544712707500)'
 MD_COUNT        = '![📦](tg://emoji?id=5206702193385700709)'  # иконка перед "Количество:"
 MD_YELLOW       = '![🟡](tg://emoji?id=5906800644525660990)'  # индикатор кол-ва после числа
 MD_GIFT         = '![🎁](tg://emoji?id=5276422526350681413)'  # значок подарка
