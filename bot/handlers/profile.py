@@ -20,6 +20,7 @@ from bot.data.statuses import STATUSES, is_status_available, _format_statuses_te
 from bot.emojis import *
 from bot.data.leagues_config import get_league_label
 from bot.data.emojis import MD_SETTINGS, MD_INFO, MD_CHECK, MD_CROSS
+from bot.data.locations import format_account_delete_warning
 
 router = Router()
 
@@ -205,14 +206,12 @@ async def handle_profile_settings(message, state: FSMContext):
     if text == "🗑️ Удалить данные":
         await state.set_state(ProfileMenu.waiting_delete_data_confirm)
         await message.answer(
-            f"{E_WARN}{E_WARN} Вы точно хотите сбросить данные аккаунта?\n"
-            f"{E_WARN}Весь прогресс потеряется и вы начнете заново!\n\n"
-            f"{E_WARN} Ниже напишите \"ПОДТВЕРДИТЬ\", чтобы удалить аккаунт.",
+            format_account_delete_warning(),
             reply_markup=ReplyKeyboardMarkup(
                 keyboard=[[KeyboardButton(text="❌ Отмена")]],
                 resize_keyboard=True
             ),
-            parse_mode="HTML"
+            parse_mode="MarkdownV2"
         )
         return
 
