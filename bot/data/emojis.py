@@ -89,3 +89,40 @@ E_SQ        = '<tg-emoji emoji-id="5267324424113124134">▫️</tg-emoji>'   # �
 E_DOT       = '<tg-emoji emoji-id="5321440402157353076">🔸</tg-emoji>'   # оранжевая точка
 E_EXP_DOT   = '<tg-emoji emoji-id="5321440402157353076">🔸</tg-emoji>'   # точка (опыт)
 E_EXP       = '<tg-emoji emoji-id="5336829549151823064">📕</tg-emoji>'   # опыт (ярлык)
+
+# ── MarkdownV2 emoji (parse_mode="MarkdownV2") ─────────────────────────────
+# Format: ![fallback](tg://emoji?id=ID)
+
+# Inventory header & line marker
+MD_INV_HEADER   = '![📦](tg://emoji?id=5854908544712707500)'
+MD_CLIPBOARD    = '![📋](tg://emoji?id=6334391113020868435)'
+
+# Materials (inventory lines)
+MD_MAT_WOOD     = '![🌳](tg://emoji?id=5449918202718985124)'
+MD_MAT_STONE    = '![🪨](tg://emoji?id=5433955200849159326)'
+MD_MAT_FOOD     = '![🥕](tg://emoji?id=6284888960644682300)'
+MD_MAT_COPPER   = '![🔶](tg://emoji?id=6278264420267201893)'
+MD_MAT_IRON     = '![⛰️](tg://emoji?id=6278216436892570592)'
+MD_MAT_GOLD     = '![🥇](tg://emoji?id=6280721566762277148)'
+MD_MAT_STEEL    = '![🌋](tg://emoji?id=6280349132968168995)'
+MD_MAT_AMETHYST = '![🤩](tg://emoji?id=5341757074936193080)'
+MD_MAT_GEM      = '![🎁](tg://emoji?id=5429387443000341439)'
+
+# Chests
+MD_CHEST        = '![📦](tg://emoji?id=6334602442591700514)'
+MD_CHEST_WOOD   = '![📦](tg://emoji?id=5854908544712707500)'
+MD_CHEST_STEEL  = '![🔩](tg://emoji?id=5201888948091129713)'
+MD_CHEST_GOLD   = '![🌟](tg://emoji?id=5276111746812112286)'
+MD_CHEST_DIVINE = '![👑](tg://emoji?id=5217822164362739968)'
+
+# Rarity (drop level)
+MD_RARITY_COMMON  = '![🌟](tg://emoji?id=5395855331945392566)'
+MD_RARITY_RARE    = '![🌟](tg://emoji?id=5395316601312548706)'
+MD_RARITY_EPIC    = '![🌟](tg://emoji?id=5395550054259921224)'
+MD_RARITY_MYTHIC  = '![🌟](tg://emoji?id=5395620513198410698)'
+
+# Settings
+MD_SETTINGS = '![⚙️](tg://emoji?id=5398095118735521227)'
+MD_INFO     = '![ℹ️](tg://emoji?id=5377561928065372080)'
+MD_CHECK    = '![✅](tg://emoji?id=5368324170671202286)'
+MD_CROSS    = '![❌](tg://emoji?id=5019523782004441717)'

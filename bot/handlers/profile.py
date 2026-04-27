@@ -12,12 +12,14 @@ from bot.database import (
 from bot.utils import (
     apply_clan_strength_buff, calculate_player_health,
     send_image_with_text, safe_html_answer, format_profile_text,
+    md_escape,
 )
 from bot.keyboards import get_profile_kb, get_statuses_kb, show_main_menu
 from bot.data.equipment import DEFAULT_WEAPON, DEFAULT_ARMOR
 from bot.data.statuses import STATUSES, is_status_available, _format_statuses_text, _get_status_requirement_text
 from bot.emojis import *
 from bot.data.leagues_config import get_league_label
+from bot.data.emojis import MD_SETTINGS, MD_INFO, MD_CHECK, MD_CROSS
 
 router = Router()
 
@@ -148,15 +150,14 @@ async def handle_profile_statuses(message: types.Message, state: FSMContext):
 
 
 def _send_settings_text(player: dict) -> str:
-    """Build the settings message text."""
+    """Build the settings message text in MarkdownV2 format."""
     block_invites = bool(player.get('block_invites', 0))
-    status_emoji = "✅" if block_invites else "❌"
+    status_emoji = MD_CHECK if block_invites else MD_CROSS
     return (
-        "⚙️ <b>Настройки бота:</b>\n\n"
-        "🔒 Заблокировать приглашения в друзья от игроков и выключить оповещения:\n"
-        "ℹ️ <i>Обычно это приглашения в рейд и т.д</i>\n"
-        f"Статус: ({status_emoji})\n\n"
-        "Нажми кнопку ниже, чтобы изменить настройку."
+        f"{MD_SETTINGS} Настройки бота:\n\n"
+        f"Заглушить все приглашения и т\\.д от игроков\n"
+        f"{MD_INFO} Обычно это приглашения в рейд и т\\.д\n"
+        f"Статус: \\({status_emoji}\\)"
     )
 
 
@@ -174,7 +175,7 @@ async def _send_settings(message, player: dict):
     await message.answer(
         _send_settings_text(player),
         reply_markup=_get_settings_kb(block_invites),
-        parse_mode="HTML"
+        parse_mode="MarkdownV2"
     )
 
 
