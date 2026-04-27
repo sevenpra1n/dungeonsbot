@@ -2,6 +2,12 @@
 
 from bot.emojis import E_FOOD, E_MAP_E, E_IRON, E_SKULL
 from bot.data.emojis import E_MAT_STONE
+from bot.data.emojis import (
+    E_MAP_HEADER, E_GREEN_MARKER, E_MARKER, E_YELLOW_MARKER, E_HOURGLASS,
+    E_BREAD, E_MOUNTAIN, E_STONE, E_BONES, E_EYE, E_FIRE, E_SEARCH, E_LEVEL,
+    E_WARNING, E_FORBIDDEN, E_LOCATION_ICON, E_MAP_ICON, E_KEY, E_SKULL as E_SKULL_MD,
+    E_GIFT_REWARD,
+)
 
 # Pickaxe custom emoji for the LOCATION MENU (mine ore activity row)
 E_PICKAXE_LOC  = '<tg-emoji emoji-id="5469636217186303242">⛏️</tg-emoji>'
@@ -740,3 +746,84 @@ def format_axes_shop_text(current_pickaxe_level: int = 0) -> str:
             f"![🔘](tg://emoji?id=5357471466919056181)Нужно \\- {comp_amount} {_E_COMP_MD}{rarity_md}\n"
         )
     return "\n".join(lines)
+
+
+def format_map_text(user_id: int, current_activity: dict = None) -> str:
+    """Вывести меню карты с правильными эмодзи."""
+    lines = [f'{E_MAP_HEADER} КАРТА\n']
+
+    if current_activity:
+        lines.append(f'{E_GREEN_MARKER} Идёт активность:')
+        lines.append(f'{E_MARKER}{E_YELLOW_MARKER}{current_activity["name"]}')
+        lines.append(f'{E_MARKER}Осталось: {E_HOURGLASS}{current_activity["remaining_seconds"]} секунд...\n')
+
+    lines.append('Выбери локацию для исследования:\n')
+
+    lines.append(f'{E_YELLOW_MARKER}{E_BREAD} Ясная поляна:')
+    lines.append(f'{E_MARKER}Здесь можно добыть еду\n')
+
+    lines.append(f'{E_YELLOW_MARKER}{E_MOUNTAIN} Лес:')
+    lines.append(f'{E_MARKER}Здесь можно добыть древесину\n')
+
+    lines.append(f'{E_YELLOW_MARKER}{E_STONE} Шахта:')
+    lines.append(f'{E_MARKER}Здесь можно добыть кучу ресурсов!')
+    lines.append(f'{E_SEARCH} Минимальный порог входа: 3 {E_LEVEL} уровень опыта\n')
+
+    lines.append(f'{E_YELLOW_MARKER}{E_BONES} Дикие пустоши:')
+    lines.append(f'{E_MARKER}Опасная локация, только для опытных')
+    lines.append(f'{E_SEARCH} Минимальный порог входа: 10 {E_LEVEL} уровень опыта\n')
+
+    lines.append(f'{E_YELLOW_MARKER}{E_EYE} Далёкие земли:')
+    lines.append(f'{E_MARKER}Здесь очень ценные ресурсы, но высокий шанс умереть..')
+    lines.append(f'{E_SEARCH} Минимальный порог входа: 18 {E_LEVEL} уровень опыта\n')
+
+    lines.append(f'{E_YELLOW_MARKER}{E_FIRE} Преисподня:')
+    lines.append(f'{E_MARKER}Последняя локация, для тех кто хочет пройти игру.')
+    lines.append(f'{E_SEARCH} Минимальный порог входа: 25 {E_LEVEL} уровень опыта')
+
+    return '\n'.join(lines)
+
+
+def format_location_wildlands_text() -> str:
+    """Меню локации Дикие пустоши."""
+    return (
+        f'{E_BONES} Дикие пустоши:\n\n'
+        f'{E_LOCATION_ICON} Выбери действие:\n\n'
+        f'2.3m{E_HOURGLASS} │ {E_MAP_ICON} │ Обыскать локацию\n\n'
+        f'10m{E_HOURGLASS} │ {E_KEY} │ Обчистить всю локацию\n'
+        f'{E_MARKER}{E_WARNING} Внимание: 100% шанс на врага\n\n'
+        f'2m{E_HOURGLASS} | {E_SKULL_MD} | Поиск врага'
+    )
+
+
+def format_location_distant_text() -> str:
+    """Меню локации Далёкие земли."""
+    return (
+        f'{E_EYE} Далёкие земли:\n\n'
+        f'{E_LOCATION_ICON} Выбери действие:\n\n'
+        f'4m{E_HOURGLASS} │ {E_MAP_ICON} │ Обыскать локацию\n\n'
+        f'20m{E_HOURGLASS} │ {E_KEY} │ Обчистить всю локацию\n'
+        f'{E_MARKER}{E_WARNING} Внимание: 100% шанс на врага\n\n'
+        f'3.5m{E_HOURGLASS} | {E_SKULL_MD} | Поиск врага'
+    )
+
+
+def format_location_hell_text() -> str:
+    """Меню локации Преисподня."""
+    return (
+        f'{E_FIRE} Преисподня:\n\n'
+        f'{E_LOCATION_ICON} Выбери действие:\n\n'
+        f'10m{E_HOURGLASS} │ {E_GIFT_REWARD} │ Обыскать локацию\n\n'
+        f'35m{E_HOURGLASS} │ {E_KEY} │ Обчистить всю локацию\n'
+        f'{E_MARKER}{E_WARNING} Внимание: 100% шанс на врага\n\n'
+        f'10m{E_HOURGLASS} | {E_SKULL_MD} | Поиск врага'
+    )
+
+
+def format_account_delete_warning() -> str:
+    """Предупреждение об удалении аккаунта."""
+    return (
+        f'{E_WARNING}{E_FORBIDDEN} Вы точно хотите сбросить данные аккаунта?\n'
+        f'{E_MARKER}Весь прогресс потеряется и вы начнете заново!\n\n'
+        f'{E_YELLOW_MARKER} Ниже напишите "ПОДТВЕРДИТЬ" чтобы удалить аккаунт.'
+    )
