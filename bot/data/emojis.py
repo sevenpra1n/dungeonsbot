@@ -96,6 +96,8 @@ E_EXP       = '<tg-emoji emoji-id="5336829549151823064">📕</tg-emoji>'   # о�
 # Inventory header & line marker
 MD_INV_HEADER   = '![📦](tg://emoji?id=5854908544712707500)'
 MD_CLIPBOARD    = '![📋](tg://emoji?id=6334391113020868435)'
+MD_MARKER       = '![▫️](tg://emoji?id=5267324424113124134)'
+MD_GREEN        = '![🟢](tg://emoji?id=5906852613629941703)'
 
 # Materials (inventory lines)
 MD_MAT_WOOD     = '![🌳](tg://emoji?id=5449918202718985124)'
