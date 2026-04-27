@@ -9,7 +9,7 @@ from bot.data.emojis import (
     E_MAT_WOOD, E_MAT_STONE, E_MAT_FOOD, E_MAT_COPPER,
     E_MAT_IRON, E_MAT_GOLD, E_MAT_STEEL, E_MAT_AMETHYST, E_MAT_GEM,
     E_INV_HEADER, E_MARKER, E_CLIPBOARD, E_GREEN,
-    MD_INV_HEADER, MD_CLIPBOARD,
+    MD_INV_HEADER, MD_MARKER, MD_GREEN,
     MD_MAT_WOOD, MD_MAT_STONE, MD_MAT_FOOD, MD_MAT_COPPER,
     MD_MAT_IRON, MD_MAT_GOLD, MD_MAT_STEEL, MD_MAT_AMETHYST, MD_MAT_GEM,
 )
@@ -79,11 +79,11 @@ def format_inventory_text(materials: dict) -> str:
     ``materials`` should map each material key to its current amount,
     e.g. ``{"wood": 5, "stone": 0, ...}``.
     """
-    lines = [f"\n{MD_CLIPBOARD} Хранение ресурсов\n"]
+    lines = [f"\n{MD_INV_HEADER} Хранение ресурсов\n"]
     for mat in INVENTORY_MATERIALS:
         amount = materials.get(mat["key"], 0)
         em = mat["emoji_md"]
         lines.append(
-            f"{MD_CLIPBOARD}\\|{amount}\\|{em}{em} {mat['name']}"
+            f"{MD_MARKER}\\|{amount}\\|{em}{MD_GREEN} {mat['name']}"
         )
     return "\n".join(lines)
