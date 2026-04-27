@@ -197,21 +197,26 @@ async def _send_components(message, user_id: int):
 async def _send_chests(message, user_id: int):
     """Показать сундуки игрока"""
     inv = get_inventory(user_id)
-    _CHEST_DROP_MD = {
-        "chest_wood":   MD_RARITY_COMMON,
-        "chest_steel":  MD_RARITY_RARE,
-        "chest_gold":   MD_RARITY_EPIC,
-        "chest_divine": MD_RARITY_MYTHIC,
-    }
-    text = f'{MD_CHEST} Твои сундуки:\n\n'
-    for key, info in CHEST_DISPLAY.items():
-        count = inv.get(key, 0)
-        drop_em = _CHEST_DROP_MD.get(key, MD_RARITY_COMMON)
-        text += (
-            f'{MD_CHEST_WOOD}{MD_CHEST_WOOD} {info["name"]}:\n'
-            f'├{MD_COUNT} Количество: {count} {MD_YELLOW}\n'
-            f'├ Дроп: {info["drop_label"]} {drop_em}\n\n'
-        )
+    wood_count = inv.get("chest_wood", 0)
+    steel_count = inv.get("chest_steel", 0)
+    gold_count = inv.get("chest_gold", 0)
+    divine_count = inv.get("chest_divine", 0)
+
+    text = (
+        f"{MD_CHEST} Твои сундуки:\n\n"
+        f"{MD_CHEST_WOOD}{MD_CHEST_WOOD} Деревянный сундук:\n"
+        f"├{MD_COUNT} Количество: {wood_count} {MD_YELLOW}\n"
+        f"├ Дроп: низкий {MD_RARITY_COMMON}\n\n"
+        f"{MD_CHEST_STEEL}{MD_CHEST_STEEL} Стальной сундук:\n"
+        f"├{MD_COUNT} Количество: {steel_count} {MD_YELLOW}\n"
+        f"├ Дроп: средний {MD_RARITY_RARE}\n\n"
+        f"{MD_CHEST_GOLD}{MD_CHEST_GOLD} Золотой сундук:\n"
+        f"├{MD_COUNT} Количество: {gold_count} {MD_YELLOW}\n"
+        f"├ Дроп: высокий {MD_RARITY_EPIC}\n\n"
+        f"{MD_CHEST_DIVINE}{MD_CHEST_DIVINE} Всевышний сундук:\n"
+        f"├{MD_COUNT} Количество: {divine_count} {MD_YELLOW}\n"
+        f"├ Дроп: очень высокий {MD_RARITY_MYTHIC}\n\n"
+    )
     await message.answer(text, reply_markup=_get_chests_kb(), parse_mode="MarkdownV2")
 
 
