@@ -14,6 +14,8 @@ class ForgeMenu(StatesGroup):
     viewing_weapons = State()
     viewing_armor = State()
     viewing_skills = State()
+    viewing_crafting = State()
+    viewing_craft_choice = State()
 
 class BattleState(StatesGroup):
     viewing_enemies = State()

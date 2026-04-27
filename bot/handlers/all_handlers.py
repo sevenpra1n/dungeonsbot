@@ -86,6 +86,7 @@ from bot.keyboards import (
     get_clan_boss_menu_kb, get_clan_boss_battle_kb, get_clan_boss_back_kb,
     get_next_weapon_kb, get_next_armor_kb, get_skills_kb,
     get_monster_encounter_kb, get_coop_invite_kb, get_coop_lobby_kb,
+    get_crafting_kb, get_craft_choice_kb,
     _weapon_btn_text, _armor_btn_text,
 )
 from bot.data.enemies import ENEMIES, RAID_FLOORS, COOP_ENEMY_HP_MULT, COOP_REWARD_MULT
@@ -116,6 +117,10 @@ from bot.data.inventory_config import format_inventory_text
 from bot.data.components_config import format_components_text, COMPONENT_RARITIES
 from bot.data.chests_config import CHEST_DISPLAY, format_chest_opening, format_chest_reward
 from bot.data.leagues_config import get_league_label, format_all_leagues_info
+from bot.data.crafting import (
+    CRAFTING_RECIPES, format_crafting_menu_text,
+    format_crafting_choice_menu, format_craft_result,
+)
 from bot.data.emojis import (
     E_INV_HEADER, E_FRIENDS,
     E_GIFT as E_GIFT_NEW, E_GIFT2, E_GIFT3,
@@ -704,12 +709,18 @@ async def _give_activity_rewards(user_id: int, activity: dict) -> bool:
         pickaxe_level = get_player_pickaxe_level(user_id)
         if pickaxe_level > 0:
             pickaxe_data = PICKAXES[pickaxe_level]
-            # Always mine some stone
-            earned['stone'] = random.randint(pickaxe_data['min_stone'], pickaxe_data['max_stone'])
-            # Chance-based ore drops
+            # Always mine stone in the defined range
+            stone_min, stone_max = pickaxe_data.get('stone_amount', (pickaxe_data['min_stone'], pickaxe_data['max_stone']))
+            earned['stone'] = random.randint(stone_min, stone_max)
+            # Chance-based ore drops with per-ore amount ranges
+            ore_amounts = pickaxe_data.get('ore_amounts', {})
             for ore, chance in pickaxe_data['ore_chances'].items():
                 if chance > 0 and random.random() < chance:
-                    earned[ore] = earned.get(ore, 0) + 1
+                    min_amt, max_amt = ore_amounts.get(ore, (1, 1))
+                    earned[ore] = earned.get(ore, 0) + random.randint(min_amt, max_amt)
+            # Profile experience for mining
+            exp_min, exp_max = pickaxe_data.get('experience', (1, 1))
+            earned['experience'] = random.randint(exp_min, exp_max)
     else:
         for rew_key, (min_v, max_v) in rewards.items():
             earned[rew_key] = random.randint(min_v, max_v)
@@ -961,6 +972,13 @@ async def handle_forge_menu(message: types.Message, state: FSMContext):
         await state.set_state(ForgeMenu.viewing_skills)
         return
 
+    if text == "⚙️ Изготовление":
+        comp = get_components(user_id)
+        crafting_text = format_crafting_menu_text(comp)
+        await message.answer(crafting_text, reply_markup=get_crafting_kb(), parse_mode="MarkdownV2")
+        await state.set_state(ForgeMenu.viewing_crafting)
+        return
+
     await message.answer("Выбери раздел!", reply_markup=get_forge_kb())
 
 @router.message(ForgeMenu.viewing_weapons)
@@ -1168,6 +1186,91 @@ async def handle_skills_menu(message: types.Message, state: FSMContext):
             return
 
     await message.answer("Выбери скилл из списка!", reply_markup=get_skills_kb(user_id))
+
+@router.message(ForgeMenu.viewing_crafting)
+async def handle_crafting_menu(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    player = get_player(user_id)
+    text = message.text
+
+    if text == "⬅️ Назад":
+        weapon_id = get_player_weapon(user_id)
+        armor_id = get_player_armor(user_id)
+        weapon = _get_weapon_info(weapon_id)
+        armor = _get_armor_info(armor_id)
+        forge_text = _build_forge_main_text(player, weapon, armor)
+        await send_image_with_text(message, "images/kusnya.png", forge_text, reply_markup=get_forge_kb())
+        await state.set_state(ForgeMenu.viewing_forge)
+        return
+
+    if text == "🔨 Изготовить":
+        choice_text = format_crafting_choice_menu()
+        await message.answer(choice_text, reply_markup=get_craft_choice_kb(), parse_mode="MarkdownV2")
+        await state.set_state(ForgeMenu.viewing_craft_choice)
+        return
+
+    await message.answer("Выбери действие!", reply_markup=get_crafting_kb())
+
+
+# Mapping from button text to rarity key
+_CRAFT_BTN_TO_RARITY = {
+    "⚙️ Скрафтить обычный":     "common",
+    "⚙️ Скрафтить редкий":      "rare",
+    "⚙️ Скрафтить эпический":   "epic",
+    "⚙️ Скрафтить легендарный": "legendary",
+    "⚙️ Скрафтить мифический":  "mythic",
+}
+
+
+@router.message(ForgeMenu.viewing_craft_choice)
+async def handle_craft_choice(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+
+    if text == "⬅️ Назад":
+        comp = get_components(user_id)
+        crafting_text = format_crafting_menu_text(comp)
+        await message.answer(crafting_text, reply_markup=get_crafting_kb(), parse_mode="MarkdownV2")
+        await state.set_state(ForgeMenu.viewing_crafting)
+        return
+
+    rarity_key = _CRAFT_BTN_TO_RARITY.get(text)
+    if rarity_key is None:
+        await message.answer("Выбери компонент из списка!", reply_markup=get_craft_choice_kb())
+        return
+
+    recipe = CRAFTING_RECIPES[rarity_key]
+    inv = get_inventory(user_id)
+
+    # Check if player has enough materials
+    for mat, required in recipe["materials"].items():
+        have = inv.get(mat, 0)
+        if have < required:
+            await message.answer(
+                f"❌ Недостаточно ресурсов для крафта\\!\n"
+                f"Нужно: {mat} \\— {required}, у вас: {have}",
+                reply_markup=get_craft_choice_kb(),
+                parse_mode="MarkdownV2"
+            )
+            return
+
+    # Deduct materials regardless of success
+    for mat, required in recipe["materials"].items():
+        remove_inventory_material(user_id, mat, required)
+
+    # Roll craft chance
+    success = random.random() < recipe["craft_chance"]
+    exp_gained = 0
+    if success:
+        add_component(user_id, rarity_key, 1)
+        exp_min, exp_max = recipe["experience"]
+        exp_gained = random.randint(exp_min, exp_max)
+        add_experience_to_player(user_id, exp_gained)
+
+    result_text = format_craft_result(rarity_key, success, exp_gained)
+    await message.answer(result_text, reply_markup=get_craft_choice_kb(), parse_mode="MarkdownV2")
+
+
 @router.message(F.text == "🎖️ Снаряжение")
 async def open_equipment_shop(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
