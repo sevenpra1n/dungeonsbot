@@ -146,7 +146,7 @@ def format_crafting_menu_text(comp: dict) -> str:
 def format_crafting_choice_menu() -> str:
     """Build the crafting choice menu text showing all recipes with requirements."""
     lines = [
-        f"{_E_WARN}{_E_GEAR} Выберите что хотите изготовить!\n",
+        f"{_E_WARN}{_E_GEAR} Выберите что хотите изготовить\\!\n",
     ]
     for rarity_key, recipe in CRAFTING_RECIPES.items():
         rarity_emoji = recipe["rarity_emoji"]
@@ -168,7 +168,7 @@ def format_craft_result(rarity_key: str, success: bool, exp_gained: int) -> str:
     comp_name = recipe["name"]
     if success:
         return (
-            f"{_E_GREEN} Крафт успешен!\n\n"
+            f"{_E_GREEN} Крафт успешен\\!\n\n"
             f"{_E_MARKER}{rarity_emoji} {comp_name} добавлен в инвентарь\\!\n"
             f"{_E_MARKER}Получено опыта: {exp_gained}"
         )
