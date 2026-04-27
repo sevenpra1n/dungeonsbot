@@ -152,6 +152,7 @@ def init_database():
         'ALTER TABLE players ADD COLUMN has_set_clan_image INTEGER DEFAULT 0',
         'ALTER TABLE players ADD COLUMN is_spammer INTEGER DEFAULT 0',
         'ALTER TABLE players ADD COLUMN likes INTEGER DEFAULT 0',
+        'ALTER TABLE players ADD COLUMN block_invites INTEGER DEFAULT 0',
     ]:
         try:
             cursor.execute(col_sql)
@@ -498,7 +499,7 @@ def get_player(user_id: int):
                COALESCE(online_matches, 0),
                COALESCE(deaths, 0), COALESCE(dodges, 0), COALESCE(pve_wins, 0),
                COALESCE(has_set_clan_image, 0), COALESCE(is_spammer, 0),
-               COALESCE(likes, 0)
+               COALESCE(likes, 0), COALESCE(block_invites, 0)
         FROM players
         WHERE user_id = ?
     ''', (user_id,))
@@ -532,6 +533,7 @@ def get_player(user_id: int):
             "has_set_clan_image": result[21],
             "is_spammer": result[22],
             "likes": result[23],
+            "block_invites": result[24],
         }
     return None
 
@@ -945,6 +947,25 @@ def set_player_spammer_flag(user_id: int):
     conn.close()
 
 
+def set_player_block_invites(user_id: int, value: bool):
+    """Установить/снять блокировку приглашений для игрока"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('UPDATE players SET block_invites = ? WHERE user_id = ?', (1 if value else 0, user_id))
+    conn.commit()
+    conn.close()
+
+
+def get_player_block_invites(user_id: int) -> bool:
+    """Проверить, заблокированы ли приглашения у игрока"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('SELECT COALESCE(block_invites, 0) FROM players WHERE user_id = ?', (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return bool(row[0]) if row else False
+
+
 # ============== INVENTORY FUNCTIONS ==============
 
 def get_inventory(user_id: int) -> dict:
@@ -1131,6 +1152,30 @@ def check_activity_done(user_id: int) -> dict | None:
     if now >= end_time:
         return activity
     return None
+
+
+def get_all_completed_activities() -> list:
+    """Получить все завершённые активности (end_time <= now) вместе с user_id."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    now = datetime.now(timezone.utc)
+    cursor.execute(
+        'SELECT user_id, activity_type, location_id, start_time, end_time '
+        'FROM active_activities WHERE end_time <= ?',
+        (now.isoformat(),)
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [
+        {
+            'user_id': row[0],
+            'activity_type': row[1],
+            'location_id': row[2],
+            'start_time': row[3],
+            'end_time': row[4],
+        }
+        for row in rows
+    ]
 
 
 # ============== EQUIPMENT DB ==============

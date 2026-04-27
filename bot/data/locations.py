@@ -128,7 +128,6 @@ LOCATION_ENEMIES = {
         "max_player_strength": 99,
         "rewards": {
             "coins": (10, 30),
-            "rating_points": 2,
             "clan_exp": (2, 5),
             "experience": (3, 9),
             "food": (2, 2),

@@ -491,6 +491,7 @@ def get_profile_kb() -> ReplyKeyboardMarkup:
     """Клавиатура профиля"""
     kb = [
         [KeyboardButton(text="🎭 Статусы"), KeyboardButton(text="📦 Инвентарь")],
+        [KeyboardButton(text="⚙️ Настройки")],
         [KeyboardButton(text="🏠 Назад")]
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)

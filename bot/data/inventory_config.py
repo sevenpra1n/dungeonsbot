@@ -67,11 +67,10 @@ def format_inventory_text(materials: dict) -> str:
     ``materials`` should map each material key to its current amount,
     e.g. ``{"wood": 5, "stone": 0, ...}``.
     """
-    lines = [f"{E_INV_HEADER} Инвентарь:\n{E_INV_HEADER} Хранение ресурсов\n"]
+    lines = [f"\n{E_CLIPBOARD} Хранение ресурсов\n"]
     for mat in INVENTORY_MATERIALS:
         amount = materials.get(mat["key"], 0)
         lines.append(
-            f"{E_MARKER}{mat['emoji']}  {mat['name']}\n"
-            f"├ {E_CLIPBOARD} количество: {amount} {E_GREEN}\n"
+            f"{E_CLIPBOARD}|{amount}| {mat['emoji']}{mat['emoji']} {mat['name']}"
         )
     return "\n".join(lines)
