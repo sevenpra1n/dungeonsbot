@@ -528,7 +528,7 @@ def delete_player_data(user_id: int):
         'DELETE FROM player_skills WHERE user_id = ?',
         'DELETE FROM friendships WHERE user_id = ? OR friend_id = ?',
         'DELETE FROM player_likes WHERE liker_id = ? OR liked_id = ?',
-        'DELETE FROM clan_chat WHERE sender_id = ?',
+        'DELETE FROM clan_chat WHERE user_id = ?',
         'DELETE FROM clan_boss_tickets WHERE user_id = ?',
         'DELETE FROM clan_boss_damage WHERE user_id = ?',
         'DELETE FROM players WHERE user_id = ?',
