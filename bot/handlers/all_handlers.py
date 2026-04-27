@@ -158,7 +158,7 @@ _CRAFT_MAT_NAMES_RU = {
     "gem":      "Самоцвет",
 }
 
-_map_activity_timers: dict[int, asyncio.Task] = {}
+map_activity_timers: dict[int, asyncio.Task] = {}
 
 # ============== INVENTORY TAB ==============
 def _get_inventory_kb(back_button: str = "⬅️ Назад") -> ReplyKeyboardMarkup:
@@ -489,14 +489,14 @@ def _build_map_text(activity: dict | None = None, remaining: int = 0) -> str:
 
 
 def _cancel_map_timer(user_id: int):
-    task = _map_activity_timers.pop(user_id, None)
+    task = map_activity_timers.pop(user_id, None)
     if task and not task.done():
         task.cancel()
 
 
 def _schedule_map_timer(user_id: int, chat_id: int, message_id: int):
     _cancel_map_timer(user_id)
-    _map_activity_timers[user_id] = asyncio.create_task(
+    map_activity_timers[user_id] = asyncio.create_task(
         _map_activity_countdown_loop(user_id, chat_id, message_id)
     )
 
@@ -536,9 +536,9 @@ async def _map_activity_countdown_loop(user_id: int, chat_id: int, message_id: i
     except asyncio.CancelledError:
         return
     finally:
-        task = _map_activity_timers.get(user_id)
+        task = map_activity_timers.get(user_id)
         if task and task.done():
-            _map_activity_timers.pop(user_id, None)
+            map_activity_timers.pop(user_id, None)
 
 
 def _get_location_enemy_for_battle(location_id: int, player_strength: float) -> dict:
@@ -1085,8 +1085,9 @@ async def _give_activity_rewards(user_id: int, activity: dict) -> bool:
     act_name = act_cfg.get('name', act_type)
     act_emoji = act_cfg.get('emoji', '')
 
-    finish_text = "Обыск закончен" if act_type in {"search", "loot_all"} else "Добыча закончена"
-    finish_emoji = E_MAP_E if act_type in {"search", "loot_all"} else E_PICKAXE_LOC
+    is_search_activity = act_type in {"search", "loot_all"}
+    finish_text = "Обыск закончен" if is_search_activity else "Добыча закончена"
+    finish_emoji = E_MAP_E if is_search_activity else E_PICKAXE_LOC
     text = (
         f"{E_BELL}{finish_emoji} {finish_text}:\n"
         f"{E_GIFT}{E_PLUS} Получено:\n\n"
