@@ -854,7 +854,6 @@ async def _run_enemy_search(user_id: int, chat_id: int, search_time: int = 10, l
 
     await fsm_ctx.set_state(BattleState.in_battle)
     await fsm_ctx.update_data(
-        selected_enemy=None,
         location_enemy_cfg=enemy_cfg,
         player_health=player_health,
         player_damage=player_damage,
@@ -1155,7 +1154,6 @@ async def fight_location_monster(message: types.Message, state: FSMContext):
     reset_battle_cooldown(user_id)
     await state.set_state(BattleState.in_battle)
     await state.update_data(
-        selected_enemy=None,
         player_health=player_health,
         player_damage=player_damage,
         enemy_health=enemy_health,

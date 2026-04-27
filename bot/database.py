@@ -1159,6 +1159,7 @@ def start_activity(user_id: int, activity_type: str, location_id: int, duration_
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     now = datetime.now(timezone.utc)
+    # Админам из конфигурации разрешён мгновенный пропуск таймера (для тестирования/отладки).
     duration = 0 if user_id in ADMIN_IDS else max(0, int(duration_seconds))
     import datetime as dt
     end_time = now + dt.timedelta(seconds=duration)
