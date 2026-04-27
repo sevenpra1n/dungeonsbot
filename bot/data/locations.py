@@ -766,7 +766,7 @@ def format_map_text(user_id: int, current_activity: dict = None) -> str:
     lines.append(f'{E_MARKER}Здесь можно добыть древесину\n')
 
     lines.append(f'{E_YELLOW_MARKER}{E_STONE} Шахта:')
-    lines.append(f'{E_MARKER}Здесь можно добыть кучу ресурсов!')
+    lines.append(f'{E_MARKER}Здесь можно добыть кучу ресурсов\\!')
     lines.append(f'{E_SEARCH} Минимальный порог входа: 3 {E_LEVEL} уровень опыта\n')
 
     lines.append(f'{E_YELLOW_MARKER}{E_BONES} Дикие пустоши:')
@@ -774,11 +774,11 @@ def format_map_text(user_id: int, current_activity: dict = None) -> str:
     lines.append(f'{E_SEARCH} Минимальный порог входа: 10 {E_LEVEL} уровень опыта\n')
 
     lines.append(f'{E_YELLOW_MARKER}{E_EYE} Далёкие земли:')
-    lines.append(f'{E_MARKER}Здесь очень ценные ресурсы, но высокий шанс умереть..')
+    lines.append(f'{E_MARKER}Здесь очень ценные ресурсы, но высокий шанс умереть\\.\\.')
     lines.append(f'{E_SEARCH} Минимальный порог входа: 18 {E_LEVEL} уровень опыта\n')
 
     lines.append(f'{E_YELLOW_MARKER}{E_FIRE} Преисподня:')
-    lines.append(f'{E_MARKER}Последняя локация, для тех кто хочет пройти игру.')
+    lines.append(f'{E_MARKER}Последняя локация, для тех кто хочет пройти игру\\.')
     lines.append(f'{E_SEARCH} Минимальный порог входа: 25 {E_LEVEL} уровень опыта')
 
     return '\n'.join(lines)
@@ -789,7 +789,7 @@ def format_location_wildlands_text() -> str:
     return (
         f'{E_BONES} Дикие пустоши:\n\n'
         f'{E_LOCATION_ICON} Выбери действие:\n\n'
-        f'2.3m{E_HOURGLASS} │ {E_MAP_ICON} │ Обыскать локацию\n\n'
+        f'2\\.3m{E_HOURGLASS} │ {E_MAP_ICON} │ Обыскать локацию\n\n'
         f'10m{E_HOURGLASS} │ {E_KEY} │ Обчистить всю локацию\n'
         f'{E_MARKER}{E_WARNING} Внимание: 100% шанс на врага\n\n'
         f'2m{E_HOURGLASS} | {E_SKULL_MD} | Поиск врага'
@@ -804,7 +804,7 @@ def format_location_distant_text() -> str:
         f'4m{E_HOURGLASS} │ {E_MAP_ICON} │ Обыскать локацию\n\n'
         f'20m{E_HOURGLASS} │ {E_KEY} │ Обчистить всю локацию\n'
         f'{E_MARKER}{E_WARNING} Внимание: 100% шанс на врага\n\n'
-        f'3.5m{E_HOURGLASS} | {E_SKULL_MD} | Поиск врага'
+        f'3\\.5m{E_HOURGLASS} | {E_SKULL_MD} | Поиск врага'
     )
 
 
@@ -824,6 +824,6 @@ def format_account_delete_warning() -> str:
     """Предупреждение об удалении аккаунта."""
     return (
         f'{E_WARNING}{E_FORBIDDEN} Вы точно хотите сбросить данные аккаунта?\n'
-        f'{E_MARKER}Весь прогресс потеряется и вы начнете заново!\n\n'
-        f'{E_YELLOW_MARKER} Ниже напишите "ПОДТВЕРДИТЬ" чтобы удалить аккаунт.'
+        f'{E_MARKER}Весь прогресс потеряется и вы начнете заново\\!\n\n'
+        f'{E_YELLOW_MARKER} Ниже напишите "ПОДТВЕРДИТЬ" чтобы удалить аккаунт\\.'
     )
