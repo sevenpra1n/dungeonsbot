@@ -536,9 +536,7 @@ async def _map_activity_countdown_loop(user_id: int, chat_id: int, message_id: i
     except asyncio.CancelledError:
         return
     finally:
-        task = map_activity_timers.get(user_id)
-        if task and task.done():
-            map_activity_timers.pop(user_id, None)
+        map_activity_timers.pop(user_id, None)
 
 
 def _get_location_enemy_for_battle(location_id: int, player_strength: float) -> dict:

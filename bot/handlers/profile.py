@@ -207,7 +207,7 @@ async def handle_profile_settings(message, state: FSMContext):
         await message.answer(
             f"{E_WARN}{E_WARN} Вы точно хотите сбросить данные аккаунта?\n"
             f"{E_WARN}Весь прогресс потеряется и вы начнете заново!\n\n"
-            f"{E_WARN} Ниже напишите \"ПОДТВЕРДИТЬ\" чтобы удалить аккаунт.",
+            f"{E_WARN} Ниже напишите \"ПОДТВЕРДИТЬ\", чтобы удалить аккаунт.",
             reply_markup=ReplyKeyboardMarkup(
                 keyboard=[[KeyboardButton(text="❌ Отмена")]],
                 resize_keyboard=True
