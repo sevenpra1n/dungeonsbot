@@ -84,6 +84,6 @@ def format_inventory_text(materials: dict) -> str:
         amount = materials.get(mat["key"], 0)
         em = mat["emoji_md"]
         lines.append(
-            f"{MD_CLIPBOARD}\\|{amount}\\|{em}{em} {mat['name']}"
+            f"{em}\\|{amount}\\|{em}{em} {mat['name']}"
         )
     return "\n".join(lines)
