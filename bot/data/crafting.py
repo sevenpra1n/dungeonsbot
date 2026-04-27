@@ -138,7 +138,7 @@ def format_crafting_menu_text(comp: dict) -> str:
     for rarity_key, comp_name in RARITY_COMPONENT_NAMES.items():
         rarity_emoji = _RARITY_EMOJIS[rarity_key]
         amount = comp.get(rarity_key, 0)
-        lines.append(f"{_E_MARKER}{rarity_emoji}{comp_name} ({amount}){_E_YELLOW}")
+        lines.append(f"{_E_MARKER}{rarity_emoji}{comp_name} \\({amount}\\){_E_YELLOW}")
     lines.append(f"\n{_E_CHART} Ниже можете изготовить их!")
     return "\n".join(lines)
 
@@ -157,7 +157,7 @@ def format_crafting_choice_menu() -> str:
             mat_name = _MAT_NAMES.get(mat, mat)
             lines.append(f"{_E_MARKER}{mat_emoji} {amount} {mat_name}")
         chance_pct = int(recipe["craft_chance"] * 100)
-        lines.append(f"({_E_CLOCK} шанс крафта: {chance_pct}%)\n")
+        lines.append(f"\\({_E_CLOCK} шанс крафта: {chance_pct}%\\)\n")
     return "\n".join(lines)
 
 
