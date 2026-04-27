@@ -792,7 +792,7 @@ def format_location_wildlands_text() -> str:
         f'2\\.3m{E_HOURGLASS} │ {E_MAP_ICON} │ Обыскать локацию\n\n'
         f'10m{E_HOURGLASS} │ {E_KEY} │ Обчистить всю локацию\n'
         f'{E_MARKER}{E_WARNING} Внимание: 100% шанс на врага\n\n'
-        f'2m{E_HOURGLASS} | {E_SKULL_MD} | Поиск врага'
+        f'2m{E_HOURGLASS} │ {E_SKULL_MD} │ Поиск врага'
     )
 
 
@@ -804,7 +804,7 @@ def format_location_distant_text() -> str:
         f'4m{E_HOURGLASS} │ {E_MAP_ICON} │ Обыскать локацию\n\n'
         f'20m{E_HOURGLASS} │ {E_KEY} │ Обчистить всю локацию\n'
         f'{E_MARKER}{E_WARNING} Внимание: 100% шанс на врага\n\n'
-        f'3\\.5m{E_HOURGLASS} | {E_SKULL_MD} | Поиск врага'
+        f'3\\.5m{E_HOURGLASS} │ {E_SKULL_MD} │ Поиск врага'
     )
 
 
@@ -816,7 +816,7 @@ def format_location_hell_text() -> str:
         f'10m{E_HOURGLASS} │ {E_GIFT_REWARD} │ Обыскать локацию\n\n'
         f'35m{E_HOURGLASS} │ {E_KEY} │ Обчистить всю локацию\n'
         f'{E_MARKER}{E_WARNING} Внимание: 100% шанс на врага\n\n'
-        f'10m{E_HOURGLASS} | {E_SKULL_MD} | Поиск врага'
+        f'10m{E_HOURGLASS} │ {E_SKULL_MD} │ Поиск врага'
     )
 
 
