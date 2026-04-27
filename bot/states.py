@@ -81,6 +81,8 @@ class ProfileMenu(StatesGroup):
     viewing_profile = State()
     viewing_statuses = State()
     viewing_settings = State()
+    confirming_delete_data = State()
+    waiting_delete_data_confirm = State()
     viewing_inventory = State()
     viewing_components = State()
     viewing_chests = State()

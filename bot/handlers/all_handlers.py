@@ -94,7 +94,9 @@ from bot.data.enemies import ENEMIES, RAID_FLOORS, COOP_ENEMY_HP_MULT, COOP_REWA
 from bot.data.equipment import EQUIPMENT, DEFAULT_WEAPON, DEFAULT_ARMOR, WEAPONS, ARMOR
 from bot.data.locations import (
     LOCATIONS, LOCATION_ENEMIES, AXES, PICKAXES, FOREST_ENEMIES, MINE_ENEMIES,
+    WASTELAND_ENEMIES, FARLANDS_ENEMIES, HELL_ENEMIES,
     get_location_enemy_for_player, get_forest_enemy_for_player, get_mine_enemy_for_player,
+    get_wasteland_enemy_for_player, get_farlands_enemy_for_player, get_hell_enemy_for_player,
     E_PICKAXE_LOC, E_PICKAXE_SHOP, E_STONE_MAT,
     format_axes_shop_text,
 )
@@ -155,6 +157,8 @@ _CRAFT_MAT_NAMES_RU = {
     "amethyst": "Аметист",
     "gem":      "Самоцвет",
 }
+
+map_activity_timers: dict[int, asyncio.Task] = {}
 
 # ============== INVENTORY TAB ==============
 def _get_inventory_kb(back_button: str = "⬅️ Назад") -> ReplyKeyboardMarkup:
@@ -440,6 +444,162 @@ async def handle_opening_chest(message: types.Message, state: FSMContext):
     pass
 
 # ============== MAP / LOCATIONS ==============
+def _build_map_text(activity: dict | None = None, remaining: int = 0) -> str:
+    """Сформировать текст карты с опциональным блоком активной активности."""
+    lines = [f"{E_MAP_E} <b>КАРТА</b>", ""]
+
+    if activity:
+        loc = LOCATIONS.get(activity['location_id'], {})
+        act_cfg = loc.get('activities', {}).get(activity['activity_type'], {})
+        act_name = act_cfg.get('name', activity['activity_type'])
+        act_emoji = act_cfg.get('display_emoji', act_cfg.get('emoji', E_HOURGLASS))
+        lines.extend([
+            f"{E_YELLOW} Идёт активность:",
+            f"{E_SQ}{act_emoji}{act_name}",
+            f"{E_SQ}Осталось: {E_HOURGLASS}{max(0, remaining)} секунд...",
+            "",
+        ])
+
+    lines.extend([
+        "Выбери локацию для исследования:",
+        "",
+        f"{E_SQ}🌾 Ясная поляна:",
+        f"{E_SQ}Здесь можно добыть еду",
+        "",
+        f"{E_SQ}{E_TREE} Лес:",
+        f"{E_SQ}Здесь можно добыть древесину",
+        "",
+        f"{E_SQ}{E_PICKAXE_LOC} Шахта:",
+        f"{E_SQ}Здесь можно добыть кучу ресурсов!",
+        f"{E_SQ} Минимальный порог входа: 3 {E_EXP} уровень опыта",
+        "",
+        f"{E_SQ}🦂 Дикие пустоши:",
+        f"{E_SQ}Опасная локация, только для опытных",
+        f"{E_SQ} Минимальный порог входа: 10 {E_EXP} уровень опыта",
+        "",
+        f"{E_SQ}🏜 Далёкие земли:",
+        f"{E_SQ}Здесь очень ценные ресурсы, но высокий шанс умереть..",
+        f"{E_SQ} Минимальный порог входа: 18 {E_EXP} уровень опыта",
+        "",
+        f"{E_SQ}🔥 Преисподня:",
+        f"{E_SQ}Последняя локация, для тех кто хочет пройти игру.",
+        f"{E_SQ} Минимальный порог входа: 25 {E_EXP} уровень опыта",
+    ])
+    return "\n".join(lines)
+
+
+def _cancel_map_timer(user_id: int):
+    task = map_activity_timers.pop(user_id, None)
+    if task and not task.done():
+        task.cancel()
+
+
+def _schedule_map_timer(user_id: int, chat_id: int, message_id: int):
+    _cancel_map_timer(user_id)
+    map_activity_timers[user_id] = asyncio.create_task(
+        _map_activity_countdown_loop(user_id, chat_id, message_id)
+    )
+
+
+async def _map_activity_countdown_loop(user_id: int, chat_id: int, message_id: int):
+    """Обновлять сообщение карты каждую секунду пока активность не завершится."""
+    last_text = None
+    try:
+        while True:
+            activity = get_active_activity(user_id)
+            if not activity:
+                text = _build_map_text()
+                if text != last_text:
+                    await bot.edit_message_text(
+                        text=text, chat_id=chat_id, message_id=message_id,
+                        reply_markup=get_map_kb(), parse_mode="HTML"
+                    )
+                break
+            try:
+                end_time = datetime.fromisoformat(activity['end_time'])
+                remaining = max(0, int((end_time - datetime.now(timezone.utc)).total_seconds()))
+            except Exception:
+                remaining = 0
+            text = _build_map_text(activity, remaining)
+            if text != last_text:
+                try:
+                    await bot.edit_message_text(
+                        text=text, chat_id=chat_id, message_id=message_id,
+                        reply_markup=get_map_kb(), parse_mode="HTML"
+                    )
+                except Exception:
+                    break
+                last_text = text
+            if remaining <= 0:
+                break
+            await asyncio.sleep(1)
+    except asyncio.CancelledError:
+        return
+    finally:
+        map_activity_timers.pop(user_id, None)
+
+
+def _get_location_enemy_for_battle(location_id: int, player_strength: float) -> dict:
+    """Выбрать врага в зависимости от локации и силы игрока."""
+    if location_id == 2:
+        return get_forest_enemy_for_player(player_strength)
+    if location_id == 3:
+        return get_mine_enemy_for_player(player_strength)
+    if location_id == 4:
+        return get_wasteland_enemy_for_player(player_strength)
+    if location_id == 5:
+        return get_farlands_enemy_for_player(player_strength)
+    if location_id == 6:
+        return get_hell_enemy_for_player(player_strength)
+    return get_location_enemy_for_player(player_strength)
+
+
+async def _open_location_view(message: types.Message, state: FSMContext, user_id: int, loc_id: int):
+    """Открыть меню выбранной локации."""
+    loc = LOCATIONS.get(loc_id)
+    if not loc:
+        await message.answer("Локация не найдена.", reply_markup=get_map_kb())
+        return
+
+    player = get_player(user_id)
+    if not player:
+        await message.answer("Сначала зарегистрируйся! /start")
+        return
+
+    min_lvl = int(loc.get('min_level', 1))
+    if int(player.get('player_level', 1)) < min_lvl:
+        await message.answer(
+            f"{E_CROSS} Эта локация пока недоступна.\n"
+            f"{E_SQ}Нужен минимум {min_lvl} {E_EXP} уровень опыта.",
+            reply_markup=get_map_kb()
+        )
+        return
+
+    await state.update_data(selected_location=loc_id)
+    loc_text = f"<b>{loc['name']}</b>:\n\n{E_BOOK2} Выбери действие:\n"
+    for act_key, act in loc['activities'].items():
+        disp_emoji = act.get('display_emoji', act['emoji'])
+        loc_text += f"\n{_fmt_time(act['time'])}{E_HOURGLASS} │ {disp_emoji} │ {act['name']}\n"
+        if loc_id == 2 and act_key == 'chop_wood':
+            loc_text += f"{E_SQ}{E_WARN} (необходим топор для добычи!)\n"
+        if loc_id == 3 and act_key == 'mine_ore':
+            pickaxe_level = get_player_pickaxe_level(user_id)
+            if pickaxe_level <= 0:
+                loc_text += f"{E_SQ}{E_WARN} (необходима кирка для добычи!)\n"
+        if act_key == 'loot_all':
+            loc_text += f"{E_SQ}{E_WARN} Внимание: 100% шанс на врага\n"
+
+    enemy_search_time = int(loc.get('enemy_search_time', 0))
+    if enemy_search_time > 0:
+        loc_text += f"\n{_fmt_time(enemy_search_time)}{E_HOURGLASS} | {E_SKULL} | Поиск врага\n"
+
+    await send_image_with_text(
+        message, loc.get('image', 'images/meadow.png'), loc_text,
+        reply_markup=get_location_activities_kb(loc_id)
+    )
+    await state.set_state(LocationMenu.viewing_location)
+
+
 @router.message(F.text == "🗺️ Карта")
 async def open_map(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
@@ -454,33 +614,28 @@ async def open_map(message: types.Message, state: FSMContext):
         monster = await _give_activity_rewards(user_id, completed)
         if not monster:
             await state.set_state(LocationMenu.viewing_map)
-            map_text = "🗺️ <b>КАРТА</b>\n\nВыбери локацию для исследования:"
-            await message.answer(map_text, reply_markup=get_map_kb())
+            sent = await message.answer(_build_map_text(), reply_markup=get_map_kb(), parse_mode="HTML")
+            _cancel_map_timer(user_id)
         return
 
     activity = get_active_activity(user_id)
     if activity:
-        import datetime as dt
         try:
             end_time = datetime.fromisoformat(activity['end_time'])
-        except Exception:
-            end_time = None
-        if end_time:
             remaining = max(0, int((end_time - datetime.now(timezone.utc)).total_seconds()))
-            loc = LOCATIONS.get(activity['location_id'], {})
-            act_cfg = loc.get('activities', {}).get(activity['activity_type'], {})
-            await message.answer(
-                f"⏳ <b>Активность в процессе</b>\n\n"
-                f"Локация: {loc.get('name', '?')}\n"
-                f"Действие: {act_cfg.get('name', activity['activity_type'])}\n"
-                f"Осталось: {remaining} сек.",
-                reply_markup=ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="❌ Вернуться")]], resize_keyboard=True)
-            )
-            await state.set_state(LocationMenu.viewing_map)
-            return
+        except Exception:
+            remaining = 0
+        sent = await message.answer(
+            _build_map_text(activity, remaining),
+            reply_markup=get_map_kb(),
+            parse_mode="HTML",
+        )
+        _schedule_map_timer(user_id, sent.chat.id, sent.message_id)
+        await state.set_state(LocationMenu.viewing_map)
+        return
 
-    map_text = "🗺️ <b>КАРТА</b>\n\nВыбери локацию для исследования:"
-    await message.answer(map_text, reply_markup=get_map_kb())
+    sent = await message.answer(_build_map_text(), reply_markup=get_map_kb(), parse_mode="HTML")
+    _cancel_map_timer(user_id)
     await state.set_state(LocationMenu.viewing_map)
 
 
@@ -501,6 +656,7 @@ async def handle_map(message: types.Message, state: FSMContext):
     text = message.text
 
     if text == "❌ Вернуться":
+        _cancel_map_timer(user_id)
         await show_main_menu(message, state)
         return
 
@@ -509,33 +665,40 @@ async def handle_map(message: types.Message, state: FSMContext):
     if completed:
         monster = await _give_activity_rewards(user_id, completed)
         if not monster:
-            map_text = "🗺️ <b>КАРТА</b>\n\nВыбери локацию для исследования:"
-            await message.answer(map_text, reply_markup=get_map_kb())
+            sent = await message.answer(_build_map_text(), reply_markup=get_map_kb(), parse_mode="HTML")
+            _cancel_map_timer(user_id)
         return
 
     for loc_id, loc in LOCATIONS.items():
         if text == loc['name']:
-            await state.update_data(selected_location=loc_id)
-            loc_text = f"<b>{loc['name']}</b>:\n\n{E_BOOK2} Выбери действие:\n"
-            for act_key, act in loc['activities'].items():
-                disp_emoji = act.get('display_emoji', act['emoji'])
-                loc_text += f"\n{_fmt_time(act['time'])}{E_HOURGLASS} │ {disp_emoji} │ {act['name']}\n"
-                if loc_id == 3 and act_key == 'mine_ore':
-                    pickaxe_level = get_player_pickaxe_level(user_id)
-                    if pickaxe_level <= 0:
-                        loc_text += f"{E_SQ}{E_WARN} (необходима кирка для добычи!)\n"
-            if loc_id == 1:
-                loc_text += f"\n{_fmt_time(10)}{E_HOURGLASS} | {E_SKULL} | Поиск врага\n"
-            if loc_id == 2:
-                loc_text += f"\n{E_SQ}{E_WARN} (необходим топор для добычи!)\n"
-                loc_text += f"\n{_fmt_time(30)}{E_HOURGLASS} | {E_SKULL} | Поиск врага\n"
-            if loc_id == 3:
-                loc_text += f"\n{_fmt_time(60)}{E_HOURGLASS} | {E_SKULL} | Поиск врага\n"
-            await send_image_with_text(message, loc.get('image', 'images/meadow.png'), loc_text, reply_markup=get_location_activities_kb(loc_id))
-            await state.set_state(LocationMenu.viewing_location)
+            _cancel_map_timer(user_id)
+            await _open_location_view(message, state, user_id, loc_id)
             return
 
-    await message.answer("Выбери локацию из списка!", reply_markup=get_map_kb())
+    await message.answer("Выбери локацию кнопками в сообщении карты!", reply_markup=get_map_kb())
+
+
+@router.callback_query(LocationMenu.viewing_map, F.data == "map_close")
+async def handle_map_close_callback(callback: types.CallbackQuery, state: FSMContext):
+    user_id = callback.from_user.id
+    _cancel_map_timer(user_id)
+    await callback.answer()
+    await callback.message.answer("Возврат в главное меню.")
+    await show_main_menu(callback.message, state)
+
+
+@router.callback_query(LocationMenu.viewing_map, F.data.startswith("map_loc:"))
+async def handle_map_location_callback(callback: types.CallbackQuery, state: FSMContext):
+    user_id = callback.from_user.id
+    data = callback.data or ""
+    try:
+        loc_id = int(data.split(":", 1)[1])
+    except Exception:
+        await callback.answer("Локация не найдена.", show_alert=True)
+        return
+    _cancel_map_timer(user_id)
+    await callback.answer()
+    await _open_location_view(callback.message, state, user_id, loc_id)
 
 @router.message(LocationMenu.viewing_location)
 async def handle_location(message: types.Message, state: FSMContext):
@@ -545,9 +708,31 @@ async def handle_location(message: types.Message, state: FSMContext):
     loc_id = data.get('selected_location', 1)
     loc = LOCATIONS.get(loc_id)
 
+    if text == "⚔️ Сразиться с монстром":
+        await fight_location_monster(message, state)
+        return
+
+    if text == "🏃 Убежать":
+        await flee_location_monster(message, state)
+        return
+
     if text == "⬅️ Назад на карту":
-        map_text = "🗺️ <b>КАРТА</b>\n\nВыбери локацию для исследования:"
-        await message.answer(map_text, reply_markup=get_map_kb())
+        activity = get_active_activity(user_id)
+        if activity:
+            try:
+                end_time = datetime.fromisoformat(activity['end_time'])
+                remaining = max(0, int((end_time - datetime.now(timezone.utc)).total_seconds()))
+            except Exception:
+                remaining = 0
+            sent = await message.answer(
+                _build_map_text(activity, remaining),
+                reply_markup=get_map_kb(),
+                parse_mode="HTML",
+            )
+            _schedule_map_timer(user_id, sent.chat.id, sent.message_id)
+        else:
+            await message.answer(_build_map_text(), reply_markup=get_map_kb(), parse_mode="HTML")
+            _cancel_map_timer(user_id)
         await state.set_state(LocationMenu.viewing_map)
         return
 
@@ -593,6 +778,16 @@ async def handle_location(message: types.Message, state: FSMContext):
                         reply_markup=get_location_activities_kb(loc_id)
                     )
                     return
+            if user_id in ADMIN_IDS:
+                await message.answer(f"⚡ Админ-режим: время активности пропущено.")
+                await _give_activity_rewards(
+                    user_id,
+                    {
+                        'activity_type': act_key,
+                        'location_id': loc_id,
+                    }
+                )
+                return
             start_activity(user_id, act_key, loc_id, act['time'])
             await message.answer(
                 f"✅ Начато: {act['name']}\n"
@@ -605,34 +800,20 @@ async def handle_location(message: types.Message, state: FSMContext):
             )
             return
 
-    if text == "🔍 Поиск врага (10с)":
+    enemy_search_time = int(loc.get('enemy_search_time', 0)) if loc else 0
+    if enemy_search_time > 0 and text == f"💀 Поиск врага ({enemy_search_time}с)":
+        if user_id in ADMIN_IDS:
+            await state.set_state(LocationMenu.searching_enemy)
+            await message.answer("⚡ Админ-режим: поиск врага пропущен.")
+            await _run_enemy_search(user_id, message.chat.id, search_time=0, location_id=loc_id)
+            return
         await state.set_state(LocationMenu.searching_enemy)
         await message.answer(
-            "🔍 <b>Поиск врага...</b>\n\n⏳ Осталось 10 секунд. Подожди — кнопки заблокированы.",
+            f"{E_SKULL} <b>Поиск врага...</b>\n\n⏳ Осталось {enemy_search_time} секунд. Подожди — кнопки заблокированы.",
             reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True),
             parse_mode="HTML"
         )
-        asyncio.create_task(_run_enemy_search(user_id, message.chat.id, search_time=10, location_id=1))
-        return
-
-    if text == "💀 Поиск врага (30с)":
-        await state.set_state(LocationMenu.searching_enemy)
-        await message.answer(
-            f"{E_SKULL} <b>Поиск врага...</b>\n\n⏳ Осталось 30 секунд. Подожди — кнопки заблокированы.",
-            reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True),
-            parse_mode="HTML"
-        )
-        asyncio.create_task(_run_enemy_search(user_id, message.chat.id, search_time=30, location_id=2))
-        return
-
-    if text == "💀 Поиск врага (60с)":
-        await state.set_state(LocationMenu.searching_enemy)
-        await message.answer(
-            f"{E_SKULL} <b>Поиск врага...</b>\n\n⏳ Осталось 60 секунд. Подожди — кнопки заблокированы.",
-            reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True),
-            parse_mode="HTML"
-        )
-        asyncio.create_task(_run_enemy_search(user_id, message.chat.id, search_time=60, location_id=3))
+        asyncio.create_task(_run_enemy_search(user_id, message.chat.id, search_time=enemy_search_time, location_id=loc_id))
         return
 
     await message.answer("Выбери действие!", reply_markup=get_location_activities_kb(loc_id))
@@ -652,12 +833,7 @@ async def _run_enemy_search(user_id: int, chat_id: int, search_time: int = 10, l
     if current_state != LocationMenu.searching_enemy.state:
         return
 
-    if location_id == 2:
-        enemy_cfg = get_forest_enemy_for_player(player['strength'])
-    elif location_id == 3:
-        enemy_cfg = get_mine_enemy_for_player(player['strength'])
-    else:
-        enemy_cfg = get_location_enemy_for_player(player['strength'])
+    enemy_cfg = _get_location_enemy_for_battle(location_id, float(player['strength']))
     enemy_strength = enemy_cfg['strength']
     # For forest enemies, use the explicit health value if available
     if 'health' in enemy_cfg:
@@ -676,7 +852,6 @@ async def _run_enemy_search(user_id: int, chat_id: int, search_time: int = 10, l
 
     await fsm_ctx.set_state(BattleState.in_battle)
     await fsm_ctx.update_data(
-        selected_enemy=None,
         location_enemy_cfg=enemy_cfg,
         player_health=player_health,
         player_damage=player_damage,
@@ -725,6 +900,7 @@ async def _give_activity_rewards(user_id: int, activity: dict) -> bool:
 
     # Calculate rewards
     earned = {}
+    earned_components = {}
     # Special handling for Forest wood chopping (depends on axe level)
     if loc_id == 2 and act_type == 'chop_wood':
         axe_level = get_player_axe_level(user_id)
@@ -778,6 +954,83 @@ async def _give_activity_rewards(user_id: int, activity: dict) -> bool:
             if random.random() < 0.10:
                 earned['iron'] = 10
             earned['coins'] = random.randint(100, 300)
+    elif loc_id == 4 and act_type == 'search':
+        earned['coins'] = random.randint(30, 90)
+        earned['experience'] = random.randint(18, 36)
+        earned['stone'] = random.randint(2, 6)
+        if random.random() < 0.45:
+            earned['iron'] = random.randint(1, 3)
+        if random.random() < 0.10:
+            earned['gold'] = 1
+        if random.random() < 0.03:
+            earned['steel'] = 1
+        if random.random() < 0.65:
+            earned_components['common'] = random.randint(2, 4)
+        if random.random() < 0.12:
+            earned_components['rare'] = 1
+    elif loc_id == 4 and act_type == 'loot_all':
+        earned['coins'] = random.randint(90, 220)
+        earned['experience'] = random.randint(35, 70)
+        earned['stone'] = random.randint(6, 14)
+        earned['iron'] = random.randint(2, 6)
+        if random.random() < 0.22:
+            earned['gold'] = random.randint(1, 2)
+        if random.random() < 0.06:
+            earned['steel'] = 1
+        earned_components['common'] = random.randint(2, 4)
+        if random.random() < 0.18:
+            earned_components['rare'] = 1
+    elif loc_id == 5 and act_type == 'search':
+        earned['coins'] = random.randint(80, 200)
+        earned['experience'] = random.randint(32, 70)
+        earned['stone'] = random.randint(4, 12)
+        earned['iron'] = random.randint(1, 5)
+        if random.random() < 0.30:
+            earned['gold'] = random.randint(1, 3)
+        if random.random() < 0.10:
+            earned['steel'] = 1
+        earned_components['common'] = random.randint(2, 4)
+        if random.random() < 0.24:
+            earned_components['rare'] = 1
+    elif loc_id == 5 and act_type == 'loot_all':
+        earned['coins'] = random.randint(220, 520)
+        earned['experience'] = random.randint(75, 130)
+        earned['stone'] = random.randint(12, 28)
+        earned['iron'] = random.randint(4, 11)
+        earned['gold'] = random.randint(1, 4)
+        if random.random() < 0.14:
+            earned['steel'] = random.randint(1, 2)
+        earned_components['common'] = random.randint(2, 4)
+        if random.random() < 0.35:
+            earned_components['rare'] = random.randint(1, 2)
+        if random.random() < 0.04:
+            earned_components['epic'] = 1
+    elif loc_id == 6 and act_type == 'search':
+        earned['coins'] = random.randint(180, 420)
+        earned['experience'] = random.randint(70, 130)
+        earned['stone'] = random.randint(8, 22)
+        earned['iron'] = random.randint(4, 12)
+        earned['gold'] = random.randint(2, 6)
+        if random.random() < 0.20:
+            earned['steel'] = random.randint(1, 2)
+        earned_components['common'] = random.randint(2, 4)
+        if random.random() < 0.38:
+            earned_components['rare'] = random.randint(1, 2)
+        if random.random() < 0.07:
+            earned_components['epic'] = 1
+    elif loc_id == 6 and act_type == 'loot_all':
+        earned['coins'] = random.randint(500, 1200)
+        earned['experience'] = random.randint(130, 230)
+        earned['stone'] = random.randint(20, 45)
+        earned['iron'] = random.randint(10, 22)
+        earned['gold'] = random.randint(4, 10)
+        if random.random() < 0.26:
+            earned['steel'] = random.randint(1, 3)
+        earned_components['common'] = random.randint(2, 4)
+        if random.random() < 0.50:
+            earned_components['rare'] = random.randint(1, 3)
+        if random.random() < 0.12:
+            earned_components['epic'] = 1
     else:
         for rew_key, (min_v, max_v) in rewards.items():
             earned[rew_key] = random.randint(min_v, max_v)
@@ -791,6 +1044,9 @@ async def _give_activity_rewards(user_id: int, activity: dict) -> bool:
     for mat in ('food', 'wood', 'stone', 'iron', 'gold', 'copper', 'steel', 'amethyst', 'gem'):
         if mat in earned:
             add_inventory_material(user_id, mat, earned[mat])
+    for rarity, amount in earned_components.items():
+        if amount > 0:
+            add_component(user_id, rarity, amount)
 
     # Build reward lines with custom emojis (inventory tab emojis)
     mat_names = {
@@ -806,17 +1062,31 @@ async def _give_activity_rewards(user_id: int, activity: dict) -> bool:
         'coins':      (E_COINS,         'Монеты'),
         'experience': (E_EXP,           'Опыта'),
     }
+    comp_names = {
+        'common': ('⚙️', 'Обычные компоненты'),
+        'rare': ('⚙️', 'Редкие компоненты'),
+        'epic': ('⚙️', 'Эпические компоненты'),
+        'legendary': ('⚙️', 'Легендарные компоненты'),
+        'mythic': ('⚙️', 'Мифические компоненты'),
+    }
     reward_lines = []
     for k, v in earned.items():
         emoji, name = mat_names.get(k, ('', k))
         reward_lines.append(f"{E_SQ} {emoji} {v} {name}")
+    for rarity, amount in earned_components.items():
+        if amount > 0:
+            emoji, name = comp_names.get(rarity, ('⚙️', rarity))
+            reward_lines.append(f"{E_SQ} {emoji} {amount} {name}")
 
     loc_name = loc.get('name', '?')
     act_name = act_cfg.get('name', act_type)
     act_emoji = act_cfg.get('emoji', '')
 
+    is_search_activity = act_type in {"search", "loot_all"}
+    finish_text = "Обыск закончен" if is_search_activity else "Добыча закончена"
+    finish_emoji = E_MAP_E if is_search_activity else E_PICKAXE_LOC
     text = (
-        f"{E_BELL}{E_PICKAXE_LOC} Добыча закончена:\n"
+        f"{E_BELL}{finish_emoji} {finish_text}:\n"
         f"{E_GIFT}{E_PLUS} Получено:\n\n"
         + "\n".join(reward_lines)
     )
@@ -825,7 +1095,11 @@ async def _give_activity_rewards(user_id: int, activity: dict) -> bool:
 
     # Check monster encounter
     monster_encountered = monster_chance > 0 and random.random() < monster_chance
+    enemy_cfg = None
     if monster_encountered:
+        player_now = get_player(user_id)
+        p_strength = float(player_now['strength']) if player_now else 0.0
+        enemy_cfg = _get_location_enemy_for_battle(loc_id, p_strength)
         text += "\n\n⚠️ Внимание! Ты встретил монстра!"
 
     try:
@@ -837,6 +1111,10 @@ async def _give_activity_rewards(user_id: int, activity: dict) -> bool:
         try:
             fsm_ctx = dp.fsm.resolve_context(bot, user_id, user_id)
             await fsm_ctx.set_state(LocationMenu.viewing_location)
+            await fsm_ctx.update_data(
+                selected_location=loc_id,
+                pending_location_enemy=enemy_cfg,
+            )
             await bot.send_message(
                 chat_id=user_id,
                 text="Что будешь делать?",
@@ -858,32 +1136,40 @@ async def fight_location_monster(message: types.Message, state: FSMContext):
     if not player:
         await message.answer("Сначала зарегистрируйся! /start")
         return
-    selected_enemy = 1
-    enemy_info = ENEMIES[selected_enemy]
+    data = await state.get_data()
+    pending_enemy = data.get('pending_location_enemy')
+    loc_id = int(data.get('selected_location', 1))
+    if not pending_enemy:
+        pending_enemy = _get_location_enemy_for_battle(loc_id, float(player['strength']))
+
+    enemy_health = pending_enemy.get('health', calculate_player_health(pending_enemy['strength']))
+    enemy_damage = calculate_damage(pending_enemy['strength'])
     player_clan = get_player_clan(user_id)
     clan_level = player_clan['clan_level'] if player_clan else 1
     buffed_strength = apply_clan_strength_buff(player['strength'], clan_level)
     player_health = calculate_player_health(buffed_strength)
     player_damage = calculate_damage(buffed_strength)
-    enemy_damage = calculate_enemy_damage(selected_enemy)
     reset_battle_cooldown(user_id)
     await state.set_state(BattleState.in_battle)
     await state.update_data(
-        selected_enemy=selected_enemy,
         player_health=player_health,
         player_damage=player_damage,
-        enemy_health=enemy_info['health'],
+        enemy_health=enemy_health,
         enemy_damage=enemy_damage,
         player_mana=100,
         enemy_skip_turn=False,
         player_blind_turns=0,
+        is_location_battle=True,
+        location_id=loc_id,
+        location_enemy_cfg=pending_enemy,
+        pending_location_enemy=None,
     )
     mana = 100
     battle_info = (
         f"{E_SKULL}{E_WARN} Враг найден!\n\n"
-        f"{E_SKULL} {enemy_info['name']}\n"
+        f"{E_SKULL} {pending_enemy['name']}\n"
         f"{E_SQ}Сила: {enemy_damage} {E_ATK}\n"
-        f"{E_SQ}Здоровье: {enemy_info['health']} {E_ESWORD}\n\n"
+        f"{E_SQ}Здоровье: {enemy_health} {E_ESWORD}\n\n"
         f"{_fmt_player_stats(html.escape(player['nickname']), player_health, player_damage, mana)}\n"
     )
     await message.answer(battle_info, reply_markup=get_battle_kb())
@@ -891,7 +1177,13 @@ async def fight_location_monster(message: types.Message, state: FSMContext):
 @router.message(LocationMenu.viewing_map, F.text == "🏃 Убежать")
 @router.message(LocationMenu.viewing_location, F.text == "🏃 Убежать")
 async def flee_location_monster(message: types.Message, state: FSMContext):
-    await message.answer("🏃 Ты убежал от монстра!", reply_markup=get_map_kb())
+    user_id = message.from_user.id
+    _cancel_map_timer(user_id)
+    await state.update_data(pending_location_enemy=None)
+    loss_text = _apply_location_defeat_losses(user_id)
+    await message.answer("🏃 Ты убежал от монстра!", parse_mode="HTML")
+    await message.answer(loss_text, parse_mode="HTML")
+    await message.answer(_build_map_text(), reply_markup=get_map_kb(), parse_mode="HTML")
     await state.set_state(LocationMenu.viewing_map)
 
 # ============== FORGE (КУЗНЯ) ==============
