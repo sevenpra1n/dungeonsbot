@@ -116,10 +116,12 @@ from bot.emojis import get_rarity_emoji
 from bot.data.inventory_config import format_inventory_text
 from bot.data.components_config import format_components_text, COMPONENT_RARITIES
 from bot.data.chests_config import CHEST_DISPLAY, format_chest_opening, format_chest_reward
-from bot.data.leagues_config import get_league_label, format_all_leagues_info
+from bot.data.leagues_config import get_league_label, format_all_leagues_info, get_league
 from bot.data.crafting import (
     CRAFTING_RECIPES, format_crafting_menu_text,
     format_crafting_choice_menu, format_craft_result,
+    _MAT_EMOJIS as _CRAFT_MAT_EMOJIS, _E_WARN as _CRAFT_E_WARN,
+    _E_BOX_REQ as _CRAFT_E_BOX_REQ, _E_MARKER as _CRAFT_E_MARKER,
 )
 from bot.data.emojis import (
     E_INV_HEADER, E_FRIENDS,
@@ -136,6 +138,18 @@ from bot.data.emojis import (
 from bot.handlers.profile import _send_profile
 
 router = Router()
+
+# Russian names for crafting materials (used in insufficient-resources error message)
+_CRAFT_MAT_NAMES_RU = {
+    "wood":     "Древесина",
+    "stone":    "Камень",
+    "copper":   "Медь",
+    "iron":     "Железо",
+    "gold":     "Золото",
+    "steel":    "Сталь",
+    "amethyst": "Аметист",
+    "gem":      "Самоцвет",
+}
 
 # ============== INVENTORY TAB ==============
 def _get_inventory_kb(back_button: str = "⬅️ Назад") -> ReplyKeyboardMarkup:
@@ -1276,26 +1290,16 @@ async def handle_craft_choice(message: types.Message, state: FSMContext):
             missing.append((mat, required, have))
 
     if missing:
-        from bot.data.crafting import _MAT_EMOJIS, _MAT_NAMES, _E_WARN, _E_BOX_REQ, _E_MARKER
         lines = [
-            f"{_E_WARN} Недостаточно ресурсов для крафта\\!\n",
-            f"{_E_BOX_REQ} Необходимо:\n",
+            f"{_CRAFT_E_WARN} Недостаточно ресурсов для крафта\\!\n",
+            f"{_CRAFT_E_BOX_REQ} Необходимо:\n",
         ]
         for mat, required, have in missing:
-            mat_emoji = _MAT_EMOJIS.get(mat, "")
-            mat_name_ru = {
-                "wood":     "Древесина",
-                "stone":    "Камень",
-                "copper":   "Медь",
-                "iron":     "Железо",
-                "gold":     "Золото",
-                "steel":    "Сталь",
-                "amethyst": "Аметист",
-                "gem":      "Самоцвет",
-            }.get(mat, mat)
+            mat_emoji = _CRAFT_MAT_EMOJIS.get(mat, "")
+            mat_name_ru = _CRAFT_MAT_NAMES_RU.get(mat, mat)
             lines.append(
-                f"{_E_MARKER}{mat_emoji} {mat_name_ru} \\({required} {mat_emoji}\\)\n"
-                f"{_E_MARKER} У вас: \\({have} {mat_emoji}\\)\n"
+                f"{_CRAFT_E_MARKER}{mat_emoji} {mat_name_ru} \\({required} {mat_emoji}\\)\n"
+                f"{_CRAFT_E_MARKER} У вас: \\({have} {mat_emoji}\\)\n"
             )
         await message.answer(
             "\n".join(lines),
@@ -3613,8 +3617,6 @@ async def battle_round(message: types.Message, state: FSMContext):
                 f"{E_DMG}{E_HEART_B} Урон тебе: {enemy_damage}\n\n"
             )
         if new_player_health <= 0:
-            if not data.get('is_location_battle'):
-                pass  # no rating penalty for dungeon battles
             increment_player_deaths(user_id)
             battle_log += _fmt_defeat(html.escape(player['nickname']), enemy_info['name'], data.get('is_location_battle'))
             await message.answer(battle_log, reply_markup=get_end_battle_kb())
@@ -3625,14 +3627,14 @@ async def battle_round(message: types.Message, state: FSMContext):
                     pass
             await state.clear()
             return
-            battle_log += (
-                f"{_fmt_player_stats(html.escape(player['nickname']), new_player_health, data['player_damage'], new_mana)}\n\n"
-                f"{_fmt_enemy_stats(enemy_info['name'], new_enemy_health, data['enemy_damage'])}"
-            )
-            await message.answer(battle_log, reply_markup=get_battle_action_kb(user_id, new_mana))
-            await state.update_data(player_health=new_player_health, enemy_health=new_enemy_health,
-                                    player_mana=new_mana, enemy_skip_turn=new_enemy_skip, player_blind_turns=new_player_blind)
-            return
+        battle_log += (
+            f"{_fmt_player_stats(html.escape(player['nickname']), new_player_health, data['player_damage'], new_mana)}\n\n"
+            f"{_fmt_enemy_stats(enemy_info['name'], new_enemy_health, data['enemy_damage'])}"
+        )
+        await message.answer(battle_log, reply_markup=get_battle_action_kb(user_id, new_mana))
+        await state.update_data(player_health=new_player_health, enemy_health=new_enemy_health,
+                                player_mana=new_mana, enemy_skip_turn=new_enemy_skip, player_blind_turns=new_player_blind)
+        return
         if roll_miss():
             player_hit = 0
             increment_player_dodges(user_id)
@@ -4168,7 +4170,6 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
             add_clan_exp(winner_clan['clan_id'], 2)
 
         # Check for league promotion
-        from bot.data.leagues_config import get_league
         old_league = get_league(my_rating)
         new_league = get_league(new_my_rating)
         league_up = new_league['key'] != old_league['key'] and new_my_rating >= new_league['min_points']

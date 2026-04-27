@@ -40,8 +40,15 @@ async def main():
     logger.info("Handlers included")
 
     logger.info("Bot started polling...")
-    asyncio.create_task(activity_notification_loop())
-    await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+    task = asyncio.create_task(activity_notification_loop())
+    try:
+        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 if __name__ == "__main__":

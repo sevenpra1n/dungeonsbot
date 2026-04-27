@@ -1,6 +1,7 @@
 from aiogram import Router, types, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
 from bot.states import ProfileMenu
 from bot.database import (
@@ -160,7 +161,6 @@ def _send_settings_text(player: dict) -> str:
 
 
 def _get_settings_kb(block_invites: bool) -> ReplyKeyboardMarkup:
-    from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
     label = "🔓 Включить приглашения" if block_invites else "🔒 Заблокировать приглашения"
     return ReplyKeyboardMarkup(keyboard=[
         [KeyboardButton(text=label)],
