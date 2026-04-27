@@ -755,7 +755,7 @@ def format_map_text(user_id: int, current_activity: dict = None) -> str:
     if current_activity:
         lines.append(f'{E_GREEN_MARKER} Идёт активность:')
         lines.append(f'{E_MARKER}{E_YELLOW_MARKER}{current_activity["name"]}')
-        lines.append(f'{E_MARKER}Осталось: {E_HOURGLASS}{current_activity["remaining_seconds"]} секунд...\n')
+        lines.append(f'{E_MARKER}Осталось: {E_HOURGLASS}{current_activity["remaining_seconds"]} секунд\\.\\.\\.\n')
 
     lines.append('Выбери локацию для исследования:\n')
 
