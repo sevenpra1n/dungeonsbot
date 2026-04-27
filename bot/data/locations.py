@@ -63,7 +63,7 @@ LOCATIONS = {
                     "experience": (5, 15),
                     "food": (1, 3)
                 },
-                "monster_chance": 0.05
+                "monster_chance": 0.10
             }
         }
     },
@@ -89,7 +89,7 @@ LOCATIONS = {
                     "coins": (10, 30),
                     "experience": (9, 9),
                 },
-                "monster_chance": 0
+                "monster_chance": 0.18
             }
         }
     },
@@ -111,12 +111,8 @@ LOCATIONS = {
                 "time": 90,
                 "emoji": "🗺️",
                 "display_emoji": E_MAP_E,
-                "rewards": {
-                    "coins": (15, 45),
-                    "experience": (12, 20),
-                    "iron": (1, 4),
-                },
-                "monster_chance": 0
+                "rewards": {},
+                "monster_chance": 0.25
             }
         }
     },
@@ -173,10 +169,16 @@ PICKAXES = {
         "comp_rarity": "common",    "comp_amount": 4,  "comp_name": "обычных",
         "comp_word": "компонента",
         "star_emoji": '<tg-emoji emoji-id="5204460680018666213">⭐️</tg-emoji>',
+        "stone_amount": (3, 6),
         "ore_chances": {
             "copper": 0.10, "iron": 0.05, "gold": 0.01,
             "steel": 0.0,  "amethyst": 0.0, "gem": 0.0,
         },
+        "ore_amounts": {
+            "copper": (1, 5), "iron": (1, 3), "gold": (1, 1),
+            "steel": (1, 1),  "amethyst": (1, 1), "gem": (1, 1),
+        },
+        "experience": (4, 10),
     },
     2: {
         "name": "Каменная кирка",
@@ -184,10 +186,16 @@ PICKAXES = {
         "comp_rarity": "common",    "comp_amount": 35, "comp_name": "обычных",
         "comp_word": "компонента",
         "star_emoji": '<tg-emoji emoji-id="5204221415980539813">⭐️</tg-emoji>',
+        "stone_amount": (6, 14),
         "ore_chances": {
             "copper": 0.20, "iron": 0.10, "gold": 0.03,
             "steel": 0.001, "amethyst": 0.0, "gem": 0.0,
         },
+        "ore_amounts": {
+            "copper": (2, 10), "iron": (1, 6), "gold": (1, 3),
+            "steel": (1, 1),   "amethyst": (1, 1), "gem": (1, 1),
+        },
+        "experience": (8, 20),
     },
     3: {
         "name": "Железная кирка",
@@ -195,10 +203,16 @@ PICKAXES = {
         "comp_rarity": "rare",      "comp_amount": 10, "comp_name": "редких",
         "comp_word": "компонента",
         "star_emoji": '<tg-emoji emoji-id="5204347567759956677">⭐️</tg-emoji>',
+        "stone_amount": (10, 32),
         "ore_chances": {
             "copper": 0.50, "iron": 0.25, "gold": 0.08,
             "steel": 0.01,  "amethyst": 0.001, "gem": 0.0,
         },
+        "ore_amounts": {
+            "copper": (5, 18), "iron": (4, 12), "gold": (2, 6),
+            "steel": (1, 4),   "amethyst": (1, 2), "gem": (1, 1),
+        },
+        "experience": (12, 40),
     },
     4: {
         "name": "Алмазная кирка",
@@ -206,10 +220,16 @@ PICKAXES = {
         "comp_rarity": "epic",      "comp_amount": 24, "comp_name": "эпических",
         "comp_word": "компонентов",
         "star_emoji": '<tg-emoji emoji-id="5204141284775697953">⭐️</tg-emoji>',
+        "stone_amount": (24, 75),
         "ore_chances": {
             "copper": 0.80, "iron": 0.40, "gold": 0.14,
-            "steel": 0.08,  "amethyst": 0.02, "gem": 0.0,
+            "steel": 0.08,  "amethyst": 0.01, "gem": 0.0,
         },
+        "ore_amounts": {
+            "copper": (18, 34), "iron": (12, 24), "gold": (4, 12),
+            "steel": (2, 8),    "amethyst": (2, 6), "gem": (1, 1),
+        },
+        "experience": (24, 80),
     },
     5: {
         "name": "Незеритовая кирка",
@@ -217,10 +237,16 @@ PICKAXES = {
         "comp_rarity": "legendary", "comp_amount": 12, "comp_name": "легендарных",
         "comp_word": "компонентов",
         "star_emoji": '<tg-emoji emoji-id="5217979901331644711">⭐️</tg-emoji>',
+        "stone_amount": (45, 135),
         "ore_chances": {
             "copper": 1.0,  "iron": 1.0,  "gold": 0.45,
             "steel": 0.20,  "amethyst": 0.095, "gem": 0.03,
         },
+        "ore_amounts": {
+            "copper": (22, 55), "iron": (18, 45), "gold": (6, 24),
+            "steel": (4, 12),   "amethyst": (3, 10), "gem": (1, 4),
+        },
+        "experience": (60, 140),
     },
 }
 
@@ -379,7 +405,7 @@ def format_axes_shop_text(current_pickaxe_level: int = 0) -> str:
         lines.append(
             f"{_E_MARKER_MD}{pickaxe_name} \\- {_E_PICKAXE_MD} {pick_id} level {star_md}\n"
             f"├ в наличии {owned}\n"
-            f"🔘Цена \\- {cost_md}{_E_COINS_MD}\n"
-            f"🔘Нужно \\- {comp_amount} {_E_COMP_MD}{rarity_md}\n"
+            f"![🔘](tg://emoji?id=5357471466919056181)Цена \\- {cost_md}{_E_COINS_MD}\n"
+            f"![🔘](tg://emoji?id=5357471466919056181)Нужно \\- {comp_amount} {_E_COMP_MD}{rarity_md}\n"
         )
     return "\n".join(lines)

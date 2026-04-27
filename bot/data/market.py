@@ -1,7 +1,7 @@
 """Market configuration constants."""
 
 from bot.data.emojis import (
-    E_MAT_FOOD, E_MAT_WOOD, E_MAT_STONE,
+    E_MAT_FOOD, E_MAT_WOOD, E_MAT_STONE, E_MAT_COPPER,
     E_MAT_IRON, E_MAT_GOLD, E_MAT_STEEL, E_MAT_AMETHYST, E_MAT_GEM,
 )
 
@@ -10,6 +10,7 @@ MARKET_PRICES = {
     'food':     0.7,
     'wood':     2.0,
     'stone':    8.0,
+    'copper':   12.0,
     'iron':     40.0,
     'gold':     160.0,
     'steel':    800.0,
@@ -23,6 +24,7 @@ _MARKET_MAT_INFO = {
     'food':     (E_MAT_FOOD,     'Еду',        "Продать"),
     'wood':     (E_MAT_WOOD,     'Древесину',  "Продать"),
     'stone':    (E_MAT_STONE,    'Камень',     "Продать"),
+    'copper':   (E_MAT_COPPER,   'Медь',       "Продать"),
     'iron':     (E_MAT_IRON,     'Железо',     "Продать"),
     'gold':     (E_MAT_GOLD,     'Золото',     "Продать"),
     'steel':    (E_MAT_STEEL,    'Сталь',      "Продать"),
@@ -35,6 +37,7 @@ _MARKET_SELL_BUTTONS = {
     "Продать еду🥕":         'food',
     "Продать древесину🌳":   'wood',
     "Продать камень🪨":      'stone',
+    "Продать медь🔶":        'copper',
     "Продать железо⛰":      'iron',
     "Продать золото🥇":      'gold',
     "Продать сталь🌋":       'steel',

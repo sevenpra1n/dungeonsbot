@@ -55,9 +55,10 @@ def get_market_kb() -> ReplyKeyboardMarkup:
     """Клавиатура рынка (продажа ресурсов)"""
     kb = [
         [KeyboardButton(text="Продать еду🥕"),        KeyboardButton(text="Продать древесину🌳")],
-        [KeyboardButton(text="Продать камень🪨"),      KeyboardButton(text="Продать железо⛰")],
-        [KeyboardButton(text="Продать золото🥇"),      KeyboardButton(text="Продать сталь🌋")],
-        [KeyboardButton(text="Продать аметист🤩"),     KeyboardButton(text="Продать самоцвет🎁")],
+        [KeyboardButton(text="Продать камень🪨"),      KeyboardButton(text="Продать медь🔶")],
+        [KeyboardButton(text="Продать железо⛰"),      KeyboardButton(text="Продать золото🥇")],
+        [KeyboardButton(text="Продать сталь🌋"),       KeyboardButton(text="Продать аметист🤩")],
+        [KeyboardButton(text="Продать самоцвет🎁")],
         [KeyboardButton(text="⬅️ Назад к категориям")],
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
@@ -93,7 +94,30 @@ def get_forge_kb():
     kb = [
         [KeyboardButton(text="⚔️ Оружие"), KeyboardButton(text="🛡️ Броня")],
         [KeyboardButton(text="✨ Скиллы")],
+        [KeyboardButton(text="⚙️ Изготовление")],
         [KeyboardButton(text="❌ Выход")]
+    ]
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+
+def get_crafting_kb() -> ReplyKeyboardMarkup:
+    """Клавиатура вкладки изготовления компонентов"""
+    kb = [
+        [KeyboardButton(text="🔨 Изготовить")],
+        [KeyboardButton(text="⬅️ Назад")],
+    ]
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+
+def get_craft_choice_kb() -> ReplyKeyboardMarkup:
+    """Клавиатура выбора что крафтить"""
+    kb = [
+        [KeyboardButton(text="⚙️ Скрафтить обычный")],
+        [KeyboardButton(text="⚙️ Скрафтить редкий")],
+        [KeyboardButton(text="⚙️ Скрафтить эпический")],
+        [KeyboardButton(text="⚙️ Скрафтить легендарный")],
+        [KeyboardButton(text="⚙️ Скрафтить мифический")],
+        [KeyboardButton(text="⬅️ Назад")],
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 

@@ -86,6 +86,7 @@ from bot.keyboards import (
     get_clan_boss_menu_kb, get_clan_boss_battle_kb, get_clan_boss_back_kb,
     get_next_weapon_kb, get_next_armor_kb, get_skills_kb,
     get_monster_encounter_kb, get_coop_invite_kb, get_coop_lobby_kb,
+    get_crafting_kb, get_craft_choice_kb,
     _weapon_btn_text, _armor_btn_text,
 )
 from bot.data.enemies import ENEMIES, RAID_FLOORS, COOP_ENEMY_HP_MULT, COOP_REWARD_MULT
@@ -116,6 +117,10 @@ from bot.data.inventory_config import format_inventory_text
 from bot.data.components_config import format_components_text, COMPONENT_RARITIES
 from bot.data.chests_config import CHEST_DISPLAY, format_chest_opening, format_chest_reward
 from bot.data.leagues_config import get_league_label, format_all_leagues_info
+from bot.data.crafting import (
+    CRAFTING_RECIPES, format_crafting_menu_text,
+    format_crafting_choice_menu, format_craft_result,
+)
 from bot.data.emojis import (
     E_INV_HEADER, E_FRIENDS,
     E_GIFT as E_GIFT_NEW, E_GIFT2, E_GIFT3,
@@ -704,12 +709,44 @@ async def _give_activity_rewards(user_id: int, activity: dict) -> bool:
         pickaxe_level = get_player_pickaxe_level(user_id)
         if pickaxe_level > 0:
             pickaxe_data = PICKAXES[pickaxe_level]
-            # Always mine some stone
-            earned['stone'] = random.randint(pickaxe_data['min_stone'], pickaxe_data['max_stone'])
-            # Chance-based ore drops
+            # Always mine stone in the defined range
+            stone_min, stone_max = pickaxe_data.get('stone_amount', (pickaxe_data['min_stone'], pickaxe_data['max_stone']))
+            earned['stone'] = random.randint(stone_min, stone_max)
+            # Chance-based ore drops with per-ore amount ranges
+            ore_amounts = pickaxe_data.get('ore_amounts', {})
             for ore, chance in pickaxe_data['ore_chances'].items():
                 if chance > 0 and random.random() < chance:
-                    earned[ore] = earned.get(ore, 0) + 1
+                    min_amt, max_amt = ore_amounts.get(ore, (1, 1))
+                    earned[ore] = earned.get(ore, 0) + random.randint(min_amt, max_amt)
+            # Profile experience for mining
+            exp_min, exp_max = pickaxe_data.get('experience', (1, 1))
+            earned['experience'] = random.randint(exp_min, exp_max)
+    # Special handling for Mine search (tiered by player strength)
+    elif loc_id == 3 and act_type == 'search':
+        _player = get_player(user_id)
+        strength = float(_player['strength']) if _player else 0.0
+        if strength < 100:
+            earned['experience'] = random.randint(10, 30)
+            earned['stone'] = random.randint(1, 3)
+            if random.random() < 0.20:
+                earned['copper'] = 1
+            earned['coins'] = random.randint(5, 15)
+        elif strength < 800:
+            earned['experience'] = random.randint(25, 70)
+            earned['stone'] = random.randint(4, 8)
+            if random.random() < 0.20:
+                earned['copper'] = 6
+            if random.random() < 0.10:
+                earned['iron'] = 2
+            earned['coins'] = random.randint(20, 65)
+        else:
+            earned['experience'] = random.randint(60, 165)
+            earned['stone'] = 22
+            if random.random() < 0.20:
+                earned['copper'] = 14
+            if random.random() < 0.10:
+                earned['iron'] = 10
+            earned['coins'] = random.randint(100, 300)
     else:
         for rew_key, (min_v, max_v) in rewards.items():
             earned[rew_key] = random.randint(min_v, max_v)
@@ -961,6 +998,13 @@ async def handle_forge_menu(message: types.Message, state: FSMContext):
         await state.set_state(ForgeMenu.viewing_skills)
         return
 
+    if text == "⚙️ Изготовление":
+        comp = get_components(user_id)
+        crafting_text = format_crafting_menu_text(comp)
+        await message.answer(crafting_text, reply_markup=get_crafting_kb(), parse_mode="MarkdownV2")
+        await state.set_state(ForgeMenu.viewing_crafting)
+        return
+
     await message.answer("Выбери раздел!", reply_markup=get_forge_kb())
 
 @router.message(ForgeMenu.viewing_weapons)
@@ -1168,6 +1212,91 @@ async def handle_skills_menu(message: types.Message, state: FSMContext):
             return
 
     await message.answer("Выбери скилл из списка!", reply_markup=get_skills_kb(user_id))
+
+@router.message(ForgeMenu.viewing_crafting)
+async def handle_crafting_menu(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    player = get_player(user_id)
+    text = message.text
+
+    if text == "⬅️ Назад":
+        weapon_id = get_player_weapon(user_id)
+        armor_id = get_player_armor(user_id)
+        weapon = _get_weapon_info(weapon_id)
+        armor = _get_armor_info(armor_id)
+        forge_text = _build_forge_main_text(player, weapon, armor)
+        await send_image_with_text(message, "images/kusnya.png", forge_text, reply_markup=get_forge_kb())
+        await state.set_state(ForgeMenu.viewing_forge)
+        return
+
+    if text == "🔨 Изготовить":
+        choice_text = format_crafting_choice_menu()
+        await message.answer(choice_text, reply_markup=get_craft_choice_kb(), parse_mode="MarkdownV2")
+        await state.set_state(ForgeMenu.viewing_craft_choice)
+        return
+
+    await message.answer("Выбери действие!", reply_markup=get_crafting_kb())
+
+
+# Mapping from button text to rarity key
+_CRAFT_BTN_TO_RARITY = {
+    "⚙️ Скрафтить обычный":     "common",
+    "⚙️ Скрафтить редкий":      "rare",
+    "⚙️ Скрафтить эпический":   "epic",
+    "⚙️ Скрафтить легендарный": "legendary",
+    "⚙️ Скрафтить мифический":  "mythic",
+}
+
+
+@router.message(ForgeMenu.viewing_craft_choice)
+async def handle_craft_choice(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+
+    if text == "⬅️ Назад":
+        comp = get_components(user_id)
+        crafting_text = format_crafting_menu_text(comp)
+        await message.answer(crafting_text, reply_markup=get_crafting_kb(), parse_mode="MarkdownV2")
+        await state.set_state(ForgeMenu.viewing_crafting)
+        return
+
+    rarity_key = _CRAFT_BTN_TO_RARITY.get(text)
+    if rarity_key is None:
+        await message.answer("Выбери компонент из списка!", reply_markup=get_craft_choice_kb())
+        return
+
+    recipe = CRAFTING_RECIPES[rarity_key]
+    inv = get_inventory(user_id)
+
+    # Check if player has enough materials
+    for mat, required in recipe["materials"].items():
+        have = inv.get(mat, 0)
+        if have < required:
+            await message.answer(
+                f"❌ Недостаточно ресурсов для крафта\\!\n"
+                f"Нужно: {mat} \\— {required}, у вас: {have}",
+                reply_markup=get_craft_choice_kb(),
+                parse_mode="MarkdownV2"
+            )
+            return
+
+    # Deduct materials regardless of success
+    for mat, required in recipe["materials"].items():
+        remove_inventory_material(user_id, mat, required)
+
+    # Roll craft chance
+    success = random.random() < recipe["craft_chance"]
+    exp_gained = 0
+    if success:
+        add_component(user_id, rarity_key, 1)
+        exp_min, exp_max = recipe["experience"]
+        exp_gained = random.randint(exp_min, exp_max)
+        add_experience_to_player(user_id, exp_gained)
+
+    result_text = format_craft_result(rarity_key, success, exp_gained)
+    await message.answer(result_text, reply_markup=get_craft_choice_kb(), parse_mode="MarkdownV2")
+
+
 @router.message(F.text == "🎖️ Снаряжение")
 async def open_equipment_shop(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
@@ -1984,6 +2113,48 @@ def _fmt_defeat(nickname: str, enemy_name: str, is_location: bool = False) -> st
     if not is_location:
         text += f"\n\n{E_BAN} Потеряно:\n{E_CROSS} 10 {E_LEAGUE_POINTS} Points"
     return text
+
+
+def _apply_location_defeat_losses(user_id: int) -> str:
+    """Steal a small amount of resources from the player after a location defeat.
+
+    Returns formatted HTML text describing what was lost.
+    If the player has no resources, returns an 'empty' notice.
+    """
+    inv = get_inventory(user_id)
+    # (material_key, steal_chance, min_amount, max_amount, emoji, display_name)
+    steal_cfg = [
+        ('food',     0.50, 1, 2, _E_MAT_FOOD,     'Еда'),
+        ('wood',     0.40, 1, 3, _E_MAT_WOOD,     'Древесина'),
+        ('stone',    0.30, 1, 3, _E_MAT_STONE,    'Камень'),
+        ('copper',   0.25, 1, 2, _E_MAT_COPPER,   'Медь'),
+        ('iron',     0.20, 1, 1, _E_MAT_IRON,     'Железо'),
+        ('gold',     0.10, 1, 1, _E_MAT_GOLD,     'Золото'),
+        ('steel',    0.05, 1, 1, _E_MAT_STEEL,    'Сталь'),
+        ('amethyst', 0.02, 1, 1, _E_MAT_AMETHYST, 'Аметист'),
+        ('gem',      0.01, 1, 1, _E_MAT_GEM,      'Самоцвет'),
+    ]
+    lost = []
+    for mat, chance, min_amt, max_amt, emoji, name in steal_cfg:
+        amount = inv.get(mat, 0)
+        if amount > 0 and random.random() < chance:
+            steal_amt = min(random.randint(min_amt, max_amt), amount)
+            if steal_amt > 0:
+                remove_inventory_material(user_id, mat, steal_amt)
+                lost.append((emoji, steal_amt, name))
+
+    if not lost:
+        return (
+            f"{E_WARN}{E_SKULL} Враг хотел украсть ресурсы...\n"
+            f"{E_BAN} Но у тебя ничего нет — пусто!"
+        )
+    lines = [
+        f"{E_WARN}{E_SKULL} Вот неудача! Ресурсы были украдены!\n",
+        f"{E_BAN} Вы потеряли ресурсы:\n",
+    ]
+    for emoji, amount, name in lost:
+        lines.append(f"{E_SQ}{emoji} {amount} {name}")
+    return "\n".join(lines)
 
 @router.message(F.text == "🐉 Рейд")
 async def open_raid(message: types.Message, state: FSMContext):
@@ -3292,6 +3463,11 @@ async def start_battle(message: types.Message, state: FSMContext):
             battle_log += _fmt_defeat(html.escape(player['nickname']), enemy_info['name'], data.get('is_location_battle'))
             
             await message.answer(battle_log, reply_markup=get_end_battle_kb())
+            if data.get('is_location_battle'):
+                try:
+                    await message.answer(_apply_location_defeat_losses(user_id), parse_mode="HTML")
+                except Exception:
+                    pass
             await state.clear()
             return
         
@@ -3421,6 +3597,11 @@ async def battle_round(message: types.Message, state: FSMContext):
                 increment_player_deaths(user_id)
                 battle_log += _fmt_defeat(html.escape(player['nickname']), enemy_info['name'], data.get('is_location_battle'))
                 await message.answer(battle_log, reply_markup=get_end_battle_kb())
+                if data.get('is_location_battle'):
+                    try:
+                        await message.answer(_apply_location_defeat_losses(user_id), parse_mode="HTML")
+                    except Exception:
+                        pass
                 await state.clear()
                 return
             battle_log += (
@@ -3543,6 +3724,11 @@ async def battle_round(message: types.Message, state: FSMContext):
         increment_player_deaths(user_id)
         battle_log += _fmt_defeat(html.escape(player['nickname']), enemy_info['name'], data.get('is_location_battle'))
         await message.answer(battle_log, reply_markup=get_end_battle_kb())
+        if data.get('is_location_battle'):
+            try:
+                await message.answer(_apply_location_defeat_losses(user_id), parse_mode="HTML")
+            except Exception:
+                pass
         await state.clear()
         return
     
@@ -5300,6 +5486,7 @@ def _get_market_text(player: dict) -> str:
         f"{_E_MAT_FOOD} Еда | {MARKET_PRICES['food']}{E_COINS}",
         f"{_E_MAT_WOOD} Древесина | {MARKET_PRICES['wood']}{E_COINS}",
         f"{_E_MAT_STONE} Камень | {MARKET_PRICES['stone']}{E_COINS}",
+        f"{_E_MAT_COPPER} Медь | {MARKET_PRICES['copper']}{E_COINS}",
         f"{_E_MAT_IRON} Железо | {MARKET_PRICES['iron']}{E_COINS}",
         f"{_E_MAT_GOLD} Золото | {MARKET_PRICES['gold']}{E_COINS}",
         f"{_E_MAT_STEEL} Сталь | {int(MARKET_PRICES['steel'])}{E_COINS}",
