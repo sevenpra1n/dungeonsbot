@@ -387,7 +387,10 @@ async def handle_change_profile_photo(message: types.Message, state: FSMContext)
     width = photo.width
     height = photo.height
 
-    if width < height * 0.7:
+    # Reject photos that are too vertical: width must be at least 70% of height
+    # This allows square and landscape orientation but blocks portrait-heavy photos
+    MIN_ASPECT_RATIO = 0.7
+    if width < height * MIN_ASPECT_RATIO:
         await message.answer(
             f"{E_CROSS} Фото слишком вертикальное!\n"
             f"{E_SQ}Ширина: {width}px, Высота: {height}px\n"

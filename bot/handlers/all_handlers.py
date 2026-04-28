@@ -2513,9 +2513,11 @@ def _apply_location_defeat_losses(user_id: int, enemy_strength: float = 0.0) -> 
     ratio_clamped = max(0.3, min(3.0, power_ratio))
 
     def _sc(base: float) -> float:
+        # Cap steal chance at 95% to ensure there's always a small chance of escape
         return min(0.95, base * ratio_clamped)
 
     def _sa(min_a: int, max_a: int) -> tuple[int, int]:
+        # Ensure theft amounts don't decrease below base values when player is stronger
         factor = max(1.0, ratio_clamped)
         return (min_a, max(min_a + 1, int(max_a * factor)))
 
