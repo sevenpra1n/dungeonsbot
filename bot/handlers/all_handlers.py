@@ -1730,7 +1730,7 @@ async def handle_craft_choice_back(callback: types.CallbackQuery, state: FSMCont
     crafting_text = format_crafting_menu_text(comp)
     await callback.answer()
     await callback.message.edit_text(crafting_text, parse_mode="MarkdownV2")
-    await callback.message.answer("Выбери действие:", reply_markup=get_crafting_kb())
+    await bot.send_message(callback.from_user.id, "Выбери действие:", reply_markup=get_crafting_kb())
     await state.set_state(ForgeMenu.viewing_crafting)
 
 
