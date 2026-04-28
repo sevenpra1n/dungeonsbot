@@ -405,6 +405,7 @@ async def handle_change_profile_photo(message: types.Message, state: FSMContext)
 
     import os
     from bot.loader import bot as _bot
+    from bot.global_state import image_file_id_cache
 
     photos_dir = "images/profiles"
     os.makedirs(photos_dir, exist_ok=True)
@@ -412,6 +413,9 @@ async def handle_change_profile_photo(message: types.Message, state: FSMContext)
 
     file = await _bot.get_file(photo.file_id)
     await _bot.download_file(file.file_path, photo_path)
+
+    # Invalidate cached file_id so the new photo is shown next time
+    image_file_id_cache.pop(photo_path, None)
 
     update_player_profile_photo(user_id, photo_path)
     add_crystals_to_player(user_id, -79)
