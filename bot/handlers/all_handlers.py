@@ -5,13 +5,14 @@ admin, market, clan_boss)."""
 import asyncio
 import html
 import logging
+import os
 import random
 from datetime import datetime, timezone
 
 from aiogram import Router, types, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 
 from bot.loader import bot, dp
 from bot.config import ADMIN_IDS, BAGOUSER_ID, DB_NAME
@@ -62,6 +63,7 @@ from bot.database import (
     update_clan_image, save_clan_message, get_clan_messages,
     get_player_skills, has_purchased_skill, add_skill_purchase,
     update_rating_points, get_pvp_league_points,
+    get_player_profile_photo,
     ALLOWED_INVENTORY_MATERIALS,
     init_database,
 )
@@ -87,7 +89,7 @@ from bot.keyboards import (
     get_clan_boss_menu_kb, get_clan_boss_battle_kb, get_clan_boss_back_kb,
     get_next_weapon_kb, get_next_armor_kb, get_skills_kb,
     get_monster_encounter_kb, get_coop_invite_kb, get_coop_lobby_kb,
-    get_crafting_kb, get_craft_choice_kb,
+    get_crafting_kb, get_craft_choice_inline_kb,
     _weapon_btn_text, _armor_btn_text,
 )
 from bot.data.enemies import ENEMIES, RAID_FLOORS, COOP_ENEMY_HP_MULT, COOP_REWARD_MULT
@@ -125,7 +127,7 @@ from bot.data.chests_config import CHEST_DISPLAY, format_chest_opening, format_c
 from bot.data.leagues_config import get_league_label, format_all_leagues_info, get_league
 from bot.data.crafting import (
     CRAFTING_RECIPES, format_crafting_menu_text,
-    format_crafting_choice_menu, format_craft_result,
+    format_crafting_choice_card, format_craft_result,
     _MAT_EMOJIS as _CRAFT_MAT_EMOJIS, _E_WARN as _CRAFT_E_WARN,
     _E_BOX_REQ as _CRAFT_E_BOX_REQ, _E_MARKER as _CRAFT_E_MARKER,
 )
@@ -160,6 +162,14 @@ _CRAFT_MAT_NAMES_RU = {
     "amethyst": "Аметист",
     "gem":      "Самоцвет",
 }
+
+
+def _get_profile_photo_path(user_id: int) -> str:
+    custom_photo = get_player_profile_photo(user_id)
+    if custom_photo and os.path.exists(custom_photo):
+        return custom_photo
+    return "images/profile.png"
+
 
 map_activity_timers: dict[int, asyncio.Task] = {}
 
@@ -1588,22 +1598,44 @@ async def handle_crafting_menu(message: types.Message, state: FSMContext):
         return
 
     if text == "🔨 Изготовить":
-        choice_text = format_crafting_choice_menu()
-        await message.answer(choice_text, reply_markup=get_craft_choice_kb(), parse_mode="MarkdownV2")
+        rarity_key = next(iter(CRAFTING_RECIPES))
+        choice_text = format_crafting_choice_card(rarity_key)
+        sent = await message.answer(
+            choice_text,
+            reply_markup=ReplyKeyboardRemove(),
+            parse_mode="MarkdownV2"
+        )
+        await sent.edit_reply_markup(reply_markup=get_craft_choice_inline_kb(rarity_key))
+        await state.update_data(craft_rarity=rarity_key)
         await state.set_state(ForgeMenu.viewing_craft_choice)
         return
 
     await message.answer("Выбери действие!", reply_markup=get_crafting_kb())
 
 
-# Mapping from button text to rarity key
-_CRAFT_BTN_TO_RARITY = {
-    "⚙️ Скрафтить обычный":     "common",
-    "⚙️ Скрафтить редкий":      "rare",
-    "⚙️ Скрафтить эпический":   "epic",
-    "⚙️ Скрафтить легендарный": "legendary",
-    "⚙️ Скрафтить мифический":  "mythic",
-}
+def _get_next_craft_rarity(rarity_key: str) -> str:
+    rarity_order = list(CRAFTING_RECIPES.keys())
+    try:
+        current_index = rarity_order.index(rarity_key)
+    except ValueError:
+        return rarity_order[0]
+    return rarity_order[(current_index + 1) % len(rarity_order)]
+
+
+def _build_missing_craft_text(rarity_key: str, missing: list[tuple[str, int, int]]) -> str:
+    lines = [
+        f"{_CRAFT_E_WARN} Недостаточно ресурсов для крафта\\!\n",
+        f"{_CRAFT_E_BOX_REQ} Необходимо:\n",
+    ]
+    for mat, required, have in missing:
+        mat_emoji = _CRAFT_MAT_EMOJIS.get(mat, "")
+        mat_name_ru = _CRAFT_MAT_NAMES_RU.get(mat, mat)
+        lines.append(
+            f"{_CRAFT_E_MARKER}{mat_emoji} {mat_name_ru} \\({required} {mat_emoji}\\)\n"
+            f"{_CRAFT_E_MARKER} У вас: \\({have} {mat_emoji}\\)\n"
+        )
+    lines.append(f"\n{format_crafting_choice_card(rarity_key)}")
+    return "\n".join(lines)
 
 
 @router.message(ForgeMenu.viewing_craft_choice)
@@ -1618,15 +1650,43 @@ async def handle_craft_choice(message: types.Message, state: FSMContext):
         await state.set_state(ForgeMenu.viewing_crafting)
         return
 
-    rarity_key = _CRAFT_BTN_TO_RARITY.get(text)
-    if rarity_key is None:
-        await message.answer("Выбери компонент из списка!", reply_markup=get_craft_choice_kb())
+    data = await state.get_data()
+    rarity_key = data.get("craft_rarity") or next(iter(CRAFTING_RECIPES))
+    choice_text = format_crafting_choice_card(rarity_key)
+    sent = await message.answer(
+        choice_text,
+        reply_markup=ReplyKeyboardRemove(),
+        parse_mode="MarkdownV2"
+    )
+    await sent.edit_reply_markup(reply_markup=get_craft_choice_inline_kb(rarity_key))
+
+
+@router.callback_query(ForgeMenu.viewing_craft_choice, F.data.startswith("craft_next:"))
+async def handle_craft_choice_next(callback: types.CallbackQuery, state: FSMContext):
+    data = callback.data or ""
+    current_rarity = data.split(":", 1)[1]
+    rarity_key = _get_next_craft_rarity(current_rarity)
+    choice_text = format_crafting_choice_card(rarity_key)
+    await callback.message.edit_text(
+        choice_text,
+        reply_markup=get_craft_choice_inline_kb(rarity_key),
+        parse_mode="MarkdownV2"
+    )
+    await state.update_data(craft_rarity=rarity_key)
+    await callback.answer()
+
+
+@router.callback_query(ForgeMenu.viewing_craft_choice, F.data.startswith("craft_make:"))
+async def handle_craft_choice_make(callback: types.CallbackQuery, state: FSMContext):
+    user_id = callback.from_user.id
+    data = callback.data or ""
+    rarity_key = data.split(":", 1)[1]
+    recipe = CRAFTING_RECIPES.get(rarity_key)
+    if recipe is None:
+        await callback.answer("Компонент не найден.", show_alert=True)
         return
 
-    recipe = CRAFTING_RECIPES[rarity_key]
     inv = get_inventory(user_id)
-
-    # Check if player has enough materials — collect ALL missing resources
     missing = []
     for mat, required in recipe["materials"].items():
         have = inv.get(mat, 0)
@@ -1634,29 +1694,17 @@ async def handle_craft_choice(message: types.Message, state: FSMContext):
             missing.append((mat, required, have))
 
     if missing:
-        lines = [
-            f"{_CRAFT_E_WARN} Недостаточно ресурсов для крафта\\!\n",
-            f"{_CRAFT_E_BOX_REQ} Необходимо:\n",
-        ]
-        for mat, required, have in missing:
-            mat_emoji = _CRAFT_MAT_EMOJIS.get(mat, "")
-            mat_name_ru = _CRAFT_MAT_NAMES_RU.get(mat, mat)
-            lines.append(
-                f"{_CRAFT_E_MARKER}{mat_emoji} {mat_name_ru} \\({required} {mat_emoji}\\)\n"
-                f"{_CRAFT_E_MARKER} У вас: \\({have} {mat_emoji}\\)\n"
-            )
-        await message.answer(
-            "\n".join(lines),
-            reply_markup=get_craft_choice_kb(),
+        await callback.message.edit_text(
+            _build_missing_craft_text(rarity_key, missing),
+            reply_markup=get_craft_choice_inline_kb(rarity_key),
             parse_mode="MarkdownV2"
         )
+        await callback.answer("Недостаточно ресурсов.")
         return
 
-    # Deduct materials regardless of success
     for mat, required in recipe["materials"].items():
         remove_inventory_material(user_id, mat, required)
 
-    # Roll craft chance
     success = random.random() < recipe["craft_chance"]
     exp_gained = 0
     if success:
@@ -1666,7 +1714,24 @@ async def handle_craft_choice(message: types.Message, state: FSMContext):
         add_experience_to_player(user_id, exp_gained)
 
     result_text = format_craft_result(rarity_key, success, exp_gained)
-    await message.answer(result_text, reply_markup=get_craft_choice_kb(), parse_mode="MarkdownV2")
+    choice_text = format_crafting_choice_card(rarity_key)
+    await callback.message.edit_text(
+        f"{result_text}\n\n{choice_text}",
+        reply_markup=get_craft_choice_inline_kb(rarity_key),
+        parse_mode="MarkdownV2"
+    )
+    await state.update_data(craft_rarity=rarity_key)
+    await callback.answer("Готово!")
+
+
+@router.callback_query(ForgeMenu.viewing_craft_choice, F.data == "craft_back")
+async def handle_craft_choice_back(callback: types.CallbackQuery, state: FSMContext):
+    comp = get_components(callback.from_user.id)
+    crafting_text = format_crafting_menu_text(comp)
+    await callback.answer()
+    await callback.message.edit_text(crafting_text, parse_mode="MarkdownV2")
+    await bot.send_message(callback.from_user.id, "Выбери действие:", reply_markup=get_crafting_kb())
+    await state.set_state(ForgeMenu.viewing_crafting)
 
 
 @router.message(F.text == "🎖️ Снаряжение")
@@ -1854,7 +1919,12 @@ async def handle_rating_menu(message: types.Message, state: FSMContext):
                 viewer_id = message.from_user.id
                 await state.set_state(RatingState.viewing_player)
                 await state.update_data(viewing_player_id=full_player['user_id'])
-                await send_image_with_text(message, "images/profile.png", profile_text, reply_markup=get_rating_player_kb(viewer_id, full_player['user_id']))
+                await send_image_with_text(
+                    message,
+                    _get_profile_photo_path(full_player['user_id']),
+                    profile_text,
+                    reply_markup=get_rating_player_kb(viewer_id, full_player['user_id'])
+                )
                 return
         await message.answer(f"{E_CROSS} Игрок не найден!")
         return
@@ -1924,7 +1994,12 @@ async def add_friend_from_rating(message: types.Message, state: FSMContext):
                 raid_tickets=target_player["raid_tickets"],
                 likes=target_player.get("likes", 0),
             )
-            await send_image_with_text(message, "images/profile.png", profile_text, reply_markup=get_rating_player_kb(user_id, target_id))
+            await send_image_with_text(
+                message,
+                _get_profile_photo_path(target_id),
+                profile_text,
+                reply_markup=get_rating_player_kb(user_id, target_id)
+            )
         else:
             await message.answer("✅ Заявка отправлена!", reply_markup=get_rating_player_kb(user_id, target_id))
     elif result == 'already_friends':
@@ -1994,7 +2069,12 @@ async def process_like_message_from_rating(message: types.Message, state: FSMCon
                 raid_tickets=target_player["raid_tickets"],
                 likes=target_player.get("likes", 0),
             )
-            await send_image_with_text(message, "images/profile.png", profile_text, reply_markup=get_rating_player_kb(user_id, target_id))
+            await send_image_with_text(
+                message,
+                _get_profile_photo_path(target_id),
+                profile_text,
+                reply_markup=get_rating_player_kb(user_id, target_id)
+            )
         return
 
     if not target_id:
@@ -2207,7 +2287,7 @@ async def _send_friend_profile(message, friend: dict, viewer_id: int = None):
         raid_tickets=friend["raid_tickets"],
         likes=friend.get("likes", 0),
     )
-    await send_image_with_text(message, "images/profile.png", profile_text,
+    await send_image_with_text(message, _get_profile_photo_path(friend['user_id']), profile_text,
                                reply_markup=get_friend_profile_kb(can_invite_raid=can_invite, viewer_id=viewer_id, friend_id=friend['user_id']))
 
 @router.message(FriendsMenu.viewing_friend_profile)

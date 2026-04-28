@@ -161,6 +161,24 @@ def format_crafting_choice_menu() -> str:
     return "\n".join(lines)
 
 
+def format_crafting_choice_card(rarity_key: str) -> str:
+    """Build text card for a single craft recipe."""
+    recipe = CRAFTING_RECIPES[rarity_key]
+    rarity_emoji = recipe["rarity_emoji"]
+    lines = [
+        f"{_E_WARN}{_E_GEAR} Изготовление компонента\n",
+        f"{_E_MARKER}{rarity_emoji} {recipe['name']}",
+        f"{_E_BOX_REQ} Требуется:",
+    ]
+    for mat, amount in recipe["materials"].items():
+        mat_emoji = _MAT_EMOJIS.get(mat, "")
+        mat_name = _MAT_NAMES.get(mat, mat)
+        lines.append(f"{_E_MARKER}{mat_emoji} {amount} {mat_name}")
+    chance_pct = int(recipe["craft_chance"] * 100)
+    lines.append(f"\\({_E_CLOCK} шанс крафта: {chance_pct}%\\)")
+    return "\n".join(lines)
+
+
 def format_craft_result(rarity_key: str, success: bool, exp_gained: int) -> str:
     """Build the craft result message."""
     recipe = CRAFTING_RECIPES[rarity_key]

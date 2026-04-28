@@ -125,6 +125,18 @@ def get_craft_choice_kb() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 
+def get_craft_choice_inline_kb(rarity_key: str) -> InlineKeyboardMarkup:
+    """Inline-кнопки выбора и крафта компонента."""
+    kb = [
+        [
+            InlineKeyboardButton(text="изготовить", callback_data=f"craft_make:{rarity_key}"),
+            InlineKeyboardButton(text=">", callback_data=f"craft_next:{rarity_key}"),
+        ],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data="craft_back")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=kb)
+
+
 def _weapon_btn_text(w: dict) -> str:
     """Текст кнопки оружия (используется в KB и при matching)"""
     return f"⚔️ {w['name']} — {w['cost']} монет"
