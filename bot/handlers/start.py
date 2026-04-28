@@ -12,9 +12,10 @@ from bot.utils import send_image_with_text
 from bot.keyboards import show_main_menu, get_main_menu_text, get_main_kb
 from bot.emojis import (
     E_PROFILE, E_SQ, E_GIFT, E_CROSS, E_COINS, E_CRYSTALS,
-    E_WARN, E_EXP, E_PLUS, E_BELL, E_SWORD, E_STAR, E_TROPHY,
+    E_WARN, E_EXP, E_PLUS, E_BELL, E_STAR, E_TROPHY,
     E_CROWN, E_INV_BOX, E_WOOD, E_STONE, E_FOOD, E_IRON,
     E_GOLD_M, E_COPPER, E_CHEST_W,
+    E_YELLOW, E_TIMER, E_HP,
 )
 
 router = Router()
@@ -51,9 +52,9 @@ async def cmd_start(message: types.Message, state: FSMContext):
         await show_main_menu(message, state)
     else:
         welcome_text = (
-            f"{E_CROWN} Приветствую тебя в моём боте <b>\"Hades\"</b>!\n"
-            f" {E_SWORD} Желаешь начать игру?\n"
-            f"{E_STAR} Я введу тебя в курс дела, и всё объясню кратко!"
+            f"🌸 Приветствую тебя в моём боте <b>\"Hades\"</b>!\n"
+            f" {E_YELLOW} Желаешь начать игру?\n"
+            f"{E_SQ}Я введу тебя в курс дела, и всё объясню кратко!"
         )
         kb = ReplyKeyboardMarkup(
             keyboard=[[KeyboardButton(text="Давай начнём!")]],
@@ -74,7 +75,7 @@ async def tutorial_welcome_response(message: types.Message, state: FSMContext):
     suggestions = _get_random_nicknames(6)
     await state.update_data(nick_suggestions=suggestions)
     ask_nick_text = (
-        f"{E_PROFILE} Отлично! Как тебя звать?\n"
+        f"{E_PROFILE}{E_TIMER} Отлично! Как тебя звать?\n"
         f"{E_SQ}до 30 символов максимум."
     )
     await message.answer(ask_nick_text, reply_markup=_get_nickname_kb(suggestions), parse_mode="HTML")
@@ -96,7 +97,7 @@ async def tutorial_process_nickname(message: types.Message, state: FSMContext):
     add_player(user_id, nickname)
 
     confirm_text = (
-        f"{E_BELL} Никнейм успешно выбран!\n"
+        f"{E_HP} Никнейм успешно выбран!\n"
         f"Тебя зовут <b>{nickname}</b>, красивое название."
     )
     await message.answer(confirm_text, reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True), parse_mode="HTML")
