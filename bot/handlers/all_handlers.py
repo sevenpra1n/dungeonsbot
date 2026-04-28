@@ -1606,6 +1606,7 @@ async def handle_crafting_menu(message: types.Message, state: FSMContext):
             parse_mode="MarkdownV2"
         )
         await sent.edit_reply_markup(reply_markup=get_craft_choice_inline_kb(rarity_key))
+        await state.update_data(craft_rarity=rarity_key)
         await state.set_state(ForgeMenu.viewing_craft_choice)
         return
 
@@ -1649,11 +1650,19 @@ async def handle_craft_choice(message: types.Message, state: FSMContext):
         await state.set_state(ForgeMenu.viewing_crafting)
         return
 
-    await message.answer("Используй inline-кнопки под сообщением крафта.")
+    data = await state.get_data()
+    rarity_key = data.get("craft_rarity") or next(iter(CRAFTING_RECIPES))
+    choice_text = format_crafting_choice_card(rarity_key)
+    sent = await message.answer(
+        choice_text,
+        reply_markup=ReplyKeyboardRemove(),
+        parse_mode="MarkdownV2"
+    )
+    await sent.edit_reply_markup(reply_markup=get_craft_choice_inline_kb(rarity_key))
 
 
 @router.callback_query(ForgeMenu.viewing_craft_choice, F.data.startswith("craft_next:"))
-async def handle_craft_choice_next(callback: types.CallbackQuery):
+async def handle_craft_choice_next(callback: types.CallbackQuery, state: FSMContext):
     data = callback.data or ""
     current_rarity = data.split(":", 1)[1]
     rarity_key = _get_next_craft_rarity(current_rarity)
@@ -1663,11 +1672,12 @@ async def handle_craft_choice_next(callback: types.CallbackQuery):
         reply_markup=get_craft_choice_inline_kb(rarity_key),
         parse_mode="MarkdownV2"
     )
+    await state.update_data(craft_rarity=rarity_key)
     await callback.answer()
 
 
 @router.callback_query(ForgeMenu.viewing_craft_choice, F.data.startswith("craft_make:"))
-async def handle_craft_choice_make(callback: types.CallbackQuery):
+async def handle_craft_choice_make(callback: types.CallbackQuery, state: FSMContext):
     user_id = callback.from_user.id
     data = callback.data or ""
     rarity_key = data.split(":", 1)[1]
@@ -1710,6 +1720,7 @@ async def handle_craft_choice_make(callback: types.CallbackQuery):
         reply_markup=get_craft_choice_inline_kb(rarity_key),
         parse_mode="MarkdownV2"
     )
+    await state.update_data(craft_rarity=rarity_key)
     await callback.answer("Готово!")
 
 
@@ -1718,7 +1729,8 @@ async def handle_craft_choice_back(callback: types.CallbackQuery, state: FSMCont
     comp = get_components(callback.from_user.id)
     crafting_text = format_crafting_menu_text(comp)
     await callback.answer()
-    await callback.message.answer(crafting_text, reply_markup=get_crafting_kb(), parse_mode="MarkdownV2")
+    await callback.message.edit_text(crafting_text, parse_mode="MarkdownV2")
+    await callback.message.answer("Выбери действие:", reply_markup=get_crafting_kb())
     await state.set_state(ForgeMenu.viewing_crafting)
 
 
