@@ -54,7 +54,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
         welcome_text = (
             f"🌸 Приветствую тебя в моём боте <b>\"Hades\"</b>!\n"
             f"{E_YELLOW} Желаешь начать игру?\n"
-            f"{E_SQ}Я введу тебя в курс дела, и всё объясню кратко!"
+            f"{E_SQ} Я введу тебя в курс дела, и всё объясню кратко!"
         )
         kb = ReplyKeyboardMarkup(
             keyboard=[[KeyboardButton(text="Давай начнём!")]],
