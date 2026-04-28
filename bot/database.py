@@ -157,6 +157,7 @@ def init_database():
         'ALTER TABLE players ADD COLUMN is_spammer INTEGER DEFAULT 0',
         'ALTER TABLE players ADD COLUMN likes INTEGER DEFAULT 0',
         'ALTER TABLE players ADD COLUMN block_invites INTEGER DEFAULT 0',
+        'ALTER TABLE players ADD COLUMN profile_photo TEXT DEFAULT NULL',
     ]:
         try:
             cursor.execute(col_sql)
@@ -1019,6 +1020,34 @@ def get_player_block_invites(user_id: int) -> bool:
     row = cursor.fetchone()
     conn.close()
     return bool(row[0]) if row else False
+
+
+def update_player_nickname(user_id: int, nickname: str):
+    """Изменить никнейм игрока"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('UPDATE players SET nickname = ? WHERE user_id = ?', (nickname, user_id))
+    conn.commit()
+    conn.close()
+
+
+def update_player_profile_photo(user_id: int, photo_path: str):
+    """Обновить путь к фото профиля игрока (None = дефолтный)"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('UPDATE players SET profile_photo = ? WHERE user_id = ?', (photo_path, user_id))
+    conn.commit()
+    conn.close()
+
+
+def get_player_profile_photo(user_id: int) -> str | None:
+    """Получить путь к фото профиля (None = дефолтный)"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('SELECT profile_photo FROM players WHERE user_id = ?', (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] if row and row[0] else None
 
 
 # ============== INVENTORY FUNCTIONS ==============
