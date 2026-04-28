@@ -868,6 +868,7 @@ async def _run_enemy_search(user_id: int, chat_id: int, search_time: int = 10, l
         player_blind_turns=0,
         is_location_battle=True,
         location_id=location_id,
+        enemy_strength_raw=float(enemy_cfg.get('strength', 0)),
     )
 
     battle_info = (
@@ -917,6 +918,9 @@ async def _give_activity_rewards(user_id: int, activity: dict) -> bool:
                     if 'wood' not in earned:
                         earned['wood'] = 0
                     earned['wood'] += wood_amount
+        if 'experience' not in earned:
+            earned['experience'] = random.randint(6, 18)
+        earned['clan_exp'] = earned.get('clan_exp', 0) + random.randint(2, 6)
     # Special handling for Mine ore mining (depends on pickaxe level)
     elif loc_id == 3 and act_type == 'mine_ore':
         pickaxe_level = get_player_pickaxe_level(user_id)
@@ -934,35 +938,39 @@ async def _give_activity_rewards(user_id: int, activity: dict) -> bool:
             # Profile experience for mining
             exp_min, exp_max = pickaxe_data.get('experience', (1, 1))
             earned['experience'] = random.randint(exp_min, exp_max)
+            earned['clan_exp'] = earned.get('clan_exp', 0) + random.randint(2, 6)
     # Special handling for Mine search (tiered by player strength)
     elif loc_id == 3 and act_type == 'search':
         _player = get_player(user_id)
         strength = float(_player['strength']) if _player else 0.0
         if strength < 100:
-            earned['experience'] = random.randint(10, 30)
+            earned['experience'] = random.randint(15, 45)
             earned['stone'] = random.randint(1, 3)
             if random.random() < 0.20:
                 earned['copper'] = 1
             earned['coins'] = random.randint(5, 15)
+            earned['clan_exp'] = random.randint(3, 8)
         elif strength < 800:
-            earned['experience'] = random.randint(25, 70)
+            earned['experience'] = random.randint(35, 100)
             earned['stone'] = random.randint(4, 8)
             if random.random() < 0.20:
                 earned['copper'] = 6
             if random.random() < 0.10:
                 earned['iron'] = 2
             earned['coins'] = random.randint(20, 65)
+            earned['clan_exp'] = random.randint(5, 12)
         else:
-            earned['experience'] = random.randint(60, 165)
+            earned['experience'] = random.randint(85, 220)
             earned['stone'] = 22
             if random.random() < 0.20:
                 earned['copper'] = 14
             if random.random() < 0.10:
                 earned['iron'] = 10
             earned['coins'] = random.randint(100, 300)
+            earned['clan_exp'] = random.randint(8, 18)
     elif loc_id == 4 and act_type == 'search':
         earned['coins'] = random.randint(30, 90)
-        earned['experience'] = random.randint(18, 36)
+        earned['experience'] = random.randint(28, 60)
         earned['stone'] = random.randint(2, 6)
         if random.random() < 0.45:
             earned['iron'] = random.randint(1, 3)
@@ -974,9 +982,10 @@ async def _give_activity_rewards(user_id: int, activity: dict) -> bool:
             earned_components['common'] = random.randint(2, 4)
         if random.random() < 0.12:
             earned_components['rare'] = 1
+        earned['clan_exp'] = random.randint(5, 12)
     elif loc_id == 4 and act_type == 'loot_all':
         earned['coins'] = random.randint(90, 220)
-        earned['experience'] = random.randint(35, 70)
+        earned['experience'] = random.randint(55, 105)
         earned['stone'] = random.randint(6, 14)
         earned['iron'] = random.randint(2, 6)
         if random.random() < 0.22:
@@ -986,9 +995,10 @@ async def _give_activity_rewards(user_id: int, activity: dict) -> bool:
         earned_components['common'] = random.randint(2, 4)
         if random.random() < 0.18:
             earned_components['rare'] = 1
+        earned['clan_exp'] = random.randint(10, 20)
     elif loc_id == 5 and act_type == 'search':
         earned['coins'] = random.randint(80, 200)
-        earned['experience'] = random.randint(32, 70)
+        earned['experience'] = random.randint(50, 105)
         earned['stone'] = random.randint(4, 12)
         earned['iron'] = random.randint(1, 5)
         if random.random() < 0.30:
@@ -998,9 +1008,10 @@ async def _give_activity_rewards(user_id: int, activity: dict) -> bool:
         earned_components['common'] = random.randint(2, 4)
         if random.random() < 0.24:
             earned_components['rare'] = 1
+        earned['clan_exp'] = random.randint(8, 18)
     elif loc_id == 5 and act_type == 'loot_all':
         earned['coins'] = random.randint(220, 520)
-        earned['experience'] = random.randint(75, 130)
+        earned['experience'] = random.randint(110, 190)
         earned['stone'] = random.randint(12, 28)
         earned['iron'] = random.randint(4, 11)
         earned['gold'] = random.randint(1, 4)
@@ -1011,9 +1022,10 @@ async def _give_activity_rewards(user_id: int, activity: dict) -> bool:
             earned_components['rare'] = random.randint(1, 2)
         if random.random() < 0.04:
             earned_components['epic'] = 1
+        earned['clan_exp'] = random.randint(15, 30)
     elif loc_id == 6 and act_type == 'search':
         earned['coins'] = random.randint(180, 420)
-        earned['experience'] = random.randint(70, 130)
+        earned['experience'] = random.randint(100, 185)
         earned['stone'] = random.randint(8, 22)
         earned['iron'] = random.randint(4, 12)
         earned['gold'] = random.randint(2, 6)
@@ -1024,9 +1036,10 @@ async def _give_activity_rewards(user_id: int, activity: dict) -> bool:
             earned_components['rare'] = random.randint(1, 2)
         if random.random() < 0.07:
             earned_components['epic'] = 1
+        earned['clan_exp'] = random.randint(12, 25)
     elif loc_id == 6 and act_type == 'loot_all':
         earned['coins'] = random.randint(500, 1200)
-        earned['experience'] = random.randint(130, 230)
+        earned['experience'] = random.randint(190, 330)
         earned['stone'] = random.randint(20, 45)
         earned['iron'] = random.randint(10, 22)
         earned['gold'] = random.randint(4, 10)
@@ -1037,9 +1050,13 @@ async def _give_activity_rewards(user_id: int, activity: dict) -> bool:
             earned_components['rare'] = random.randint(1, 3)
         if random.random() < 0.12:
             earned_components['epic'] = 1
+        earned['clan_exp'] = random.randint(20, 40)
     else:
         for rew_key, (min_v, max_v) in rewards.items():
             earned[rew_key] = random.randint(min_v, max_v)
+
+    # Extract clan_exp before applying material rewards
+    clan_exp_earned = earned.pop('clan_exp', 0)
 
     # Apply rewards
     if 'coins' in earned:
@@ -1053,6 +1070,12 @@ async def _give_activity_rewards(user_id: int, activity: dict) -> bool:
     for rarity, amount in earned_components.items():
         if amount > 0:
             add_component(user_id, rarity, amount)
+
+    # Apply clan experience
+    if clan_exp_earned > 0:
+        player_clan_act = get_player_clan(user_id)
+        if player_clan_act:
+            add_clan_exp(player_clan_act['clan_id'], clan_exp_earned)
 
     # Build reward lines with custom emojis (inventory tab emojis)
     mat_names = {
@@ -1083,6 +1106,10 @@ async def _give_activity_rewards(user_id: int, activity: dict) -> bool:
         if amount > 0:
             emoji, name = comp_names.get(rarity, ('⚙️', rarity))
             reward_lines.append(f"{E_SQ} {emoji} {amount} {name}")
+    if clan_exp_earned > 0:
+        player_clan_rw = get_player_clan(user_id)
+        if player_clan_rw:
+            reward_lines.append(f"{E_SQ} {E_CLAN_BOTTLE} {clan_exp_earned} Опыта клана")
 
     loc_name = loc.get('name', '?')
     act_name = act_cfg.get('name', act_type)
@@ -1169,6 +1196,7 @@ async def fight_location_monster(message: types.Message, state: FSMContext):
         location_id=loc_id,
         location_enemy_cfg=pending_enemy,
         pending_location_enemy=None,
+        enemy_strength_raw=float(pending_enemy.get('strength', 0)),
     )
     mana = 100
     battle_info = (
@@ -1186,7 +1214,8 @@ async def flee_location_monster(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     _cancel_map_timer(user_id)
     await state.update_data(pending_location_enemy=None)
-    loss_text = _apply_location_defeat_losses(user_id)
+    data = await state.get_data()
+    loss_text = _apply_location_defeat_losses(user_id, float(data.get('enemy_strength_raw', 0)))
     await message.answer("🏃 Ты убежал от монстра!", parse_mode="HTML")
     await message.answer(loss_text, parse_mode="HTML")
     await message.answer(_build_map_text(), reply_markup=get_map_kb(), parse_mode="MarkdownV2")
@@ -2467,24 +2496,41 @@ def _fmt_defeat(nickname: str, enemy_name: str, is_location: bool = False) -> st
     return text
 
 
-def _apply_location_defeat_losses(user_id: int) -> str:
-    """Steal a small amount of resources from the player after a location defeat.
-
+def _apply_location_defeat_losses(user_id: int, enemy_strength: float = 0.0) -> str:
+    """Steal resources from the player after a location defeat.
+    Scales theft by power ratio between enemy and player.
     Returns formatted HTML text describing what was lost.
-    If the player has no resources, returns an 'empty' notice.
     """
     inv = get_inventory(user_id)
-    # (material_key, steal_chance, min_amount, max_amount, emoji, display_name)
+    player = get_player(user_id)
+    player_strength = float(player['strength']) if player else 1.0
+
+    if enemy_strength > 0 and player_strength > 0:
+        power_ratio = enemy_strength / player_strength
+    else:
+        power_ratio = 1.0
+
+    ratio_clamped = max(0.3, min(3.0, power_ratio))
+
+    def _sc(base: float) -> float:
+        # Cap steal chance at 95% to ensure there's always a small chance of escape
+        return min(0.95, base * ratio_clamped)
+
+    def _sa(min_a: int, max_a: int) -> tuple[int, int]:
+        # Ensure theft amounts don't decrease below base values when player is stronger
+        factor = max(1.0, ratio_clamped)
+        return (min_a, max(min_a + 1, int(max_a * factor)))
+
     steal_cfg = [
-        ('food',     0.50, 1, 2, _E_MAT_FOOD,     'Еда'),
-        ('wood',     0.40, 1, 3, _E_MAT_WOOD,     'Древесина'),
-        ('stone',    0.30, 1, 3, _E_MAT_STONE,    'Камень'),
-        ('copper',   0.25, 1, 2, _E_MAT_COPPER,   'Медь'),
-        ('iron',     0.20, 1, 1, _E_MAT_IRON,     'Железо'),
-        ('gold',     0.10, 1, 1, _E_MAT_GOLD,     'Золото'),
-        ('steel',    0.05, 1, 1, _E_MAT_STEEL,    'Сталь'),
-        ('amethyst', 0.02, 1, 1, _E_MAT_AMETHYST, 'Аметист'),
-        ('gem',      0.01, 1, 1, _E_MAT_GEM,      'Самоцвет'),
+        ('food',     _sc(0.65), *_sa(2, 6),   _E_MAT_FOOD,     'Еда'),
+        ('wood',     _sc(0.50), *_sa(1, 5),   _E_MAT_WOOD,     'Древесина'),
+        ('stone',    _sc(0.40), *_sa(1, 5),   _E_MAT_STONE,    'Камень'),
+        ('copper',   _sc(0.30), *_sa(1, 3),   _E_MAT_COPPER,   'Медь'),
+        ('iron',     _sc(0.25), *_sa(1, 2),   _E_MAT_IRON,     'Железо'),
+        ('gold',     _sc(0.15), *_sa(1, 2),   _E_MAT_GOLD,     'Золото'),
+        ('steel',    _sc(0.08), *_sa(1, 1),   _E_MAT_STEEL,    'Сталь'),
+        ('amethyst', _sc(0.04), *_sa(1, 1),   _E_MAT_AMETHYST, 'Аметист'),
+        ('gem',      _sc(0.02), *_sa(1, 1),   _E_MAT_GEM,      'Самоцвет'),
     ]
     lost = []
     for mat, chance, min_amt, max_amt, emoji, name in steal_cfg:
@@ -2507,6 +2553,16 @@ def _apply_location_defeat_losses(user_id: int) -> str:
     for emoji, amount, name in lost:
         lines.append(f"{E_SQ}{emoji} {amount} {name}")
     return "\n".join(lines)
+
+
+async def _send_victory_message(message, text: str, reply_markup=None):
+    """Отправить сообщение о победе с изображением"""
+    await send_image_with_text(message, "images/pobeda.png", text, reply_markup=reply_markup)
+
+
+async def _send_defeat_message(message, text: str, reply_markup=None):
+    """Отправить сообщение о поражении с изображением"""
+    await send_image_with_text(message, "images/defeat.png", text, reply_markup=reply_markup)
 
 @router.message(F.text == "🐉 Рейд")
 async def open_raid(message: types.Message, state: FSMContext):
@@ -2817,7 +2873,7 @@ async def handle_raid_menu(message: types.Message, state: FSMContext):
             increment_player_deaths(user_id)
             log += _fmt_defeat(html.escape(player['nickname']), enemy_info['name'])
             log += f"\n\nРекорд: {player['raid_max_floor']} этаж."
-            await message.answer(log, reply_markup=get_end_battle_kb())
+            await _send_defeat_message(message, log, reply_markup=get_end_battle_kb())
             await state.clear()
             return
 
@@ -2944,7 +3000,7 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
                 increment_player_deaths(user_id)
                 log += _fmt_defeat(html.escape(player['nickname']), enemy_info['name'])
                 log += f"\n\nПройдено этажей: {floors_completed}. Рекорд: {new_max}."
-                await message.answer(log, reply_markup=get_end_battle_kb())
+                await _send_defeat_message(message, log, reply_markup=get_end_battle_kb())
                 await state.clear()
                 return
             log += (
@@ -3008,7 +3064,7 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
                 "♦️💀 Зеркальный дух повержён!\n\n"
                 "Рейд начинается заново с первого этажа."
             )
-            await message.answer(log, reply_markup=get_end_battle_kb())
+            await _send_victory_message(message, log, reply_markup=get_end_battle_kb())
             await state.clear()
         else:
             next_floor = floor_id + 1
@@ -3070,7 +3126,7 @@ async def raid_battle_round(message: types.Message, state: FSMContext):
         increment_player_deaths(user_id)
         log += _fmt_defeat(html.escape(player['nickname']), enemy_info['name'])
         log += f"\n\nПройдено этажей: {floors_completed}. Рекорд: {new_max}."
-        await message.answer(log, reply_markup=get_end_battle_kb())
+        await _send_defeat_message(message, log, reply_markup=get_end_battle_kb())
         await state.clear()
         return
 
@@ -3220,7 +3276,7 @@ async def _coop_floor_victory(
             f"{E_SKULL} Зеркальный дух повержён!\n\n"
             "Совместный рейд завершён."
         )
-        await message.answer(victory_text, reply_markup=get_end_battle_kb())
+        await _send_victory_message(message, victory_text, reply_markup=get_end_battle_kb())
         await my_state.clear()
         partner_state = dp.fsm.resolve_context(bot, partner_id, partner_id)
         await partner_state.clear()
@@ -3368,7 +3424,7 @@ async def _coop_raid_player_died(
         f"{E_CROSS} Пройдено этажей: {floors_done}\n"
     )
 
-    await message.answer(defeat_text, reply_markup=get_end_battle_kb())
+    await _send_defeat_message(message, defeat_text, reply_markup=get_end_battle_kb())
     await my_state.clear()
 
     partner_state = dp.fsm.resolve_context(bot, partner_id, partner_id)
@@ -3802,10 +3858,10 @@ async def start_battle(message: types.Message, state: FSMContext):
             increment_player_deaths(user_id)
             battle_log += _fmt_defeat(html.escape(player['nickname']), enemy_info['name'], data.get('is_location_battle'))
             
-            await message.answer(battle_log, reply_markup=get_end_battle_kb())
+            await _send_defeat_message(message, battle_log, reply_markup=get_end_battle_kb())
             if data.get('is_location_battle'):
                 try:
-                    await message.answer(_apply_location_defeat_losses(user_id), parse_mode="HTML")
+                    await message.answer(_apply_location_defeat_losses(user_id, float(data.get('enemy_strength_raw', 0))), parse_mode="HTML")
                 except Exception:
                     pass
             await state.clear()
@@ -3934,10 +3990,10 @@ async def battle_round(message: types.Message, state: FSMContext):
         if new_player_health <= 0:
             increment_player_deaths(user_id)
             battle_log += _fmt_defeat(html.escape(player['nickname']), enemy_info['name'], data.get('is_location_battle'))
-            await message.answer(battle_log, reply_markup=get_end_battle_kb())
+            await _send_defeat_message(message, battle_log, reply_markup=get_end_battle_kb())
             if data.get('is_location_battle'):
                 try:
-                    await message.answer(_apply_location_defeat_losses(user_id), parse_mode="HTML")
+                    await message.answer(_apply_location_defeat_losses(user_id, float(data.get('enemy_strength_raw', 0))), parse_mode="HTML")
                 except Exception:
                     pass
             await state.clear()
@@ -4010,7 +4066,7 @@ async def battle_round(message: types.Message, state: FSMContext):
                     add_crystals_to_player(user_id, cryst_earned)
                     reward_lines.append(f"{E_PLUS} {cryst_earned} {E_CRYSTALS} кристалл")
             battle_log += _fmt_victory(enemy_info['name'], reward_lines)
-            await message.answer(battle_log, reply_markup=get_end_battle_kb())
+            await _send_victory_message(message, battle_log, reply_markup=get_end_battle_kb())
             await state.clear()
             return
         reward = enemy_info['reward']
@@ -4027,7 +4083,7 @@ async def battle_round(message: types.Message, state: FSMContext):
             reward_lines.append(f"{E_PLUS} 10 опыта клану")
         battle_log += _fmt_victory(enemy_info['name'], reward_lines)
         
-        await message.answer(battle_log, reply_markup=get_end_battle_kb())
+        await _send_victory_message(message, battle_log, reply_markup=get_end_battle_kb())
         await state.clear()
         return
     
@@ -4052,10 +4108,10 @@ async def battle_round(message: types.Message, state: FSMContext):
     if new_player_health <= 0:
         increment_player_deaths(user_id)
         battle_log += _fmt_defeat(html.escape(player['nickname']), enemy_info['name'], data.get('is_location_battle'))
-        await message.answer(battle_log, reply_markup=get_end_battle_kb())
+        await _send_defeat_message(message, battle_log, reply_markup=get_end_battle_kb())
         if data.get('is_location_battle'):
             try:
-                await message.answer(_apply_location_defeat_losses(user_id), parse_mode="HTML")
+                await message.answer(_apply_location_defeat_losses(user_id, float(data.get('enemy_strength_raw', 0))), parse_mode="HTML")
             except Exception:
                 pass
         await state.clear()
@@ -4507,7 +4563,7 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
             f"{E_PLUS} +1 победа\n"
             f"{E_PLUS} +{win_pts} {E_LEAGUE_POINTS} Points\n"
         )
-        await message.answer(battle_log, reply_markup=get_end_battle_kb())
+        await _send_victory_message(message, battle_log, reply_markup=get_end_battle_kb())
         await message.answer(rating_msg, parse_mode="HTML")
         pvp_pairs.pop(user_id, None)
         pvp_pairs.pop(opponent_id, None)

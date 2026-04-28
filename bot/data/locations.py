@@ -57,7 +57,8 @@ LOCATIONS = {
                 "rewards": {
                     "food": (2, 5),
                     "experience": (3, 8),
-                    "coins": (10, 25)
+                    "coins": (10, 25),
+                    "clan_exp": (1, 3),
                 },
                 "monster_chance": 0
             },
@@ -67,9 +68,10 @@ LOCATIONS = {
                 "emoji": "🗺️",
                 "display_emoji": E_MAP_E,
                 "rewards": {
-                    "coins": (20, 50),
-                    "experience": (5, 15),
-                    "food": (1, 3)
+                    "coins": (12, 35),
+                    "experience": (4, 12),
+                    "food": (1, 2),
+                    "clan_exp": (1, 3),
                 },
                 "monster_chance": 0.10
             }
@@ -96,8 +98,9 @@ LOCATIONS = {
                 "emoji": "🗺️",
                 "display_emoji": E_MAP_E,
                 "rewards": {
-                    "coins": (10, 30),
-                    "experience": (9, 9),
+                    "coins": (20, 50),
+                    "experience": (14, 22),
+                    "clan_exp": (3, 7),
                 },
                 "monster_chance": 0.18
             }

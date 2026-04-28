@@ -87,6 +87,13 @@ class ProfileMenu(StatesGroup):
     viewing_components = State()
     viewing_chests = State()
     opening_chest = State()
+    changing_nickname = State()
+    changing_profile_photo = State()
+
+
+class TutorialState(StatesGroup):
+    welcome = State()
+    entering_nickname = State()
 
 class MarketMenu(StatesGroup):
     viewing_category = State()

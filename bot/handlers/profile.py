@@ -8,6 +8,8 @@ from bot.database import (
     get_player, get_experience_progress, get_player_weapon, get_player_armor,
     get_player_clan, get_player_with_chest_statuses,
     set_player_status, set_player_block_invites, delete_player_data,
+    update_player_nickname, update_player_profile_photo, get_player_profile_photo,
+    add_crystals_to_player,
 )
 from bot.utils import (
     apply_clan_strength_buff, calculate_player_health,
@@ -64,7 +66,10 @@ async def _send_profile(message, player: dict):
         raid_tickets=player["raid_tickets"],
         likes=player.get("likes", 0),
     )
-    await send_image_with_text(message, "images/profile.png", response, reply_markup=get_profile_kb())
+    # Use custom profile photo if set
+    custom_photo = get_player_profile_photo(player['user_id'])
+    photo_path = custom_photo if custom_photo else "images/profile.png"
+    await send_image_with_text(message, photo_path, response, reply_markup=get_profile_kb())
 
 @router.message(ProfileMenu.viewing_profile)
 async def handle_profile_menu(message: types.Message, state: FSMContext):
@@ -166,6 +171,7 @@ def _get_settings_kb(block_invites: bool) -> ReplyKeyboardMarkup:
     label = "🔓 Включить приглашения" if block_invites else "🔒 Заблокировать приглашения"
     return ReplyKeyboardMarkup(keyboard=[
         [KeyboardButton(text=label)],
+        [KeyboardButton(text="🔄 Сменить ник (25💎)"), KeyboardButton(text="🖼️ Сменить фото (79💎)")],
         [KeyboardButton(text="🗑️ Удалить данные")],
         [KeyboardButton(text="⬅️ Назад в профиль")],
     ], resize_keyboard=True)
@@ -201,6 +207,46 @@ async def handle_profile_settings(message, state: FSMContext):
             updated = get_player(user_id)
             if updated:
                 await _send_settings(message, updated)
+        return
+
+    if text == "🔄 Сменить ник (25💎)":
+        if player:
+            if player.get('crystals', 0) < 25:
+                await message.answer(
+                    f"{E_CROSS} Недостаточно кристаллов!\nТребуется: 25 {E_CRYSTALS}\nУ тебя: {player.get('crystals', 0)} {E_CRYSTALS}",
+                    reply_markup=_get_settings_kb(bool(player.get('block_invites', 0)))
+                )
+                return
+            await state.set_state(ProfileMenu.changing_nickname)
+            await message.answer(
+                f"{E_PROFILE} Введи новый никнейм:\n{E_SQ}до 30 символов максимум.",
+                reply_markup=ReplyKeyboardMarkup(
+                    keyboard=[[KeyboardButton(text="❌ Отмена")]],
+                    resize_keyboard=True
+                ),
+                parse_mode="HTML"
+            )
+        return
+
+    if text == "🖼️ Сменить фото (79💎)":
+        if player:
+            if player.get('crystals', 0) < 79:
+                await message.answer(
+                    f"{E_CROSS} Недостаточно кристаллов!\nТребуется: 79 {E_CRYSTALS}\nУ тебя: {player.get('crystals', 0)} {E_CRYSTALS}",
+                    reply_markup=_get_settings_kb(bool(player.get('block_invites', 0)))
+                )
+                return
+            await state.set_state(ProfileMenu.changing_profile_photo)
+            await message.answer(
+                f"{E_WARN} Отправь фото для профиля:\n"
+                f"{E_SQ}Фото должно быть горизонтальным или квадратным.\n"
+                f"{E_SQ}Ширина фото должна быть не менее 70% от высоты (например, 700×1000 — минимум).",
+                reply_markup=ReplyKeyboardMarkup(
+                    keyboard=[[KeyboardButton(text="❌ Отмена")]],
+                    resize_keyboard=True
+                ),
+                parse_mode="HTML"
+            )
         return
 
     if text == "🗑️ Удалить данные":
@@ -248,3 +294,138 @@ async def handle_delete_data_confirm(message, state: FSMContext):
         "✅ Данные аккаунта удалены.\nЧтобы начать новую игру, напиши /start",
         reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True)
     )
+
+
+@router.message(ProfileMenu.changing_nickname)
+async def handle_change_nickname(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = (message.text or "").strip()
+
+    if text == "❌ Отмена":
+        player = get_player(user_id)
+        await state.set_state(ProfileMenu.viewing_settings)
+        if player:
+            await _send_settings(message, player)
+        return
+
+    if not text or len(text) > 30:
+        await message.answer(
+            f"{E_CROSS} Никнейм должен быть от 1 до 30 символов. Попробуй ещё раз:",
+            reply_markup=ReplyKeyboardMarkup(
+                keyboard=[[KeyboardButton(text="❌ Отмена")]],
+                resize_keyboard=True
+            )
+        )
+        return
+
+    player = get_player(user_id)
+    if not player:
+        await state.clear()
+        return
+
+    if player.get('crystals', 0) < 25:
+        await message.answer(
+            f"{E_CROSS} Недостаточно кристаллов!",
+            reply_markup=ReplyKeyboardMarkup(
+                keyboard=[[KeyboardButton(text="❌ Отмена")]],
+                resize_keyboard=True
+            )
+        )
+        return
+
+    update_player_nickname(user_id, text)
+    add_crystals_to_player(user_id, -25)
+
+    await state.set_state(ProfileMenu.viewing_settings)
+    updated = get_player(user_id)
+    await message.answer(
+        f"{E_BELL} Никнейм успешно изменён на <b>{text}</b>!\n"
+        f"{E_CROSS} -25 {E_CRYSTALS} кристаллов",
+        parse_mode="HTML"
+    )
+    if updated:
+        await _send_settings(message, updated)
+
+
+@router.message(ProfileMenu.changing_profile_photo)
+async def handle_change_profile_photo(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+
+    if message.text == "❌ Отмена":
+        player = get_player(user_id)
+        await state.set_state(ProfileMenu.viewing_settings)
+        if player:
+            await _send_settings(message, player)
+        return
+
+    if not message.photo:
+        await message.answer(
+            f"{E_CROSS} Пожалуйста, отправь фотографию (не файл).",
+            reply_markup=ReplyKeyboardMarkup(
+                keyboard=[[KeyboardButton(text="❌ Отмена")]],
+                resize_keyboard=True
+            )
+        )
+        return
+
+    player = get_player(user_id)
+    if not player:
+        await state.clear()
+        return
+
+    if player.get('crystals', 0) < 79:
+        await message.answer(
+            f"{E_CROSS} Недостаточно кристаллов!",
+            reply_markup=ReplyKeyboardMarkup(
+                keyboard=[[KeyboardButton(text="❌ Отмена")]],
+                resize_keyboard=True
+            )
+        )
+        return
+
+    photo = message.photo[-1]
+    width = photo.width
+    height = photo.height
+
+    # Reject photos that are too vertical: width must be at least 70% of height
+    # This allows square and landscape orientation but blocks portrait-heavy photos
+    MIN_ASPECT_RATIO = 0.7
+    if width < height * MIN_ASPECT_RATIO:
+        await message.answer(
+            f"{E_CROSS} Фото слишком вертикальное!\n"
+            f"{E_SQ}Ширина: {width}px, Высота: {height}px\n"
+            f"{E_WARN} Ширина должна быть не менее 70% от высоты. Отправь более горизонтальное фото.",
+            reply_markup=ReplyKeyboardMarkup(
+                keyboard=[[KeyboardButton(text="❌ Отмена")]],
+                resize_keyboard=True
+            ),
+            parse_mode="HTML"
+        )
+        return
+
+    import os
+    from bot.loader import bot as _bot
+    from bot.global_state import image_file_id_cache
+
+    photos_dir = "images/profiles"
+    os.makedirs(photos_dir, exist_ok=True)
+    photo_path = f"{photos_dir}/{user_id}.jpg"
+
+    file = await _bot.get_file(photo.file_id)
+    await _bot.download_file(file.file_path, photo_path)
+
+    # Invalidate cached file_id so the new photo is shown next time
+    image_file_id_cache.pop(photo_path, None)
+
+    update_player_profile_photo(user_id, photo_path)
+    add_crystals_to_player(user_id, -79)
+
+    await state.set_state(ProfileMenu.viewing_settings)
+    updated = get_player(user_id)
+    await message.answer(
+        f"{E_BELL} Фото профиля успешно изменено!\n"
+        f"{E_CROSS} -79 {E_CRYSTALS} кристаллов",
+        parse_mode="HTML"
+    )
+    if updated:
+        await _send_settings(message, updated)
