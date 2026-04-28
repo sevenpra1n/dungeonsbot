@@ -239,8 +239,8 @@ async def handle_profile_settings(message, state: FSMContext):
             await state.set_state(ProfileMenu.changing_profile_photo)
             await message.answer(
                 f"{E_WARN} Отправь фото для профиля:\n"
-                f"{E_SQ}Фото должно быть горизонтальным или квадратным (ширина ≥ высота).\n"
-                f"{E_SQ}Слишком вертикальные фото не принимаются.",
+                f"{E_SQ}Фото должно быть горизонтальным или квадратным.\n"
+                f"{E_SQ}Ширина фото должна быть не менее 70% от высоты (например, 700×1000 — минимум).",
                 reply_markup=ReplyKeyboardMarkup(
                     keyboard=[[KeyboardButton(text="❌ Отмена")]],
                     resize_keyboard=True
@@ -394,7 +394,7 @@ async def handle_change_profile_photo(message: types.Message, state: FSMContext)
         await message.answer(
             f"{E_CROSS} Фото слишком вертикальное!\n"
             f"{E_SQ}Ширина: {width}px, Высота: {height}px\n"
-            f"{E_WARN} Пожалуйста, используй горизонтальное или квадратное фото.",
+            f"{E_WARN} Ширина должна быть не менее 70% от высоты. Отправь более горизонтальное фото.",
             reply_markup=ReplyKeyboardMarkup(
                 keyboard=[[KeyboardButton(text="❌ Отмена")]],
                 resize_keyboard=True

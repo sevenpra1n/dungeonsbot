@@ -66,6 +66,10 @@ async def cmd_start(message: types.Message, state: FSMContext):
 @router.message(TutorialState.welcome)
 async def tutorial_welcome_response(message: types.Message, state: FSMContext):
     if message.text != "Давай начнём!":
+        await message.answer(
+            "Нажми кнопку <b>«Давай начнём!»</b> чтобы начать обучение.",
+            parse_mode="HTML"
+        )
         return
     suggestions = _get_random_nicknames(6)
     await state.update_data(nick_suggestions=suggestions)
