@@ -635,15 +635,15 @@ def get_admin_order_action_kb(order_id: int) -> InlineKeyboardMarkup:
 
 # Resource key → (plain emoji for button text, material name)
 _MARKET_RES_BUTTONS = [
-    ("food",     "🥕", "Еда"),
-    ("wood",     "🌳", "Древесина"),
-    ("stone",    "🪨", "Камень"),
-    ("copper",   "🔶", "Медь"),
-    ("iron",     "⛰️", "Железо"),
-    ("gold",     "🥇", "Золото"),
-    ("steel",    "🌋", "Сталь"),
-    ("amethyst", "🤩", "Аметист"),
-    ("gem",      "🎁", "Самоцвет"),
+    ("food",     "🔹", "Еда"),
+    ("wood",     "🔹", "Древесина"),
+    ("stone",    "🔹", "Камень"),
+    ("copper",   "🔹", "Медь"),
+    ("iron",     "🔸", "Железо"),
+    ("gold",     "🔸", "Золото"),
+    ("steel",    "🔸", "Сталь"),
+    ("amethyst", "♦️", "Аметист"),
+    ("gem",      "♦️", "Самоцвет"),
 ]
 
 
@@ -652,7 +652,7 @@ def get_market_resources_inline_kb() -> InlineKeyboardMarkup:
     rows = []
     row = []
     for mat_key, emoji, _name in _MARKET_RES_BUTTONS:
-        row.append(InlineKeyboardButton(text=emoji, callback_data=f"mkt_sell:{mat_key}"))
+        row.append(InlineKeyboardButton(text=f"{emoji}{_name}", callback_data=f"mkt_sell:{mat_key}"))
         if len(row) == 3:
             rows.append(row)
             row = []
