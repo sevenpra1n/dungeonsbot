@@ -125,3 +125,13 @@ class CoopRaidState(StatesGroup):
 class LikeState(StatesGroup):
     waiting_message_from_rating = State()  # Ввод послания при лайке из рейтинга
     waiting_message_from_friend = State()  # Ввод послания при лайке из профиля друга
+
+class DonateMenu(StatesGroup):
+    viewing_coins = State()      # Просмотр вкладки монет
+    viewing_crystals = State()   # Просмотр вкладки кристаллов
+    entering_amount = State()    # Ввод суммы пополнения
+    waiting_payment = State()    # Ожидание оплаты (после создания лота)
+
+class AdminPaymentPanel(StatesGroup):
+    main_menu = State()          # Список заявок
+    viewing_order = State()      # Просмотр конкретной заявки

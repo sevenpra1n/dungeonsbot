@@ -6104,6 +6104,10 @@ async def handle_market_category(message: types.Message, state: FSMContext):
         await message.answer(items_text, reply_markup=_get_items_kb(user_id, mode="axes"), parse_mode="HTML")
         return
 
+    if text == "💸 Донат":
+        # Handled by donate router — just pass through (state will be set there)
+        return
+
     # Fallback
     await send_image_with_text(message, "images/rynokcategory.png", _get_market_category_text(), reply_markup=get_market_category_kb())
 

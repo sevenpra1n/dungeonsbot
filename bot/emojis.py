@@ -120,6 +120,30 @@ E_CB_TICKET = '<tg-emoji emoji-id="5334666264319141034">📕</tg-emoji>'
 E_CB_DOWN   = '<tg-emoji emoji-id="5206510891247371052">🔽</tg-emoji>'
 E_CB_STAR   = '<tg-emoji emoji-id="5206476089127372379">⭐️</tg-emoji>'
 
+# Donate / payment UI emoji
+E_TAG      = '<tg-emoji emoji-id="6334731055387378962">🏷️</tg-emoji>'   # тег/метка (донат заголовок)
+E_DOLLAR   = '<tg-emoji emoji-id="5906735026015313678">💲</tg-emoji>'   # доллар (донат)
+E_GREEDY   = '<tg-emoji emoji-id="5458501939673192257">🤑</tg-emoji>'   # деньги-рожица (баланс)
+E_RUBLE    = '<tg-emoji emoji-id="5224417597746851536">🟢</tg-emoji>'   # зелёный (рубли)
+E_CHECK_G  = '<tg-emoji emoji-id="5278411813468269386">✅</tg-emoji>'   # галочка (оплата)
+E_LINK_D   = '<tg-emoji emoji-id="5278305362703835500">🔗</tg-emoji>'   # ссылка (реквизиты)
+E_BANK     = '<tg-emoji emoji-id="5242631901214171852">🏦</tg-emoji>'   # банк (реквизиты)
+E_CODER    = '<tg-emoji emoji-id="5276381204470329471">🧑‍💻</tg-emoji>'  # программист (после оплаты)
+E_WALLET   = '<tg-emoji emoji-id="5276398496008663230">👝</tg-emoji>'   # кошелёк (баланс недостаточно)
+E_GREEN2   = '<tg-emoji emoji-id="5906852613629941703">🟢</tg-emoji>'   # зелёный (ввод суммы заголовок)
+# Decorative emoji for donate coins panel
+D_COIN_1   = '<tg-emoji emoji-id="5373305332007197662">🔤</tg-emoji>'
+D_COIN_2   = '<tg-emoji emoji-id="5362062967347108653">🔤</tg-emoji>'
+D_COIN_3   = '<tg-emoji emoji-id="5370739372515689768">🔤</tg-emoji>'
+D_COIN_4   = '<tg-emoji emoji-id="5372838275788596941">🔤</tg-emoji>'
+D_COIN_5   = '<tg-emoji emoji-id="5427231962123231962">🔤</tg-emoji>'
+# Decorative emoji for donate crystals panel
+D_CRYS_1   = '<tg-emoji emoji-id="5348472702980085943">🔤</tg-emoji>'
+D_CRYS_2   = '<tg-emoji emoji-id="5348571603192013710">🔤</tg-emoji>'
+D_CRYS_3   = '<tg-emoji emoji-id="5348556965943467206">🔤</tg-emoji>'
+D_CRYS_4   = '<tg-emoji emoji-id="5350829025117887423">🔤</tg-emoji>'
+D_CRYS_5   = '<tg-emoji emoji-id="5348414656497082723">🔤</tg-emoji>'
+
 RARITY_EMOJIS = {
     "common":    E_RARITY_COMMON,
     "uncommon":  E_RARITY_UNCOMMON,
