@@ -144,6 +144,16 @@ D_CRYS_3   = '<tg-emoji emoji-id="5348556965943467206">🔤</tg-emoji>'
 D_CRYS_4   = '<tg-emoji emoji-id="5350829025117887423">🔤</tg-emoji>'
 D_CRYS_5   = '<tg-emoji emoji-id="5348414656497082723">🔤</tg-emoji>'
 
+# Market resources header
+E_BRICK    = '<tg-emoji emoji-id="6005979836051363343">🧱</tg-emoji>'   # кирпич (рынок ресурсов)
+
+# Moderation emoji
+E_MEGAPHONE = '<tg-emoji emoji-id="5278528159837348960">📢</tg-emoji>'  # рупор (причина)
+E_CALENDAR2 = '<tg-emoji emoji-id="5472279086657199080">🗓️</tg-emoji>'  # календарь (предупреждение)
+E_UNLOCK    = '<tg-emoji emoji-id="5429405838345265327">🔓</tg-emoji>'  # замок (бан)
+E_HOURGLASS2= '<tg-emoji emoji-id="5287579571485422439">⏳</tg-emoji>'  # песочные часы (время)
+E_CLOCK4    = '<tg-emoji emoji-id="5276412364458059956">🕓</tg-emoji>'  # часы (оставшееся время)
+
 RARITY_EMOJIS = {
     "common":    E_RARITY_COMMON,
     "uncommon":  E_RARITY_UNCOMMON,

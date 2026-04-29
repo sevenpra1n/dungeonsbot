@@ -548,10 +548,10 @@ def get_statuses_kb(player: dict, page: int = 0) -> ReplyKeyboardMarkup:
 
 # Prices for donate (coins)
 DONATE_COINS_PRICES = [
-    (1000,  19,  "1.000👛"),
-    (5000,  89,  "5.000👛"),
-    (20000, 309, "20.000👛"),
-    (80000, 1199, "80.000👛"),
+    (1000,  19,  "1.000💰"),
+    (5000,  89,  "5.000💰"),
+    (20000, 309, "20.000💰"),
+    (80000, 1199, "80.000💰"),
 ]
 
 # Prices for donate (crystals)
@@ -570,10 +570,11 @@ def get_donate_coins_kb() -> InlineKeyboardMarkup:
     ]
     for coins, price, label in DONATE_COINS_PRICES:
         rows.append([InlineKeyboardButton(
-            text=f"{label} = {price}🟢",
+            text=f"{label} = {price} 💸",
             callback_data=f"donate_buy_coins:{coins}:{price}"
         )])
     rows.append([InlineKeyboardButton(text="💸 Пополнить баланс", callback_data="donate_topup")])
+    rows.append([InlineKeyboardButton(text="◀️ Вернуться", callback_data="donate_back_market")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -585,10 +586,11 @@ def get_donate_crystals_kb() -> InlineKeyboardMarkup:
     for crystals, price, label in DONATE_CRYSTALS_PRICES:
         extra = " (🎁Выгодно!)" if crystals == 239 else ""
         rows.append([InlineKeyboardButton(
-            text=f"{label} = {price}🟢{extra}",
+            text=f"{label} = {price} 💸{extra}",
             callback_data=f"donate_buy_crystals:{crystals}:{price}"
         )])
     rows.append([InlineKeyboardButton(text="💸 Пополнить баланс", callback_data="donate_topup")])
+    rows.append([InlineKeyboardButton(text="◀️ Вернуться", callback_data="donate_back_market")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -626,4 +628,106 @@ def get_admin_order_action_kb(order_id: int) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="💰 Пополнить баланс", callback_data=f"adm_approve:{order_id}")],
         [InlineKeyboardButton(text="❌ Отклонить", callback_data=f"adm_reject:{order_id}")],
         [InlineKeyboardButton(text="⬅️ Назад", callback_data="adm_refresh")],
+    ])
+
+
+# ============== MARKET INLINE KEYBOARDS ==============
+
+# Resource key → (plain emoji for button text, material name)
+_MARKET_RES_BUTTONS = [
+    ("food",     "🥕", "Еда"),
+    ("wood",     "🌳", "Древесина"),
+    ("stone",    "🪨", "Камень"),
+    ("copper",   "🔶", "Медь"),
+    ("iron",     "⛰️", "Железо"),
+    ("gold",     "🥇", "Золото"),
+    ("steel",    "🌋", "Сталь"),
+    ("amethyst", "🤩", "Аметист"),
+    ("gem",      "🎁", "Самоцвет"),
+]
+
+
+def get_market_resources_inline_kb() -> InlineKeyboardMarkup:
+    """Inline-клавиатура ресурсов рынка (3 в ряд)"""
+    rows = []
+    row = []
+    for mat_key, emoji, _name in _MARKET_RES_BUTTONS:
+        row.append(InlineKeyboardButton(text=emoji, callback_data=f"mkt_sell:{mat_key}"))
+        if len(row) == 3:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    rows.append([InlineKeyboardButton(text="⬅️ Назад к категориям", callback_data="mkt_back_categories")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def get_market_sell_qty_inline_kb(mat_key: str, inv_amount: int) -> InlineKeyboardMarkup:
+    """Inline-клавиатура выбора количества для продажи"""
+    qty_options = [1, 5, 10, 25, 50]
+    rows = []
+    row = []
+    for qty in qty_options:
+        if inv_amount >= qty:
+            row.append(InlineKeyboardButton(text=str(qty), callback_data=f"mkt_qty:{mat_key}:{qty}"))
+            if len(row) == 3:
+                rows.append(row)
+                row = []
+    if row:
+        rows.append(row)
+    if inv_amount > 0:
+        rows.append([InlineKeyboardButton(
+            text=f"Всё ({inv_amount})",
+            callback_data=f"mkt_qty:{mat_key}:all"
+        )])
+    rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data="mkt_back")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+# ============== MODERATOR KEYBOARDS ==============
+
+def get_moderator_main_kb() -> InlineKeyboardMarkup:
+    """Главное меню /moderator"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⚠️ Выдать предупреждение", callback_data="mod_warn")],
+        [InlineKeyboardButton(text="🔴 Выдать бан",            callback_data="mod_ban")],
+        [InlineKeyboardButton(text="✅ Снять предупреждение",  callback_data="mod_unwarn")],
+        [InlineKeyboardButton(text="📋 Заявки на разблокировку", callback_data="mod_appeals")],
+        [InlineKeyboardButton(text="🔍 Проверить игрока",      callback_data="mod_check")],
+    ])
+
+
+def get_mod_appeal_action_kb(appeal_id: int) -> InlineKeyboardMarkup:
+    """Кнопки решения по заявке на разблокировку"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Разблокировать", callback_data=f"mod_appeal_accept:{appeal_id}")],
+        [InlineKeyboardButton(text="❌ Отклонить",      callback_data=f"mod_appeal_reject:{appeal_id}")],
+        [InlineKeyboardButton(text="⬅️ Назад к заявкам", callback_data="mod_appeals")],
+    ])
+
+
+def get_mod_appeals_list_kb(appeals: list) -> InlineKeyboardMarkup:
+    """Список заявок на разблокировку"""
+    rows = []
+    for ap in appeals:
+        rows.append([InlineKeyboardButton(
+            text=f"👤 {ap['nickname']} — #{ap['appeal_id']}",
+            callback_data=f"mod_appeal_view:{ap['appeal_id']}"
+        )])
+    rows.append([InlineKeyboardButton(text="🔄 Обновить", callback_data="mod_appeals")])
+    rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="mod_main")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def get_warn_ack_kb() -> InlineKeyboardMarkup:
+    """Кнопка 'Извиняюсь' для игрока под предупреждением"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Извиняюсь", callback_data="warn_ack")]
+    ])
+
+
+def get_ban_appeal_kb() -> InlineKeyboardMarkup:
+    """Кнопка 'Обжаловать блокировку' для забаненного игрока"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Обжаловать блокировку", callback_data="appeal_ban")]
     ])

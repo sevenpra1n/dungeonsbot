@@ -86,6 +86,7 @@ from bot.keyboards import (
     get_admin_kb, get_map_kb, get_location_activities_kb,
     get_profile_kb, get_statuses_kb,
     get_market_category_kb, get_market_kb, get_consumables_kb, get_sell_qty_kb,
+    get_market_resources_inline_kb, get_market_sell_qty_inline_kb,
     get_clan_boss_menu_kb, get_clan_boss_battle_kb, get_clan_boss_back_kb,
     get_next_weapon_kb, get_next_armor_kb, get_skills_kb,
     get_monster_encounter_kb, get_coop_invite_kb, get_coop_lobby_kb,
@@ -6032,7 +6033,8 @@ def _get_market_category_text() -> str:
         '<tg-emoji emoji-id="5906909964328245730">🗓</tg-emoji> Выбери категорию на рынке:\n\n'
         '<tg-emoji emoji-id="5267324424113124134">▫️</tg-emoji>Продажа ресурсов <tg-emoji emoji-id="6284888960644682300">🥕</tg-emoji>\n'
         '<tg-emoji emoji-id="5267324424113124134">▫️</tg-emoji>Расходники <tg-emoji emoji-id="5334859426178313935">📕</tg-emoji>\n'
-        '<tg-emoji emoji-id="5267324424113124134">▫️</tg-emoji>Предметы <tg-emoji emoji-id="5936238625250350064">🎁</tg-emoji>'
+        '<tg-emoji emoji-id="5267324424113124134">▫️</tg-emoji>Предметы <tg-emoji emoji-id="5936238625250350064">🎁</tg-emoji>\n'
+        '<tg-emoji emoji-id="5267324424113124134">▫️</tg-emoji>Донат <tg-emoji emoji-id="5906478942885255780">⭐</tg-emoji>'
     )
 
 def _get_market_text(player: dict) -> str:
@@ -6040,17 +6042,17 @@ def _get_market_text(player: dict) -> str:
     nickname = html.escape(player['nickname'])
     lines = [
         f"{E_MARKET} <b>РЫНОК</b> | Продажа ресурсов.\n",
-        f"{nickname}, курс ресурсов:\n",
+        f"{E_BRICK} {nickname}, курс ресурсов:\n",
         f"{E_TRASH} | Продажа:",
-        f"{_E_MAT_FOOD} Еда | {MARKET_PRICES['food']}{E_COINS}",
-        f"{_E_MAT_WOOD} Древесина | {MARKET_PRICES['wood']}{E_COINS}",
-        f"{_E_MAT_STONE} Камень | {MARKET_PRICES['stone']}{E_COINS}",
-        f"{_E_MAT_COPPER} Медь | {MARKET_PRICES['copper']}{E_COINS}",
-        f"{_E_MAT_IRON} Железо | {MARKET_PRICES['iron']}{E_COINS}",
-        f"{_E_MAT_GOLD} Золото | {MARKET_PRICES['gold']}{E_COINS}",
-        f"{_E_MAT_STEEL} Сталь | {int(MARKET_PRICES['steel'])}{E_COINS}",
-        f"{_E_MAT_AMETHYST} Аметист | {int(MARKET_PRICES['amethyst'])}{E_COINS}",
-        f"{_E_MAT_GEM} Самоцвет | {int(MARKET_PRICES['gem'])}{E_COINS}",
+        f"{E_GREEN}{_E_MAT_FOOD} Еда | {MARKET_PRICES['food']}{E_COINS}",
+        f"{E_GREEN}{_E_MAT_WOOD} Древесина | {MARKET_PRICES['wood']}{E_COINS}",
+        f"{E_GREEN}{_E_MAT_STONE} Камень | {MARKET_PRICES['stone']}{E_COINS}",
+        f"{E_GREEN}{_E_MAT_COPPER} Медь | {MARKET_PRICES['copper']}{E_COINS}",
+        f"{E_YELLOW}{_E_MAT_IRON} Железо | {MARKET_PRICES['iron']}{E_COINS}",
+        f"{E_YELLOW}{_E_MAT_GOLD} Золото | {MARKET_PRICES['gold']}{E_COINS}",
+        f"{E_YELLOW}{_E_MAT_STEEL} Сталь | {int(MARKET_PRICES['steel'])}{E_COINS}",
+        f"{E_RED_C}{_E_MAT_AMETHYST} Аметист | {int(MARKET_PRICES['amethyst'])}{E_COINS}",
+        f"{E_RED_C}{_E_MAT_GEM} Самоцвет | {int(MARKET_PRICES['gem'])}{E_COINS}",
     ]
     return "\n".join(lines)
 
@@ -6089,7 +6091,7 @@ async def handle_market_category(message: types.Message, state: FSMContext):
 
     if text == "🥕 Продажа ресурсов":
         await state.set_state(MarketMenu.viewing_market)
-        await send_image_with_text(message, "images/rynok.png", _get_market_text(player), reply_markup=get_market_kb())
+        await send_image_with_text(message, "images/rynok.png", _get_market_text(player), reply_markup=get_market_resources_inline_kb(), parse_mode="HTML")
         return
 
     if text == "📕 Расходники":
@@ -6125,32 +6127,120 @@ async def handle_market(message: types.Message, state: FSMContext):
         await send_image_with_text(message, "images/rynokcategory.png", _get_market_category_text(), reply_markup=get_market_category_kb())
         return
 
-    # Check each sell button (plain emoji buttons)
-    if text in _MARKET_SELL_BUTTONS:
-        mat_key = _MARKET_SELL_BUTTONS[text]
-        emoji, mat_name, _ = _MARKET_MAT_INFO[mat_key]
-        inv = get_inventory(user_id)
-        amount = inv.get(mat_key, 0)
-        price = MARKET_PRICES[mat_key]
-        if amount == 0:
-            await message.answer(
-                f"{E_CROSS} У тебя нет {emoji} {mat_name} для продажи!",
-                reply_markup=get_market_kb()
-            )
-            return
-        sell_text = (
-            f"{emoji} <b>{mat_name}</b>\n\n"
-            f"Доступно: {amount}\n"
-            f"Цена: {price}{E_COINS} за единицу\n\n"
-            f"Сколько хочешь продать?"
-        )
-        await state.update_data(sell_material=mat_key)
-        await state.set_state(MarketMenu.selling_resource)
-        await message.answer(sell_text, reply_markup=get_sell_qty_kb(mat_key, amount))
+    # Fallback: refresh market with inline keyboard
+    await send_image_with_text(message, "images/rynok.png", _get_market_text(player), reply_markup=get_market_resources_inline_kb())
+
+
+@router.callback_query(F.data.startswith("mkt_sell:"))
+async def market_sell_select(callback: types.CallbackQuery, state: FSMContext):
+    """Игрок выбрал ресурс в инлайн-меню рынка"""
+    user_id = callback.from_user.id
+    mat_key = callback.data.split(":", 1)[1]
+    player = get_player(user_id)
+    if not player:
+        await callback.answer("Сначала зарегистрируйся! /start", show_alert=True)
+        return
+    inv = get_inventory(user_id)
+    amount = inv.get(mat_key, 0)
+    emoji, mat_name, _ = _MARKET_MAT_INFO.get(mat_key, ("❓", mat_key, ""))
+    price = MARKET_PRICES.get(mat_key, 0)
+
+    if amount == 0:
+        await callback.answer(f"У тебя нет {mat_name} для продажи!", show_alert=True)
         return
 
-    # Fallback: refresh market
-    await send_image_with_text(message, "images/rynok.png", _get_market_text(player), reply_markup=get_market_kb())
+    sell_text = (
+        f"{emoji} <b>{mat_name}</b>\n\n"
+        f"Доступно: {amount}\n"
+        f"Цена: {price}{E_COINS} за единицу\n\n"
+        f"Сколько хочешь продать?"
+    )
+    await state.update_data(sell_material=mat_key)
+    await state.set_state(MarketMenu.selling_resource)
+    await callback.message.edit_text(sell_text, reply_markup=get_market_sell_qty_inline_kb(mat_key, amount), parse_mode="HTML")
+    await callback.answer()
+
+
+@router.callback_query(F.data == "mkt_back")
+async def market_sell_back(callback: types.CallbackQuery, state: FSMContext):
+    """Вернуться из выбора количества к ресурсам"""
+    user_id = callback.from_user.id
+    player = get_player(user_id)
+    if not player:
+        await callback.answer()
+        return
+    await state.set_state(MarketMenu.viewing_market)
+    await callback.message.edit_text(_get_market_text(player), reply_markup=get_market_resources_inline_kb(), parse_mode="HTML")
+    await callback.answer()
+
+
+@router.callback_query(F.data == "mkt_back_categories")
+async def market_back_to_categories(callback: types.CallbackQuery, state: FSMContext):
+    """Вернуться к категориям рынка"""
+    await state.set_state(MarketMenu.viewing_category)
+    await callback.message.delete()
+    await callback.message.answer(_get_market_category_text(), reply_markup=get_market_category_kb(), parse_mode="HTML")
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("mkt_qty:"))
+async def market_sell_qty(callback: types.CallbackQuery, state: FSMContext):
+    """Игрок выбрал количество для продажи"""
+    user_id = callback.from_user.id
+    parts = callback.data.split(":")
+    mat_key = parts[1]
+    qty_str = parts[2]
+
+    player = get_player(user_id)
+    if not player:
+        await callback.answer("Сначала зарегистрируйся! /start", show_alert=True)
+        return
+
+    emoji, mat_name, _ = _MARKET_MAT_INFO.get(mat_key, ("❓", mat_key, ""))
+    inv = get_inventory(user_id)
+    current_amount = inv.get(mat_key, 0)
+    price = MARKET_PRICES.get(mat_key, 0)
+
+    # Parse quantity
+    if qty_str == "all":
+        qty = current_amount
+    else:
+        try:
+            qty = int(qty_str)
+        except ValueError:
+            await callback.answer("Неверное количество.", show_alert=True)
+            return
+
+    if qty <= 0 or current_amount <= 0:
+        await callback.answer("У тебя нет этого ресурса!", show_alert=True)
+        return
+
+    if qty > current_amount:
+        qty = current_amount
+
+    earned = int(round(qty * price))
+    ok = remove_inventory_material(user_id, mat_key, qty)
+    if not ok:
+        await callback.answer("Ошибка при продаже. Попробуй снова.", show_alert=True)
+        return
+
+    add_coins_to_player(user_id, earned)
+    updated = get_player(user_id)
+    updated_inv = get_inventory(user_id)
+    result_text = (
+        f"{E_PLUS} Продано: {qty} {emoji} {mat_name}\n"
+        f"{E_PLUS} Получено: {earned}{E_COINS}\n\n"
+        f"Монет теперь: {int(round(updated['coins']))}{E_COINS}\n"
+        f"Осталось {emoji}: {updated_inv[mat_key]}"
+    )
+    remaining = updated_inv[mat_key]
+    # Show result with option to sell more or go back
+    result_kb = get_market_sell_qty_inline_kb(mat_key, remaining) if remaining > 0 else get_market_resources_inline_kb()
+    await callback.message.edit_text(result_text, reply_markup=result_kb, parse_mode="HTML")
+    await state.set_state(MarketMenu.selling_resource)
+    await state.update_data(sell_material=mat_key)
+    await callback.answer()
+
 
 @router.message(MarketMenu.selling_resource)
 async def handle_market_sell(message: types.Message, state: FSMContext):
@@ -6162,69 +6252,16 @@ async def handle_market_sell(message: types.Message, state: FSMContext):
 
     if not player or not mat_key:
         await state.set_state(MarketMenu.viewing_market)
-        await message.answer("Произошла ошибка. Вернулись на рынок.", reply_markup=get_market_kb())
+        await send_image_with_text(message, "images/rynok.png", _get_market_text(player or {}), reply_markup=get_market_resources_inline_kb())
         return
 
     if text == "⬅️ Назад на рынок":
         await state.set_state(MarketMenu.viewing_market)
-        await send_image_with_text(message, "images/rynok.png", _get_market_text(player), reply_markup=get_market_kb())
+        await send_image_with_text(message, "images/rynok.png", _get_market_text(player), reply_markup=get_market_resources_inline_kb())
         return
 
-    emoji, mat_name, _ = _MARKET_MAT_INFO[mat_key]
-    inv = get_inventory(user_id)
-    current_amount = inv.get(mat_key, 0)
-    price = MARKET_PRICES[mat_key]
-
-    # Parse quantity from button text
-    qty = None
-    if text.startswith("Продать всё (") and text.endswith(")"):
-        try:
-            qty = int(text[len("Продать всё ("):-1])
-        except ValueError:
-            pass
-    elif text.startswith("Продать "):
-        try:
-            qty = int(text[len("Продать "):])
-        except ValueError:
-            pass
-
-    if qty is None or qty <= 0:
-        await message.answer(
-            "Выбери количество из кнопок ниже!",
-            reply_markup=get_sell_qty_kb(mat_key, current_amount)
-        )
-        return
-
-    if qty > current_amount:
-        await message.answer(
-            f"{E_CROSS} Недостаточно {emoji} {mat_name}!\nДоступно: {current_amount}",
-            reply_markup=get_sell_qty_kb(mat_key, current_amount)
-        )
-        return
-
-    # Calculate earnings (round to integer to avoid floating point noise)
-    earned = int(round(qty * price))
-
-    ok = remove_inventory_material(user_id, mat_key, qty)
-    if not ok:
-        await message.answer(
-            f"{E_CROSS} Ошибка при продаже. Попробуй снова.",
-            reply_markup=get_sell_qty_kb(mat_key, current_amount)
-        )
-        return
-
-    add_coins_to_player(user_id, earned)
-    updated = get_player(user_id)
-    updated_inv = get_inventory(user_id)
-    await message.answer(
-        f"{E_PLUS} Продано: {qty} {emoji} {mat_name}\n"
-        f"{E_PLUS} Получено: {earned}{E_COINS}\n\n"
-        f"Монет теперь: {int(round(updated['coins']))}{E_COINS}\n"
-        f"Осталось {emoji}: {updated_inv[mat_key]}",
-        reply_markup=get_sell_qty_kb(mat_key, updated_inv[mat_key])
-    )
-    # Keep state in selling_resource with updated inventory
-    await state.update_data(sell_material=mat_key)
+    # Fallback: refresh market
+    await send_image_with_text(message, "images/rynok.png", _get_market_text(player), reply_markup=get_market_resources_inline_kb())
 
 @router.message(MarketMenu.viewing_consumables)
 async def handle_consumables(message: types.Message, state: FSMContext):

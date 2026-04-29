@@ -8,7 +8,9 @@ from bot.handlers.all_handlers import router, _give_activity_rewards
 from bot.handlers.start import router as start_router
 from bot.handlers.profile import router as profile_router
 from bot.handlers.donate import router as donate_router
+from bot.handlers.moderator import router as moderator_router
 from bot.database import init_database, get_all_completed_activities
+from bot.middleware import BanCheckMiddleware
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -35,9 +37,14 @@ async def main():
     init_database()
     logger.info("Database initialized")
 
+    # Register ban check middleware
+    dp.message.middleware(BanCheckMiddleware())
+    dp.callback_query.middleware(BanCheckMiddleware())
+
     dp.include_router(start_router)
     dp.include_router(profile_router)
     dp.include_router(donate_router)
+    dp.include_router(moderator_router)
     dp.include_router(router)
     logger.info("Handlers included")
 
