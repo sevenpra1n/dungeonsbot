@@ -6,6 +6,7 @@ import logging
 from aiogram import Router, types, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
+from aiogram.types import ReplyKeyboardRemove
 
 from bot.loader import bot
 from bot.config import ADMIN_IDS
@@ -16,7 +17,7 @@ from bot.emojis import (
     D_CRYS_1, D_CRYS_2, D_CRYS_3, D_CRYS_4, D_CRYS_5,
     E_CROSS, E_GIFT,
 )
-from bot.states import DonateMenu, AdminPaymentPanel
+from bot.states import DonateMenu, AdminPaymentPanel, MarketMenu
 from bot.database import (
     get_player, get_player_real_balance,
     create_donation_order, get_donation_order,
@@ -132,6 +133,9 @@ async def open_donate(message: types.Message, state: FSMContext):
         return
     balance = get_player_real_balance(user_id)
     await state.set_state(DonateMenu.viewing_coins)
+    # Send a message to remove the reply keyboard, then delete it
+    remove_msg = await message.answer("...", reply_markup=ReplyKeyboardRemove())
+    await remove_msg.delete()
     await message.answer(
         _donate_coins_text(balance),
         reply_markup=get_donate_coins_kb(),
@@ -338,6 +342,28 @@ async def donate_cancel_order(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer("❌ Заявка на пополнение отменена.")
     await state.clear()
+
+
+@router.callback_query(F.data == "donate_back_market")
+async def donate_back_to_market(callback: types.CallbackQuery, state: FSMContext):
+    user_id = callback.from_user.id
+    player = get_player(user_id)
+    if not player:
+        await callback.answer("Сначала зарегистрируйся! /start", show_alert=True)
+        return
+    await state.set_state(MarketMenu.viewing_category)
+    await callback.message.delete()
+    # Import here to avoid circular imports
+    from bot.keyboards import get_market_category_kb
+    market_text = (
+        '<tg-emoji emoji-id="5906909964328245730">🗓</tg-emoji> Выбери категорию на рынке:\n\n'
+        '<tg-emoji emoji-id="5267324424113124134">▫️</tg-emoji>Продажа ресурсов <tg-emoji emoji-id="6284888960644682300">🥕</tg-emoji>\n'
+        '<tg-emoji emoji-id="5267324424113124134">▫️</tg-emoji>Расходники <tg-emoji emoji-id="5334859426178313935">📕</tg-emoji>\n'
+        '<tg-emoji emoji-id="5267324424113124134">▫️</tg-emoji>Предметы <tg-emoji emoji-id="5936238625250350064">🎁</tg-emoji>\n'
+        '<tg-emoji emoji-id="5267324424113124134">▫️</tg-emoji>Донат <tg-emoji emoji-id="5906478942885255780">⭐</tg-emoji>'
+    )
+    await callback.message.answer(market_text, reply_markup=get_market_category_kb(), parse_mode="HTML")
+    await callback.answer()
 
 
 # ============== ADMIN PAYMENT PANEL ==============

@@ -480,6 +480,37 @@ def init_database():
         if "duplicate column name" not in str(e).lower():
             logging.warning(f"Migration warning: {e}")
 
+    # Таблица предупреждений игроков
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS player_warnings (
+            user_id INTEGER PRIMARY KEY,
+            count INTEGER DEFAULT 0,
+            last_reason TEXT DEFAULT '',
+            FOREIGN KEY (user_id) REFERENCES players(user_id)
+        )
+    ''')
+
+    # Таблица банов игроков
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS player_bans (
+            user_id INTEGER PRIMARY KEY,
+            reason TEXT NOT NULL,
+            banned_until TEXT NOT NULL,
+            banned_by INTEGER DEFAULT 0
+        )
+    ''')
+
+    # Таблица заявок на разблокировку
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS ban_appeals (
+            appeal_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            appeal_text TEXT NOT NULL,
+            status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'accepted', 'rejected')),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
     conn.commit()
     conn.close()
 
@@ -2057,3 +2088,205 @@ def deduct_real_balance(user_id: int, amount: int) -> bool:
     conn.commit()
     conn.close()
     return True
+
+
+# ============== MODERATION FUNCTIONS ==============
+
+def get_player_warnings(user_id: int) -> dict:
+    """Получить предупреждения игрока. Возвращает {'count': int, 'last_reason': str}"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('SELECT count, last_reason FROM player_warnings WHERE user_id = ?', (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return {'count': row[0], 'last_reason': row[1] or ''}
+    return {'count': 0, 'last_reason': ''}
+
+
+def give_warning(user_id: int, reason: str) -> int:
+    """Выдать предупреждение игроку. Возвращает новое количество предупреждений."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(
+        'INSERT OR IGNORE INTO player_warnings (user_id, count, last_reason) VALUES (?, 0, "")',
+        (user_id,)
+    )
+    cursor.execute(
+        'UPDATE player_warnings SET count = count + 1, last_reason = ? WHERE user_id = ?',
+        (reason, user_id)
+    )
+    cursor.execute('SELECT count FROM player_warnings WHERE user_id = ?', (user_id,))
+    row = cursor.fetchone()
+    conn.commit()
+    conn.close()
+    return row[0] if row else 1
+
+
+def remove_warning(user_id: int) -> int:
+    """Снять одно предупреждение. Возвращает новое количество."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(
+        'UPDATE player_warnings SET count = MAX(0, count - 1) WHERE user_id = ?',
+        (user_id,)
+    )
+    cursor.execute('SELECT count FROM player_warnings WHERE user_id = ?', (user_id,))
+    row = cursor.fetchone()
+    conn.commit()
+    conn.close()
+    return row[0] if row else 0
+
+
+def reset_warnings(user_id: int):
+    """Сбросить все предупреждения игрока"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(
+        'UPDATE player_warnings SET count = 0, last_reason = "" WHERE user_id = ?',
+        (user_id,)
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_player_ban(user_id: int) -> dict | None:
+    """Получить бан игрока или None"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('SELECT reason, banned_until FROM player_bans WHERE user_id = ?', (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return {'reason': row[0], 'banned_until': row[1]}
+    return None
+
+
+def is_player_banned(user_id: int) -> bool:
+    """Проверить, забанен ли игрок (с учётом истечения бана)"""
+    ban = get_player_ban(user_id)
+    if not ban:
+        return False
+    try:
+        banned_until = datetime.fromisoformat(ban['banned_until'])
+        if banned_until.tzinfo is None:
+            banned_until = banned_until.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) >= banned_until:
+            unban_player(user_id)
+            return False
+        return True
+    except Exception:
+        return False
+
+
+def ban_player(user_id: int, reason: str, duration_seconds: int, banned_by: int = 0):
+    """Забанить игрока на duration_seconds секунд"""
+    from datetime import timedelta
+    banned_until = (datetime.now(timezone.utc) + timedelta(seconds=duration_seconds)).isoformat()
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(
+        'INSERT OR REPLACE INTO player_bans (user_id, reason, banned_until, banned_by) VALUES (?, ?, ?, ?)',
+        (user_id, reason, banned_until, banned_by)
+    )
+    conn.commit()
+    conn.close()
+
+
+def unban_player(user_id: int):
+    """Разбанить игрока"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM player_bans WHERE user_id = ?', (user_id,))
+    conn.commit()
+    conn.close()
+
+
+def get_ban_remaining_seconds(user_id: int) -> int:
+    """Оставшееся время бана в секундах"""
+    ban = get_player_ban(user_id)
+    if not ban:
+        return 0
+    try:
+        banned_until = datetime.fromisoformat(ban['banned_until'])
+        if banned_until.tzinfo is None:
+            banned_until = banned_until.replace(tzinfo=timezone.utc)
+        remaining = (banned_until - datetime.now(timezone.utc)).total_seconds()
+        return max(0, int(remaining))
+    except Exception:
+        return 0
+
+
+def format_ban_remaining(user_id: int) -> str:
+    """Форматировать оставшееся время бана"""
+    secs = get_ban_remaining_seconds(user_id)
+    if secs <= 0:
+        return "0 сек."
+    minutes, seconds = divmod(secs, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours > 0:
+        return f"{hours}ч {minutes}мин {seconds}сек"
+    if minutes > 0:
+        return f"{minutes}мин {seconds}сек"
+    return f"{seconds}сек"
+
+
+def create_ban_appeal(user_id: int, appeal_text: str) -> int:
+    """Создать заявку на разблокировку. Возвращает appeal_id."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM ban_appeals WHERE user_id = ? AND status = "pending"', (user_id,))
+    cursor.execute('INSERT INTO ban_appeals (user_id, appeal_text) VALUES (?, ?)', (user_id, appeal_text))
+    appeal_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return appeal_id
+
+
+def get_ban_appeal(appeal_id: int) -> dict | None:
+    """Получить заявку по ID"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(
+        'SELECT appeal_id, user_id, appeal_text, status, created_at FROM ban_appeals WHERE appeal_id = ?',
+        (appeal_id,)
+    )
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return {
+            'appeal_id': row[0], 'user_id': row[1], 'appeal_text': row[2],
+            'status': row[3], 'created_at': row[4]
+        }
+    return None
+
+
+def get_pending_appeals() -> list:
+    """Получить все ожидающие заявки на разблокировку"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT ba.appeal_id, ba.user_id, ba.appeal_text, ba.created_at, p.nickname
+        FROM ban_appeals ba
+        LEFT JOIN players p ON p.user_id = ba.user_id
+        WHERE ba.status = 'pending'
+        ORDER BY ba.created_at DESC
+    ''')
+    rows = cursor.fetchall()
+    conn.close()
+    return [
+        {
+            'appeal_id': r[0], 'user_id': r[1], 'appeal_text': r[2],
+            'created_at': r[3], 'nickname': r[4] or '?'
+        }
+        for r in rows
+    ]
+
+
+def update_appeal_status(appeal_id: int, status: str):
+    """Обновить статус заявки: 'accepted' или 'rejected'"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('UPDATE ban_appeals SET status = ? WHERE appeal_id = ?', (status, appeal_id))
+    conn.commit()
+    conn.close()

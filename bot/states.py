@@ -135,3 +135,19 @@ class DonateMenu(StatesGroup):
 class AdminPaymentPanel(StatesGroup):
     main_menu = State()          # Список заявок
     viewing_order = State()      # Просмотр конкретной заявки
+
+
+class ModeratorPanel(StatesGroup):
+    main_menu = State()
+    entering_nickname_warn = State()
+    entering_reason_warn = State()
+    entering_nickname_ban = State()
+    entering_reason_ban = State()
+    entering_duration_ban = State()
+    entering_nickname_unwarn = State()
+    viewing_appeals = State()
+    viewing_appeal = State()
+
+
+class BanAppealState(StatesGroup):
+    writing_appeal = State()
