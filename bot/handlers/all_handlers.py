@@ -241,7 +241,8 @@ def _roll_chest_drops(user_id: int, chest_key: str) -> tuple[list[str], dict]:
     """
     Бросить дроп для сундука chest_key.
     Возвращает (lines, rewards) где lines — список строк для отображения,
-    rewards — словарь {material: amount, 'experience': amount, 'coins': amount, 'crystals': amount, 'status': name}
+    rewards — словарь {material: amount, 'experience': amount, 'coins': amount, 'crystals': amount,
+                       'components': {'rarity': amount, ...}}
     """
     cfg = CHEST_CONFIG[chest_key]
     lines = []
@@ -256,6 +257,7 @@ def _roll_chest_drops(user_id: int, chest_key: str) -> tuple[list[str], dict]:
         # ("material",   amount,    chance)
         # ("material",   (min, max), chance)
         # ("status",     "Name",    chance)
+        # ("component",  "rarity",  amount_or_range, chance)
         if drop[0] == "status":
             _, sname, chance = drop
             if sname in unlocked_statuses:
@@ -265,6 +267,21 @@ def _roll_chest_drops(user_id: int, chest_key: str) -> tuple[list[str], dict]:
                 # Сразу устанавливаем статус
                 set_player_status(user_id, sname)
                 lines.append(f"{E_GIFT} Статус «{sname}» разблокирован!")
+            continue
+
+        if drop[0] == "component":
+            # ("component", "rarity", amount_or_range, chance)
+            _, rarity, val, chance = drop
+            if random.random() < chance:
+                amount = random.randint(val[0], val[1]) if isinstance(val, tuple) else val
+                if amount > 0:
+                    components = rewards.setdefault('components', {})
+                    components[rarity] = components.get(rarity, 0) + amount
+                    rarity_names = {
+                        'common': 'обычных', 'rare': 'редких', 'epic': 'эпических',
+                        'legendary': 'легендарных', 'mythic': 'мифических',
+                    }
+                    lines.append(f"{E_PLUS} +{amount} ⚙️ {rarity_names.get(rarity, rarity)} компонентов")
             continue
 
         resource = drop[0]
@@ -297,15 +314,15 @@ def _roll_chest_drops(user_id: int, chest_key: str) -> tuple[list[str], dict]:
         else:
             rewards[resource] = rewards.get(resource, 0) + amount
             mat_emojis = {
-                'wood':     (E_WOOD,     'дерева'),
-                'stone':    (E_STONE,    'камня'),
-                'food':     (E_FOOD,     'еды'),
-                'iron':     (E_IRON,     'железа'),
-                'gold':     (E_GOLD_M,   'золота'),
-                'copper':   (E_COPPER,   'меди'),
-                'steel':    (E_STEEL,    'стали'),
-                'amethyst': (E_AMETHYST, 'аметиста'),
-                'gem':      (E_GEM,      'самоцвета'),
+                'wood':     (_E_MAT_WOOD,     'дерева'),
+                'stone':    (_E_MAT_STONE,    'камня'),
+                'food':     (_E_MAT_FOOD,     'еды'),
+                'iron':     (_E_MAT_IRON,     'железа'),
+                'gold':     (_E_MAT_GOLD,     'золота'),
+                'copper':   (_E_MAT_COPPER,   'меди'),
+                'steel':    (_E_MAT_STEEL,    'стали'),
+                'amethyst': (_E_MAT_AMETHYST, 'аметиста'),
+                'gem':      (_E_MAT_GEM,      'самоцвета'),
             }
             emoji, mat_name = mat_emojis.get(resource, ('📦', resource))
             lines.append(f"{E_PLUS} +{amount} {emoji} {mat_name}")
@@ -324,6 +341,9 @@ async def _apply_chest_rewards(user_id: int, rewards: dict):
     for mat in ('wood', 'stone', 'food', 'iron', 'gold', 'copper', 'steel', 'amethyst', 'gem'):
         if rewards.get(mat):
             add_inventory_material(user_id, mat, rewards[mat])
+    for rarity, amount in rewards.get('components', {}).items():
+        if amount > 0:
+            add_component(user_id, rarity, amount)
 
 
 CHEST_BUTTON_MAP = {
@@ -1600,12 +1620,11 @@ async def handle_crafting_menu(message: types.Message, state: FSMContext):
     if text == "🔨 Изготовить":
         rarity_key = next(iter(CRAFTING_RECIPES))
         choice_text = format_crafting_choice_card(rarity_key)
-        sent = await message.answer(
+        await message.answer(
             choice_text,
-            reply_markup=ReplyKeyboardRemove(),
+            reply_markup=get_craft_choice_inline_kb(rarity_key),
             parse_mode="MarkdownV2"
         )
-        await sent.edit_reply_markup(reply_markup=get_craft_choice_inline_kb(rarity_key))
         await state.update_data(craft_rarity=rarity_key)
         await state.set_state(ForgeMenu.viewing_craft_choice)
         return
@@ -1620,6 +1639,15 @@ def _get_next_craft_rarity(rarity_key: str) -> str:
     except ValueError:
         return rarity_order[0]
     return rarity_order[(current_index + 1) % len(rarity_order)]
+
+
+def _get_prev_craft_rarity(rarity_key: str) -> str:
+    rarity_order = list(CRAFTING_RECIPES.keys())
+    try:
+        current_index = rarity_order.index(rarity_key)
+    except ValueError:
+        return rarity_order[-1]
+    return rarity_order[(current_index - 1) % len(rarity_order)]
 
 
 def _build_missing_craft_text(rarity_key: str, missing: list[tuple[str, int, int]]) -> str:
@@ -1653,12 +1681,11 @@ async def handle_craft_choice(message: types.Message, state: FSMContext):
     data = await state.get_data()
     rarity_key = data.get("craft_rarity") or next(iter(CRAFTING_RECIPES))
     choice_text = format_crafting_choice_card(rarity_key)
-    sent = await message.answer(
+    await message.answer(
         choice_text,
-        reply_markup=ReplyKeyboardRemove(),
+        reply_markup=get_craft_choice_inline_kb(rarity_key),
         parse_mode="MarkdownV2"
     )
-    await sent.edit_reply_markup(reply_markup=get_craft_choice_inline_kb(rarity_key))
 
 
 @router.callback_query(ForgeMenu.viewing_craft_choice, F.data.startswith("craft_next:"))
@@ -1673,6 +1700,35 @@ async def handle_craft_choice_next(callback: types.CallbackQuery, state: FSMCont
         parse_mode="MarkdownV2"
     )
     await state.update_data(craft_rarity=rarity_key)
+    await callback.answer()
+
+
+@router.callback_query(ForgeMenu.viewing_craft_choice, F.data.startswith("craft_prev:"))
+async def handle_craft_choice_prev(callback: types.CallbackQuery, state: FSMContext):
+    data = callback.data or ""
+    current_rarity = data.split(":", 1)[1]
+    rarity_key = _get_prev_craft_rarity(current_rarity)
+    choice_text = format_crafting_choice_card(rarity_key)
+    await callback.message.edit_text(
+        choice_text,
+        reply_markup=get_craft_choice_inline_kb(rarity_key),
+        parse_mode="MarkdownV2"
+    )
+    await state.update_data(craft_rarity=rarity_key)
+    await callback.answer()
+
+
+@router.callback_query(ForgeMenu.viewing_craft_choice, F.data == "craft_back")
+async def handle_craft_back(callback: types.CallbackQuery, state: FSMContext):
+    user_id = callback.from_user.id
+    comp = get_components(user_id)
+    crafting_text = format_crafting_menu_text(comp)
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+    await callback.message.answer(crafting_text, reply_markup=get_crafting_kb(), parse_mode="MarkdownV2")
+    await state.set_state(ForgeMenu.viewing_crafting)
     await callback.answer()
 
 
@@ -4145,6 +4201,11 @@ async def battle_round(message: types.Message, state: FSMContext):
                     cryst_earned = loc_rewards['crystals']
                     add_crystals_to_player(user_id, cryst_earned)
                     reward_lines.append(f"{E_PLUS} {cryst_earned} {E_CRYSTALS} кристалл")
+            for chest_key, chest_chance in loc_rewards.get('chest_drop', []):
+                if random.random() < chest_chance:
+                    add_inventory_material(user_id, chest_key, 1)
+                    chest_name = CHEST_CONFIG.get(chest_key, {}).get("name", "сундук")
+                    reward_lines.append(f"{E_PLUS} 1 🎁 {chest_name}")
             battle_log += _fmt_victory(enemy_info['name'], reward_lines)
             await _send_victory_message(message, battle_log, reply_markup=get_end_battle_kb())
             await state.clear()
