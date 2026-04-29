@@ -222,6 +222,7 @@ LOCATION_ENEMIES = {
             "experience": (3, 9),
             "food": (2, 2),
             "food_chance": 0.20,
+            "chest_drop": [("chest_wood", 0.05)],
         },
     },
     "angry_hawk": {
@@ -237,6 +238,7 @@ LOCATION_ENEMIES = {
             "experience": (10, 16),
             "crystals": 1,
             "crystals_chance": 0.05,
+            "chest_drop": [("chest_wood", 0.08), ("chest_steel", 0.02)],
         },
     },
 }
@@ -351,6 +353,7 @@ FOREST_ENEMIES = {
             "coins": (10, 30),
             "experience": (5, 12),
             "clan_exp": (6, 10),
+            "chest_drop": [("chest_wood", 0.05)],
         },
     },
     "forest_archer": {
@@ -364,6 +367,7 @@ FOREST_ENEMIES = {
             "wood": (4, 10),
             "experience": (15, 20),
             "clan_exp": (10, 15),
+            "chest_drop": [("chest_wood", 0.07), ("chest_steel", 0.03)],
         },
     },
     "forest_brute": {
@@ -377,6 +381,7 @@ FOREST_ENEMIES = {
             "wood": (4, 10),
             "experience": (15, 20),
             "clan_exp": (10, 15),
+            "chest_drop": [("chest_wood", 0.08), ("chest_steel", 0.05), ("chest_gold", 0.01)],
         },
     },
 }
@@ -394,6 +399,7 @@ MINE_ENEMIES = {
             "iron": (1, 3),
             "experience": (8, 15),
             "clan_exp": (8, 12),
+            "chest_drop": [("chest_wood", 0.05), ("chest_steel", 0.02)],
         },
     },
     "cave_troll": {
@@ -407,6 +413,7 @@ MINE_ENEMIES = {
             "iron": (2, 7),
             "experience": (18, 28),
             "clan_exp": (12, 18),
+            "chest_drop": [("chest_wood", 0.06), ("chest_steel", 0.04), ("chest_gold", 0.01)],
         },
     },
     "stone_golem": {
@@ -420,6 +427,7 @@ MINE_ENEMIES = {
             "iron": (5, 15),
             "experience": (25, 40),
             "clan_exp": (15, 22),
+            "chest_drop": [("chest_wood", 0.07), ("chest_steel", 0.05), ("chest_gold", 0.02)],
         },
     },
     "iron_giant": {
@@ -433,6 +441,7 @@ MINE_ENEMIES = {
             "iron": (10, 30),
             "experience": (40, 65),
             "clan_exp": (20, 30),
+            "chest_drop": [("chest_wood", 0.07), ("chest_steel", 0.06), ("chest_gold", 0.03)],
         },
     },
 }
@@ -449,6 +458,7 @@ WASTELAND_ENEMIES = {
             "coins": (20, 60),
             "experience": (10, 18),
             "clan_exp": (6, 12),
+            "chest_drop": [("chest_wood", 0.04), ("chest_steel", 0.03)],
         },
     },
     "rabid_hyena": {
@@ -462,6 +472,7 @@ WASTELAND_ENEMIES = {
             "experience": (18, 30),
             "clan_exp": (10, 16),
             "iron": (1, 2),
+            "chest_drop": [("chest_wood", 0.05), ("chest_steel", 0.04), ("chest_gold", 0.01)],
         },
     },
     "ash_stalker": {
@@ -476,6 +487,7 @@ WASTELAND_ENEMIES = {
             "clan_exp": (14, 22),
             "iron": (2, 5),
             "gold": (1, 2),
+            "chest_drop": [("chest_wood", 0.05), ("chest_steel", 0.05), ("chest_gold", 0.02)],
         },
     },
     "waste_reaver": {
@@ -491,6 +503,7 @@ WASTELAND_ENEMIES = {
             "iron": (4, 9),
             "gold": (1, 3),
             "steel": (1, 1),
+            "chest_drop": [("chest_wood", 0.04), ("chest_steel", 0.05), ("chest_gold", 0.03)],
         },
     },
     "sand_titan": {
@@ -506,6 +519,7 @@ WASTELAND_ENEMIES = {
             "iron": (6, 14),
             "gold": (2, 5),
             "steel": (1, 2),
+            "chest_drop": [("chest_wood", 0.04), ("chest_steel", 0.05), ("chest_gold", 0.04)],
         },
     },
 }
@@ -523,6 +537,7 @@ FARLANDS_ENEMIES = {
             "experience": (18, 28),
             "clan_exp": (8, 14),
             "iron": (1, 3),
+            "chest_drop": [("chest_wood", 0.04), ("chest_steel", 0.05), ("chest_gold", 0.02)],
         },
     },
     "storm_raider": {
@@ -537,6 +552,7 @@ FARLANDS_ENEMIES = {
             "clan_exp": (14, 20),
             "iron": (2, 6),
             "gold": (1, 2),
+            "chest_drop": [("chest_wood", 0.03), ("chest_steel", 0.06), ("chest_gold", 0.03), ("chest_divine", 0.005)],
         },
     },
     "rift_hunter": {
@@ -552,6 +568,7 @@ FARLANDS_ENEMIES = {
             "iron": (4, 10),
             "gold": (2, 4),
             "steel": (1, 1),
+            "chest_drop": [("chest_wood", 0.03), ("chest_steel", 0.05), ("chest_gold", 0.04), ("chest_divine", 0.01)],
         },
     },
     "obsidian_keeper": {
@@ -567,6 +584,7 @@ FARLANDS_ENEMIES = {
             "iron": (7, 16),
             "gold": (2, 6),
             "steel": (1, 2),
+            "chest_drop": [("chest_wood", 0.03), ("chest_steel", 0.05), ("chest_gold", 0.05), ("chest_divine", 0.015)],
         },
     },
     "ancient_warden": {
@@ -582,6 +600,7 @@ FARLANDS_ENEMIES = {
             "iron": (10, 22),
             "gold": (4, 8),
             "steel": (1, 3),
+            "chest_drop": [("chest_wood", 0.02), ("chest_steel", 0.04), ("chest_gold", 0.06), ("chest_divine", 0.02)],
         },
     },
 }
@@ -600,6 +619,7 @@ HELL_ENEMIES = {
             "clan_exp": (10, 16),
             "iron": (2, 5),
             "gold": (1, 2),
+            "chest_drop": [("chest_wood", 0.03), ("chest_steel", 0.05), ("chest_gold", 0.03)],
         },
     },
     "soul_reaper": {
@@ -615,6 +635,7 @@ HELL_ENEMIES = {
             "iron": (5, 11),
             "gold": (2, 4),
             "steel": (1, 1),
+            "chest_drop": [("chest_wood", 0.02), ("chest_steel", 0.05), ("chest_gold", 0.04), ("chest_divine", 0.01)],
         },
     },
     "infernal_knight": {
@@ -630,6 +651,7 @@ HELL_ENEMIES = {
             "iron": (8, 18),
             "gold": (3, 7),
             "steel": (1, 2),
+            "chest_drop": [("chest_wood", 0.02), ("chest_steel", 0.04), ("chest_gold", 0.05), ("chest_divine", 0.02)],
         },
     },
     "pit_overseer": {
@@ -645,6 +667,7 @@ HELL_ENEMIES = {
             "iron": (12, 26),
             "gold": (5, 10),
             "steel": (2, 4),
+            "chest_drop": [("chest_wood", 0.02), ("chest_steel", 0.03), ("chest_gold", 0.05), ("chest_divine", 0.03)],
         },
     },
     "lord_of_ashes": {
@@ -660,6 +683,7 @@ HELL_ENEMIES = {
             "iron": (16, 34),
             "gold": (7, 14),
             "steel": (3, 5),
+            "chest_drop": [("chest_wood", 0.01), ("chest_steel", 0.03), ("chest_gold", 0.05), ("chest_divine", 0.04)],
         },
     },
 }

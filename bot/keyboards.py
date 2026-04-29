@@ -129,6 +129,7 @@ def get_craft_choice_inline_kb(rarity_key: str) -> InlineKeyboardMarkup:
     """Inline-кнопки выбора и крафта компонента."""
     kb = [
         [
+            InlineKeyboardButton(text="<", callback_data=f"craft_prev:{rarity_key}"),
             InlineKeyboardButton(text="изготовить", callback_data=f"craft_make:{rarity_key}"),
             InlineKeyboardButton(text=">", callback_data=f"craft_next:{rarity_key}"),
         ],
