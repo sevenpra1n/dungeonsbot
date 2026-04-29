@@ -145,6 +145,7 @@ class ModeratorPanel(StatesGroup):
     entering_reason_ban = State()
     entering_duration_ban = State()
     entering_nickname_unwarn = State()
+    entering_nickname_unban = State()
     viewing_appeals = State()
     viewing_appeal = State()
 

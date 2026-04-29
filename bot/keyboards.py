@@ -691,6 +691,7 @@ def get_moderator_main_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="⚠️ Выдать предупреждение", callback_data="mod_warn")],
         [InlineKeyboardButton(text="🔴 Выдать бан",            callback_data="mod_ban")],
+        [InlineKeyboardButton(text="🟢 Снять бан",             callback_data="mod_unban")],
         [InlineKeyboardButton(text="✅ Снять предупреждение",  callback_data="mod_unwarn")],
         [InlineKeyboardButton(text="📋 Заявки на разблокировку", callback_data="mod_appeals")],
         [InlineKeyboardButton(text="🔍 Проверить игрока",      callback_data="mod_check")],

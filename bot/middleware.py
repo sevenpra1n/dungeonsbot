@@ -3,11 +3,13 @@
 from typing import Callable, Any, Dict, Awaitable
 
 from aiogram import BaseMiddleware
+from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery, TelegramObject
 
 from bot.config import ADMIN_IDS
 from bot.database import is_player_banned, get_player, get_player_ban, format_ban_remaining
 from bot.keyboards import get_ban_appeal_kb
+from bot.states import BanAppealState
 
 # Callbacks that should pass through even when banned
 _ALLOWED_CALLBACKS = {"appeal_ban", "warn_ack"}
@@ -50,6 +52,14 @@ class BanCheckMiddleware(BaseMiddleware):
 
         if user_id and user_id not in ADMIN_IDS:
             if is_player_banned(user_id):
+                # Allow messages through when the player is writing a ban appeal
+                if isinstance(event, Message):
+                    fsm_context: FSMContext | None = data.get("state")
+                    if fsm_context is not None:
+                        current_state = await fsm_context.get_state()
+                        if current_state == BanAppealState.writing_appeal.state:
+                            return await handler(event, data)
+
                 player = get_player(user_id)
                 ban = get_player_ban(user_id)
                 if player and ban:
