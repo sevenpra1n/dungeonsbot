@@ -141,6 +141,19 @@ async def mod_unwarn_start(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
+@router.callback_query(F.data == "mod_unban")
+async def mod_unban_start(callback: types.CallbackQuery, state: FSMContext):
+    if callback.from_user.id not in ADMIN_IDS:
+        await callback.answer("Нет доступа.", show_alert=True)
+        return
+    await state.set_state(ModeratorPanel.entering_nickname_unban)
+    await callback.message.edit_text(
+        "🟢 <b>Снятие бана</b>\n\nВведите никнейм игрока:",
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
 @router.callback_query(F.data == "mod_check")
 async def mod_check_start(callback: types.CallbackQuery, state: FSMContext):
     if callback.from_user.id not in ADMIN_IDS:
@@ -459,6 +472,44 @@ async def mod_entering_nickname_unwarn(message: types.Message, state: FSMContext
     await message.answer(
         f"✅ Предупреждение снято с игрока <b>{html.escape(nickname)}</b>. "
         f"Осталось: {new_count}/{_MAX_WARNINGS}",
+        reply_markup=get_moderator_main_kb(),
+        parse_mode="HTML"
+    )
+
+
+@router.message(ModeratorPanel.entering_nickname_unban)
+async def mod_entering_nickname_unban(message: types.Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS:
+        return
+    nickname = message.text.strip()
+    target = get_player_by_nickname(nickname)
+    if not target:
+        await message.answer(f"❌ Игрок «{html.escape(nickname)}» не найден.", parse_mode="HTML")
+        return
+
+    if not is_player_banned(target['user_id']):
+        await message.answer(
+            f"ℹ️ Игрок <b>{html.escape(nickname)}</b> не заблокирован.",
+            reply_markup=get_moderator_main_kb(),
+            parse_mode="HTML"
+        )
+        await state.set_state(ModeratorPanel.main_menu)
+        return
+
+    unban_player(target['user_id'])
+    await state.set_state(ModeratorPanel.main_menu)
+
+    try:
+        await bot.send_message(
+            chat_id=target['user_id'],
+            text="🟢 Ваш бан был снят модератором. Добро пожаловать обратно!",
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logger.warning(f"Failed to notify player {target['user_id']}: {e}")
+
+    await message.answer(
+        f"✅ Бан снят с игрока <b>{html.escape(nickname)}</b>.",
         reply_markup=get_moderator_main_kb(),
         parse_mode="HTML"
     )

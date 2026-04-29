@@ -6157,7 +6157,7 @@ async def market_sell_select(callback: types.CallbackQuery, state: FSMContext):
     )
     await state.update_data(sell_material=mat_key)
     await state.set_state(MarketMenu.selling_resource)
-    await callback.message.edit_text(sell_text, reply_markup=get_market_sell_qty_inline_kb(mat_key, amount), parse_mode="HTML")
+    await callback.message.edit_caption(caption=sell_text, reply_markup=get_market_sell_qty_inline_kb(mat_key, amount), parse_mode="HTML")
     await callback.answer()
 
 
@@ -6170,7 +6170,7 @@ async def market_sell_back(callback: types.CallbackQuery, state: FSMContext):
         await callback.answer()
         return
     await state.set_state(MarketMenu.viewing_market)
-    await callback.message.edit_text(_get_market_text(player), reply_markup=get_market_resources_inline_kb(), parse_mode="HTML")
+    await callback.message.edit_caption(caption=_get_market_text(player), reply_markup=get_market_resources_inline_kb(), parse_mode="HTML")
     await callback.answer()
 
 
@@ -6236,7 +6236,7 @@ async def market_sell_qty(callback: types.CallbackQuery, state: FSMContext):
     remaining = updated_inv[mat_key]
     # Show result with option to sell more or go back
     result_kb = get_market_sell_qty_inline_kb(mat_key, remaining) if remaining > 0 else get_market_resources_inline_kb()
-    await callback.message.edit_text(result_text, reply_markup=result_kb, parse_mode="HTML")
+    await callback.message.edit_caption(caption=result_text, reply_markup=result_kb, parse_mode="HTML")
     await state.set_state(MarketMenu.selling_resource)
     await state.update_data(sell_material=mat_key)
     await callback.answer()
