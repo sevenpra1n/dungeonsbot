@@ -7,6 +7,7 @@ from bot.loader import bot, dp
 from bot.handlers.all_handlers import router, _give_activity_rewards
 from bot.handlers.start import router as start_router
 from bot.handlers.profile import router as profile_router
+from bot.handlers.donate import router as donate_router
 from bot.database import init_database, get_all_completed_activities
 
 logging.basicConfig(level=logging.INFO)
@@ -36,6 +37,7 @@ async def main():
 
     dp.include_router(start_router)
     dp.include_router(profile_router)
+    dp.include_router(donate_router)
     dp.include_router(router)
     logger.info("Handlers included")
 

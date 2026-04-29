@@ -458,6 +458,28 @@ def init_database():
         if "duplicate column name" not in str(e).lower():
             logging.warning(f"Migration warning: {e}")
 
+    # Таблица заявок на пополнение баланса (донат)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS donation_orders (
+            order_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            nickname TEXT NOT NULL,
+            amount INTEGER NOT NULL,
+            memo_code TEXT NOT NULL UNIQUE,
+            status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'paid', 'completed', 'cancelled')),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES players(user_id)
+        )
+    ''')
+
+    # Миграция: добавить реальный баланс (рубли) если нет
+    try:
+        cursor.execute('ALTER TABLE players ADD COLUMN real_balance INTEGER DEFAULT 0')
+        conn.commit()
+    except sqlite3.OperationalError as e:
+        if "duplicate column name" not in str(e).lower():
+            logging.warning(f"Migration warning: {e}")
+
     conn.commit()
     conn.close()
 
@@ -1943,3 +1965,95 @@ def add_skill_purchase(user_id: int, skill_id: int):
     cursor.execute('INSERT OR IGNORE INTO player_skills (user_id, skill_id) VALUES (?, ?)', (user_id, skill_id))
     conn.commit()
     conn.close()
+
+
+# ============== DONATION FUNCTIONS ==============
+import string as _string
+
+def _generate_memo_code(length: int = 8) -> str:
+    """Генерировать уникальный memo-код для заявки на пополнение"""
+    chars = _string.ascii_uppercase + _string.digits
+    while True:
+        code = ''.join(random.choices(chars, k=length))
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute('SELECT 1 FROM donation_orders WHERE memo_code = ?', (code,))
+        exists = cursor.fetchone()
+        conn.close()
+        if not exists:
+            return code
+
+def create_donation_order(user_id: int, nickname: str, amount: int) -> dict:
+    """Создать новую заявку на пополнение баланса"""
+    memo = _generate_memo_code()
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(
+        'INSERT INTO donation_orders (user_id, nickname, amount, memo_code, status) VALUES (?, ?, ?, ?, ?)',
+        (user_id, nickname, amount, memo, 'pending')
+    )
+    order_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return {'order_id': order_id, 'memo_code': memo, 'amount': amount}
+
+def get_donation_order(order_id: int) -> dict | None:
+    """Получить заявку по ID"""
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM donation_orders WHERE order_id = ?', (order_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def get_pending_donation_orders() -> list:
+    """Получить все незавершённые заявки (pending или paid)"""
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT * FROM donation_orders WHERE status IN ('pending', 'paid') ORDER BY created_at ASC"
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+def update_donation_order_status(order_id: int, status: str):
+    """Обновить статус заявки"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('UPDATE donation_orders SET status = ? WHERE order_id = ?', (status, order_id))
+    conn.commit()
+    conn.close()
+
+def get_player_real_balance(user_id: int) -> int:
+    """Получить реальный баланс игрока (рубли)"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('SELECT real_balance FROM players WHERE user_id = ?', (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] if row else 0
+
+def add_real_balance(user_id: int, amount: int):
+    """Пополнить реальный баланс игрока"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('UPDATE players SET real_balance = real_balance + ? WHERE user_id = ?', (amount, user_id))
+    conn.commit()
+    conn.close()
+
+def deduct_real_balance(user_id: int, amount: int) -> bool:
+    """Списать с реального баланса игрока. Вернуть True если хватает средств."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('SELECT real_balance FROM players WHERE user_id = ?', (user_id,))
+    row = cursor.fetchone()
+    if not row or row[0] < amount:
+        conn.close()
+        return False
+    cursor.execute('UPDATE players SET real_balance = real_balance - ? WHERE user_id = ?', (amount, user_id))
+    conn.commit()
+    conn.close()
+    return True

@@ -50,6 +50,7 @@ def get_market_category_kb() -> ReplyKeyboardMarkup:
         [KeyboardButton(text="🥕 Продажа ресурсов")],
         [KeyboardButton(text="📕 Расходники")],
         [KeyboardButton(text="🎁 Предметы")],
+        [KeyboardButton(text="💸 Донат")],
         [KeyboardButton(text="⬅️ Назад в меню")],
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
@@ -541,3 +542,88 @@ def get_statuses_kb(player: dict, page: int = 0) -> ReplyKeyboardMarkup:
         kb.append(nav)
     kb.append([KeyboardButton(text="⬅️ Назад")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+
+# ============== DONATE KEYBOARDS ==============
+
+# Prices for donate (coins)
+DONATE_COINS_PRICES = [
+    (1000,  19,  "1.000👛"),
+    (5000,  89,  "5.000👛"),
+    (20000, 309, "20.000👛"),
+    (80000, 1199, "80.000👛"),
+]
+
+# Prices for donate (crystals)
+DONATE_CRYSTALS_PRICES = [
+    (79,   39,  "79💎"),
+    (239,  99,  "239💎"),
+    (829,  319, "829💎"),
+    (2999, 1029, "2.999💎"),
+]
+
+
+def get_donate_coins_kb() -> InlineKeyboardMarkup:
+    """Inline-клавиатура донат (монеты)"""
+    rows = [
+        [InlineKeyboardButton(text="💎 Кристаллы", callback_data="donate_tab:crystals")],
+    ]
+    for coins, price, label in DONATE_COINS_PRICES:
+        rows.append([InlineKeyboardButton(
+            text=f"{label} = {price}🟢",
+            callback_data=f"donate_buy_coins:{coins}:{price}"
+        )])
+    rows.append([InlineKeyboardButton(text="💸 Пополнить баланс", callback_data="donate_topup")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def get_donate_crystals_kb() -> InlineKeyboardMarkup:
+    """Inline-клавиатура донат (кристаллы)"""
+    rows = [
+        [InlineKeyboardButton(text="💰 Монеты", callback_data="donate_tab:coins")],
+    ]
+    for crystals, price, label in DONATE_CRYSTALS_PRICES:
+        extra = " (🎁Выгодно!)" if crystals == 239 else ""
+        rows.append([InlineKeyboardButton(
+            text=f"{label} = {price}🟢{extra}",
+            callback_data=f"donate_buy_crystals:{crystals}:{price}"
+        )])
+    rows.append([InlineKeyboardButton(text="💸 Пополнить баланс", callback_data="donate_topup")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def get_donate_back_kb() -> InlineKeyboardMarkup:
+    """Inline-кнопка 'Назад' из панели доната"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data="donate_tab:coins")]
+    ])
+
+
+def get_payment_waiting_kb(order_id: int) -> InlineKeyboardMarkup:
+    """Кнопки ожидания оплаты"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Оплатил(а)", callback_data=f"donate_paid:{order_id}")],
+        [InlineKeyboardButton(text="❌ Отменить", callback_data=f"donate_cancel:{order_id}")],
+    ])
+
+
+def get_admin_payment_kb(orders: list) -> InlineKeyboardMarkup:
+    """Inline-клавиатура /admin для просмотра заявок"""
+    rows = []
+    for order in orders:
+        status_icon = "🟡" if order['status'] == 'pending' else "✅"
+        rows.append([InlineKeyboardButton(
+            text=f"{status_icon} {order['nickname']} — {order['amount']}₽ [{order['memo_code']}]",
+            callback_data=f"adm_order:{order['order_id']}"
+        )])
+    rows.append([InlineKeyboardButton(text="🔄 Обновить", callback_data="adm_refresh")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def get_admin_order_action_kb(order_id: int) -> InlineKeyboardMarkup:
+    """Кнопки действий с заявкой (для админа)"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💰 Пополнить баланс", callback_data=f"adm_approve:{order_id}")],
+        [InlineKeyboardButton(text="❌ Отклонить", callback_data=f"adm_reject:{order_id}")],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data="adm_refresh")],
+    ])
