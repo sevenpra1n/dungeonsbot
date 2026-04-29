@@ -6128,7 +6128,7 @@ async def handle_market(message: types.Message, state: FSMContext):
         return
 
     # Fallback: refresh market with inline keyboard
-    await send_image_with_text(message, "images/rynok.png", _get_market_text(player), reply_markup=get_market_resources_inline_kb())
+    await send_image_with_text(message, "images/rynok.png", _get_market_text(player), reply_markup=get_market_resources_inline_kb(), parse_mode="HTML")
 
 
 @router.callback_query(F.data.startswith("mkt_sell:"))
@@ -6252,16 +6252,19 @@ async def handle_market_sell(message: types.Message, state: FSMContext):
 
     if not player or not mat_key:
         await state.set_state(MarketMenu.viewing_market)
-        await send_image_with_text(message, "images/rynok.png", _get_market_text(player or {}), reply_markup=get_market_resources_inline_kb())
+        if player:
+            await send_image_with_text(message, "images/rynok.png", _get_market_text(player), reply_markup=get_market_resources_inline_kb(), parse_mode="HTML")
+        else:
+            await message.answer("Сначала зарегистрируйся! /start")
         return
 
     if text == "⬅️ Назад на рынок":
         await state.set_state(MarketMenu.viewing_market)
-        await send_image_with_text(message, "images/rynok.png", _get_market_text(player), reply_markup=get_market_resources_inline_kb())
+        await send_image_with_text(message, "images/rynok.png", _get_market_text(player), reply_markup=get_market_resources_inline_kb(), parse_mode="HTML")
         return
 
     # Fallback: refresh market
-    await send_image_with_text(message, "images/rynok.png", _get_market_text(player), reply_markup=get_market_resources_inline_kb())
+    await send_image_with_text(message, "images/rynok.png", _get_market_text(player), reply_markup=get_market_resources_inline_kb(), parse_mode="HTML")
 
 @router.message(MarketMenu.viewing_consumables)
 async def handle_consumables(message: types.Message, state: FSMContext):
