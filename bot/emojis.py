@@ -113,6 +113,16 @@ E_CHEST_S  = '<tg-emoji emoji-id="5201888948091129713">🔩</tg-emoji>'   # ст
 E_CHEST_G  = '<tg-emoji emoji-id="5276111746812112286">🌟</tg-emoji>'   # золотой сундук (id from E_ITEMS_STAR – golden star)
 E_CHEST_D  = '<tg-emoji emoji-id="5217822164362739968">👑</tg-emoji>'   # всевышний сундук (id = E_CROWN)
 
+# Clan menu redesign emoji
+E_CLAN_TITLE        = '<tg-emoji emoji-id="5838971445790643600">🏆</tg-emoji>'   # заголовок клана
+E_CLAN_MEMBERS_ICON = '<tg-emoji emoji-id="5388670457249552219">👯‍♀️</tg-emoji>'  # рядом с названием
+E_CLAN_LEADER_ICON  = '<tg-emoji emoji-id="5357553616758528519">👑</tg-emoji>'   # глава клана
+E_CLAN_SAD          = '<tg-emoji emoji-id="5321427912392465658">☹️</tg-emoji>'   # нет соруководителей
+E_CLAN_CNT          = '<tg-emoji emoji-id="5298668674532538341">👥️</tg-emoji>'  # количество участников
+E_CLAN_PERSON       = '<tg-emoji emoji-id="5192982830891684741">🧔</tg-emoji>'   # значок игрока
+E_CLAN_LEVEL_ICON   = '<tg-emoji emoji-id="5276229330131772747">👑</tg-emoji>'   # уровень клана (корона)
+E_CLAN_DESC_ICON    = '<tg-emoji emoji-id="6285014721582076161">📚</tg-emoji>'   # описание клана
+
 # Clan boss emoji
 E_CB_SKULL  = '<tg-emoji emoji-id="5298899451715275167">💀</tg-emoji>'
 E_CB_CROWN  = '<tg-emoji emoji-id="5357553616758528519">👑</tg-emoji>'

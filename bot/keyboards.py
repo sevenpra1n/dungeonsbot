@@ -399,25 +399,36 @@ def get_create_clan_confirm_kb()-> ReplyKeyboardMarkup:
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
-def get_my_clan_kb(is_leader: bool, is_co_leader: bool = False) -> ReplyKeyboardMarkup:
-    """Меню своего клана"""
+def get_my_clan_inline_kb(is_leader: bool, is_co_leader: bool = False) -> InlineKeyboardMarkup:
+    """Inline-кнопки меню своего клана."""
     kb = []
     if is_leader:
-        kb.append([KeyboardButton(text="👢 Кикнуть игрока")])
-        kb.append([KeyboardButton(text="⭐ Назначить соруководителя")])
-        kb.append([KeyboardButton(text="⬇️ Снять соруководителя")])
-        kb.append([KeyboardButton(text="⚙️ Изменить порог")])
-        kb.append([KeyboardButton(text="🎨 Изменить оформление")])
-        kb.append([KeyboardButton(text="🗑️ Удалить клан")])
+        kb.append([InlineKeyboardButton(text="👢 Кикнуть игрока", callback_data="clan_kick")])
+        kb.append([
+            InlineKeyboardButton(text="⭐️ Назначить соруководителя", callback_data="clan_promote"),
+            InlineKeyboardButton(text="⬇️ Снять соруководителя", callback_data="clan_demote"),
+        ])
+        kb.append([
+            InlineKeyboardButton(text="⚙️ Изменить порог", callback_data="clan_threshold"),
+            InlineKeyboardButton(text="🎨 Изменить оформление", callback_data="clan_customize"),
+        ])
+        kb.append([
+            InlineKeyboardButton(text="🗑️ Удалить клан", callback_data="clan_delete"),
+            InlineKeyboardButton(text="💬 ЧАТ КЛАНА", callback_data="clan_chat"),
+        ])
+        kb.append([InlineKeyboardButton(text="🏰 Клановый босс", callback_data="clan_boss")])
     elif is_co_leader:
-        kb.append([KeyboardButton(text="👢 Кикнуть игрока")])
-        kb.append([KeyboardButton(text="🚪 Выйти из клана")])
+        kb.append([InlineKeyboardButton(text="👢 Кикнуть игрока", callback_data="clan_kick")])
+        kb.append([InlineKeyboardButton(text="💬 Чат клана", callback_data="clan_chat")])
+        kb.append([InlineKeyboardButton(text="🏰 Клановый босс", callback_data="clan_boss")])
+        kb.append([InlineKeyboardButton(text="🚪 Выйти из клана", callback_data="clan_leave")])
     else:
-        kb.append([KeyboardButton(text="🚪 Выйти из клана")])
-    kb.append([KeyboardButton(text="🏰 Клановый босс")])
-    kb.append([KeyboardButton(text="💬 Чат клана")])
-    kb.append([KeyboardButton(text="🔙 Вернуться")])
-    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+        kb.append([InlineKeyboardButton(text="💬 Чат клана", callback_data="clan_chat")])
+        kb.append([InlineKeyboardButton(text="🏰 Клановый босс", callback_data="clan_boss")])
+        kb.append([InlineKeyboardButton(text="🚪 Выйти из клана", callback_data="clan_leave")])
+    kb.append([InlineKeyboardButton(text="🔙 Вернуться", callback_data="clan_back")])
+    return InlineKeyboardMarkup(inline_keyboard=kb)
+
 
 def get_kick_members_kb(members: list, leader_id: int, co_leader_ids: list = None) -> ReplyKeyboardMarkup:
     """Клавиатура со списком членов для кика (нельзя кикнуть главу или других соруководителей для соруков)"""
