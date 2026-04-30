@@ -5229,14 +5229,14 @@ async def handle_clan_leave_confirm(callback: types.CallbackQuery, state: FSMCon
     await callback.message.answer("Вы вышли из клана.", reply_markup=get_clans_list_kb(clans))
     await state.set_state(ClanMenu.viewing_clans)
     leave_notify_text = (
-        f"❌👤 из клана {clan_name}, вышел {leaver_name}\n"
-        f"▫️🔴 Прощаемся с тобой. ☹️"
+        f"{E_BELL} {leaver_name}, покинул клан \"{clan_name}\"\n"
+        f"{E_CRYING} Прощаемся с тобой.."
     )
     for member_uid, _, _, _ in members_before:
         if member_uid == user_id:
             continue
         try:
-            await bot.send_message(chat_id=member_uid, text=leave_notify_text)
+            await bot.send_message(chat_id=member_uid, text=leave_notify_text, parse_mode="HTML")
         except Exception:
             pass
 
@@ -5306,14 +5306,14 @@ async def handle_kick_member(message: types.Message, state: FSMContext):
 
             # Уведомить оставшихся членов клана о выходе
             leave_notify_text = (
-                f"❌👤 из клана {clan_name}, вышел {nickname}\n"
-                f"▫️🔴 Прощаемся с тобой. ☹️"
+                f"{E_BELL} {nickname}, покинул клан \"{clan_name}\"\n"
+                f"{E_CRYING} Прощаемся с тобой.."
             )
             for m_uid, _, _, _ in members:
                 if m_uid == member_id:
                     continue
                 try:
-                    await bot.send_message(chat_id=m_uid, text=leave_notify_text)
+                    await bot.send_message(chat_id=m_uid, text=leave_notify_text, parse_mode="HTML")
                 except Exception:
                     pass
 

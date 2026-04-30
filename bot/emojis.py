@@ -43,6 +43,7 @@ E_GOLD_M   = '<tg-emoji emoji-id="6278282858561803026">🥇</tg-emoji>'   # зо
 E_PLUS     = '<tg-emoji emoji-id="5397916757333654639">➕</tg-emoji>'   # плюс (награда)
 E_CHECK    = '✅'   # галочка
 E_BELL     = '<tg-emoji emoji-id="5206222720416643915">🔔</tg-emoji>'   # колокол
+E_CRYING   = '<tg-emoji emoji-id="5343973209341445927">😢</tg-emoji>'  # прощание (выход из клана)
 E_TIMER    = '🕑'   # таймер
 E_HOURGLASS= '<tg-emoji emoji-id="5906598824012420908">⌛️</tg-emoji>'  # песочные часы
 E_MAP_E    = '<tg-emoji emoji-id="6285108394818802672">🗺</tg-emoji>'   # карта
