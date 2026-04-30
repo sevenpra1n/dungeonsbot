@@ -12,7 +12,10 @@ from datetime import datetime, timezone
 from aiogram import Router, types, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
+from aiogram.types import (
+    ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove,
+    InlineKeyboardMarkup, InlineKeyboardButton, FSInputFile,
+)
 
 from bot.loader import bot, dp
 from bot.config import ADMIN_IDS, BAGOUSER_ID, DB_NAME
@@ -80,7 +83,7 @@ from bot.keyboards import (
     get_enemies_kb, get_battle_kb, get_battle_action_kb, get_end_battle_kb,
     get_raid_menu_kb, get_searching_kb, get_online_menu_kb, get_pvp_accept_kb,
     get_rating_kb, get_rating_player_kb,
-    get_clans_list_kb, get_create_clan_confirm_kb, get_my_clan_kb,
+    get_clans_list_kb, get_create_clan_confirm_kb, get_my_clan_inline_kb,
     get_kick_members_kb, get_promote_members_kb, get_demote_members_kb,
     get_clan_chat_kb, get_delete_clan_confirm_kb,
     get_admin_kb, get_map_kb, get_location_activities_kb,
@@ -110,6 +113,7 @@ from bot.data.clans import (
     CLAN_LEVEL_EXP, MAX_CLAN_LEVEL, CLAN_BUFFS, CLAN_CHAT_MAX_MSG_LEN,
     BOSS_HEALTH_MULTIPLIER, MAX_CLAN_BOSS_TICKETS,
     TICKET_REFRESH_INTERVAL_SECONDS, CLAN_BOSSES_CONFIG,
+    get_clan_league,
 )
 from bot.data.chests import CHEST_CONFIG
 from bot.data.statuses import (
@@ -4832,22 +4836,33 @@ async def pvp_battle_round(message: types.Message, state: FSMContext):
 # ============== CLANS ==============
 def _format_clan_menu(clan: dict, leader_nickname: str) -> str:
     """Форматировать текст меню клана"""
+    # Exp display
     if clan['clan_level'] >= MAX_CLAN_LEVEL:
-        exp_display = f"{clan['clan_exp']}📈 (МАКС 🧬)"
+        exp_display = f'{E_SQ}{clan["clan_exp"]} {E_CLAN_BOTTLE} (МАКС)'
     else:
         max_exp = CLAN_LEVEL_EXP[clan['clan_level']]
-        exp_display = f'<tg-emoji emoji-id="5267324424113124134">▫️</tg-emoji> {clan["clan_exp"]} / {max_exp} <tg-emoji emoji-id="6284926868026037181">🍾</tg-emoji>'
+        exp_display = f'{E_SQ}{clan["clan_exp"]} / {max_exp} {E_CLAN_BOTTLE}'
+
+    # Co-leaders line (E_CLAN_SAD is pre-built HTML emoji markup, not user input — not escaped)
     co_leaders = get_clan_co_leaders(clan['clan_id'])
-    co_str = ", ".join(nick for _, nick in co_leaders) if co_leaders else "—"
+    if co_leaders:
+        co_str = html.escape(", ".join(nick for _, nick in co_leaders))
+    else:
+        co_str = E_CLAN_SAD  # tg-emoji HTML markup, no escaping needed
+
+    # League info
+    league_emoji, league_name = get_clan_league(clan['clan_level'])
+
     return (
-        f"| {E_CLAN} | Клан: {html.escape(clan['clan_name'])}\n"
-        f"| {E_CROWN} | Глава: {html.escape(leader_nickname)}\n"
-        f"| {E_CLAN_STAR} | Соруководители: {html.escape(co_str)}\n"
-        f"{E_CLAN_EXP} - {clan['members_count']} соклановцев\n"
-        f"(Минимальный порог входа) - {clan['min_power']} {E_ATK}\n"
-        f"Уровень клана - {clan['clan_level']} {E_CLAN_LVL}\n"
-        f"{exp_display}\n\n"
-        f"| {E_BOOK} | Описание клана:\n{html.escape(clan['description'] or '—')}"
+        f'{E_CLAN_TITLE} {E_CLAN_MEMBERS_ICON} Клан: {html.escape(clan["clan_name"])}\n'
+        f'{E_SQ}{E_CLAN_LEADER_ICON} Глава: {html.escape(leader_nickname)}\n'
+        f'{E_SQ}{E_CLAN_STAR} Соруководители: {co_str}\n'
+        f'{E_CLAN_CNT} Участников: {clan["members_count"]}{E_CLAN_PERSON}\n'
+        f'{E_SQ}Порог силы - {clan["min_power"]} {E_ATK}\n\n'
+        f'{E_CLAN_LEVEL_ICON} Уровень клана - {clan["clan_level"]} {E_CLAN_LVL}\n'
+        f'{E_SQ}{league_emoji} {league_name}\n'
+        f'{exp_display}\n\n'
+        f'{E_SQ}{E_CLAN_DESC_ICON} Описание клана:\n{html.escape(clan["description"] or "—")}'
     )
 
 @router.message(F.text == "🛡️ Кланы")
@@ -4921,13 +4936,10 @@ async def handle_clans_list(message: types.Message, state: FSMContext):
                 return
             join_clan(user_id, clan_id)
             updated_clan = get_player_clan(user_id)
-            leader = get_player(updated_clan['leader_id'])
-            leader_name_str = leader['nickname'] if leader else "—"
-            clan_text = _format_clan_menu(updated_clan, leader_name_str)
-            await message.answer(f"✅ Вы вступили в {clan_name}!\n\n" + clan_text,
-                                 reply_markup=get_my_clan_kb(False))
             await state.set_state(ClanMenu.viewing_my_clan)
             await state.update_data(clan_id=clan_id)
+            await message.answer(f"✅ Вы вступили в клан «{clan_name}»!")
+            await _show_clan_info(message, updated_clan, False)
             # Уведомить всех членов клана о новом участнике
             joiner = get_player(user_id)
             joiner_name = joiner['nickname'] if joiner else "Игрок"
@@ -4997,22 +5009,16 @@ async def handle_create_clan_description(message: types.Message, state: FSMConte
         return
 
     clan = get_player_clan(user_id)
-    leader = get_player(user_id)
-    clan_text = _format_clan_menu(clan, leader['nickname'])
-    await message.answer(f"✅ Клан создан!\n\n" + clan_text, reply_markup=get_my_clan_kb(True))
+    await message.answer("✅ Клан создан!")
     await state.set_state(ClanMenu.viewing_my_clan)
     await state.update_data(clan_id=clan_id)
+    await _show_clan_info(message, clan, True)
 
 @router.message(ClanMenu.viewing_my_clan)
 async def handle_my_clan(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
-    text = message.text
     data = await state.get_data()
     clan_id = data.get('clan_id')
-
-    if text == "🔙 Вернуться":
-        await show_main_menu(message, state)
-        return
 
     clan = get_clan(clan_id) if clan_id else None
     if not clan:
@@ -5021,128 +5027,237 @@ async def handle_my_clan(message: types.Message, state: FSMContext):
         return
 
     is_leader = (clan['leader_id'] == user_id)
-    role = get_clan_member_role(user_id, clan_id)
-    is_co_leader = not is_leader and role == 'co_leader'
-
-    if text == "🚪 Выйти из клана" and not is_leader:
-        leaver = get_player(user_id)
-        leaver_name = leaver['nickname'] if leaver else "Игрок"
-        clan_name = clan['clan_name']
-        # Получить список членов ДО выхода
-        members_before = get_clan_members(clan_id)
-        leave_clan(user_id, clan_id)
-        await state.clear()
-        clans = get_all_clans()
-        await message.answer("Вы вышли из клана.", reply_markup=get_clans_list_kb(clans))
-        await state.set_state(ClanMenu.viewing_clans)
-        # Уведомить оставшихся членов клана
-        leave_notify_text = (
-            f"❌👤 из клана {clan_name}, вышел {leaver_name}\n"
-            f"▫️🔴 Прощаемся с тобой. ☹️"
-        )
-        for member_uid, _, _, _ in members_before:
-            if member_uid == user_id:
-                continue
-            try:
-                await bot.send_message(chat_id=member_uid, text=leave_notify_text)
-            except Exception:
-                pass
-        return
-
-    if text == "👢 Кикнуть игрока" and (is_leader or is_co_leader):
-        members = get_clan_members(clan_id)
-        co_leader_ids = [uid for uid, _ in get_clan_co_leaders(clan_id)]
-        # co-leader cannot kick the leader or other co-leaders
-        if is_co_leader:
-            kickable = [(uid, nick, st, r) for uid, nick, st, r in members
-                        if uid != clan['leader_id'] and uid not in co_leader_ids]
-        else:
-            kickable = [(uid, nick, st, r) for uid, nick, st, r in members
-                        if uid != clan['leader_id']]
-        if not kickable:
-            await message.answer("В клане нет участников для кика.",
-                                 reply_markup=get_my_clan_kb(is_leader, is_co_leader))
-            return
-        await message.answer("Выберите игрока для кика:",
-                             reply_markup=get_kick_members_kb(members, clan['leader_id'],
-                                                              co_leader_ids if is_co_leader else []))
-        await state.set_state(ClanMenu.kicking_member)
-        return
-
-    if text == "⭐ Назначить соруководителя" and is_leader:
-        members = get_clan_members(clan_id)
-        promotable = [(uid, nick, st, r) for uid, nick, st, r in members
-                      if uid != clan['leader_id'] and r != 'co_leader']
-        if not promotable:
-            await message.answer("Нет игроков для назначения соруководителем.",
-                                 reply_markup=get_my_clan_kb(True))
-            return
-        await message.answer("Выберите игрока для назначения соруководителем:",
-                             reply_markup=get_promote_members_kb(members, clan['leader_id']))
-        await state.set_state(ClanMenu.promoting_member)
-        return
-
-    if text == "⬇️ Снять соруководителя" and is_leader:
-        co_leaders = get_clan_co_leaders(clan_id)
-        if not co_leaders:
-            await message.answer("В клане нет соруководителей.", reply_markup=get_my_clan_kb(True))
-            return
-        await message.answer("Выберите соруководителя для снятия с должности:",
-                             reply_markup=get_demote_members_kb(co_leaders))
-        await state.set_state(ClanMenu.demoting_member)
-        return
-
-    if text == "⚙️ Изменить порог" and is_leader:
-        await message.answer("Введите новый минимальный порог мощи для вступления (число):",
-                             reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
-        await state.set_state(ClanMenu.changing_min_power)
-        return
-
-    if text == "🗑️ Удалить клан" and is_leader:
-        await message.answer("Вы уверены, что хотите удалить клан? Это действие необратимо.",
-                             reply_markup=get_delete_clan_confirm_kb())
-        await state.set_state(ClanMenu.deleting_clan_confirm)
-        return
-
-    if text == "🎨 Изменить оформление" and is_leader:
-        kb = [
-            [KeyboardButton(text="📝 Изменить название (500 монет)")],
-            [KeyboardButton(text="📄 Изменить описание (500 монет)")],
-            [KeyboardButton(text="🖼️ Изменить картину клана")],
-            [KeyboardButton(text="❌ Отмена")],
-        ]
-        await message.answer(
-            "🎨 <b>ИЗМЕНЕНИЕ ОФОРМЛЕНИЯ КЛАНА</b>\n\nВыберите что изменить:",
-            reply_markup=ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
-        )
-        await state.set_state(ClanMenu.selecting_clan_customization)
-        return
-
-    if text == "💬 Чат клана":
-        # html is imported at the top of the file
-        messages = get_clan_messages(clan_id, 30)
-        if messages:
-            chat_text = "💬 <b>ЧАТ КЛАНА</b> (последние 30 сообщений)\n\n"
-            for nick, msg, sent_at in messages:
-                time_str = sent_at[:16] if sent_at else ""
-                chat_text += f"[{time_str}] <b>{html.escape(nick)}</b>: {html.escape(msg)}\n"
-        else:
-            chat_text = "💬 <b>ЧАТ КЛАНА</b>\n\nПока нет сообщений. Будь первым!"
-        # Register user in active chat sessions
-        if clan_id not in clan_chat_sessions:
-            clan_chat_sessions[clan_id] = set()
-        clan_chat_sessions[clan_id].add(user_id)
-        await message.answer(chat_text + "\n\nПишите сообщения — они увидят все участники клана онлайн.\nДля выхода нажмите 🚪 Выйти из чата.",
-                             reply_markup=get_clan_chat_kb())
-        await state.set_state(ClanMenu.in_clan_chat)
-        return
-
-    if text == "🏰 Клановый босс":
-        await _open_clan_boss_menu(message, state, clan, user_id)
-        return
+    is_co_leader = not is_leader and get_clan_member_role(user_id, clan_id) == 'co_leader'
 
     # Обновить и показать информацию о клане
     await _show_clan_info(message, clan, is_leader, is_co_leader)
+
+
+# ============== CLAN INLINE BUTTON CALLBACKS ==============
+
+async def _get_clan_for_callback(callback: types.CallbackQuery, state: FSMContext):
+    """Вспомогательная функция: получить клан из состояния для callback-обработчика."""
+    data = await state.get_data()
+    clan_id = data.get('clan_id')
+    clan = get_clan(clan_id) if clan_id else None
+    return clan, clan_id
+
+
+@router.callback_query(ClanMenu.viewing_my_clan, F.data == "clan_back")
+async def handle_clan_back_callback(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer()
+    await state.clear()
+    await show_main_menu(callback.message, state)
+
+
+@router.callback_query(ClanMenu.viewing_my_clan, F.data == "clan_kick")
+async def handle_clan_kick_callback(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer()
+    user_id = callback.from_user.id
+    clan, clan_id = await _get_clan_for_callback(callback, state)
+    if not clan:
+        return
+    is_leader = clan['leader_id'] == user_id
+    is_co_leader = not is_leader and get_clan_member_role(user_id, clan_id) == 'co_leader'
+    if not (is_leader or is_co_leader):
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    members = get_clan_members(clan_id)
+    co_leader_ids = [uid for uid, _ in get_clan_co_leaders(clan_id)]
+    kickable = [(uid, nick, st, r) for uid, nick, st, r in members
+                if uid != clan['leader_id'] and (not is_co_leader or uid not in co_leader_ids)]
+    if not kickable:
+        await callback.message.answer("В клане нет участников для кика.")
+        return
+    await callback.message.answer("Выберите игрока для кика:",
+                                  reply_markup=get_kick_members_kb(members, clan['leader_id'],
+                                                                   co_leader_ids if is_co_leader else []))
+    await state.set_state(ClanMenu.kicking_member)
+
+
+@router.callback_query(ClanMenu.viewing_my_clan, F.data == "clan_promote")
+async def handle_clan_promote_callback(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer()
+    user_id = callback.from_user.id
+    clan, clan_id = await _get_clan_for_callback(callback, state)
+    if not clan or clan['leader_id'] != user_id:
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    members = get_clan_members(clan_id)
+    promotable = [(uid, nick, st, r) for uid, nick, st, r in members
+                  if uid != clan['leader_id'] and r != 'co_leader']
+    if not promotable:
+        await callback.message.answer("Нет игроков для назначения соруководителем.")
+        return
+    await callback.message.answer("Выберите игрока для назначения соруководителем:",
+                                  reply_markup=get_promote_members_kb(members, clan['leader_id']))
+    await state.set_state(ClanMenu.promoting_member)
+
+
+@router.callback_query(ClanMenu.viewing_my_clan, F.data == "clan_demote")
+async def handle_clan_demote_callback(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer()
+    user_id = callback.from_user.id
+    clan, clan_id = await _get_clan_for_callback(callback, state)
+    if not clan or clan['leader_id'] != user_id:
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    co_leaders = get_clan_co_leaders(clan_id)
+    if not co_leaders:
+        await callback.message.answer("В клане нет соруководителей.")
+        return
+    await callback.message.answer("Выберите соруководителя для снятия с должности:",
+                                  reply_markup=get_demote_members_kb(co_leaders))
+    await state.set_state(ClanMenu.demoting_member)
+
+
+@router.callback_query(ClanMenu.viewing_my_clan, F.data == "clan_threshold")
+async def handle_clan_threshold_callback(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer()
+    user_id = callback.from_user.id
+    clan, _ = await _get_clan_for_callback(callback, state)
+    if not clan or clan['leader_id'] != user_id:
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    await callback.message.answer("Введите новый минимальный порог мощи для вступления (число):",
+                                  reply_markup=ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True))
+    await state.set_state(ClanMenu.changing_min_power)
+
+
+@router.callback_query(ClanMenu.viewing_my_clan, F.data == "clan_customize")
+async def handle_clan_customize_callback(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer()
+    user_id = callback.from_user.id
+    clan, _ = await _get_clan_for_callback(callback, state)
+    if not clan or clan['leader_id'] != user_id:
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    kb = [
+        [KeyboardButton(text="📝 Изменить название (500 монет)")],
+        [KeyboardButton(text="📄 Изменить описание (500 монет)")],
+        [KeyboardButton(text="🖼️ Изменить картину клана")],
+        [KeyboardButton(text="❌ Отмена")],
+    ]
+    await callback.message.answer(
+        "🎨 <b>ИЗМЕНЕНИЕ ОФОРМЛЕНИЯ КЛАНА</b>\n\nВыберите что изменить:",
+        reply_markup=ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+    )
+    await state.set_state(ClanMenu.selecting_clan_customization)
+
+
+@router.callback_query(ClanMenu.viewing_my_clan, F.data == "clan_delete")
+async def handle_clan_delete_callback(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer()
+    user_id = callback.from_user.id
+    clan, _ = await _get_clan_for_callback(callback, state)
+    if not clan or clan['leader_id'] != user_id:
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    await callback.message.answer("Вы уверены, что хотите удалить клан? Это действие необратимо.",
+                                  reply_markup=get_delete_clan_confirm_kb())
+    await state.set_state(ClanMenu.deleting_clan_confirm)
+
+
+@router.callback_query(ClanMenu.viewing_my_clan, F.data == "clan_chat")
+async def handle_clan_chat_callback(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer()
+    user_id = callback.from_user.id
+    clan, clan_id = await _get_clan_for_callback(callback, state)
+    if not clan:
+        return
+    messages_list = get_clan_messages(clan_id, 30)
+    if messages_list:
+        chat_text = "💬 <b>ЧАТ КЛАНА</b> (последние 30 сообщений)\n\n"
+        for nick, msg, sent_at in messages_list:
+            time_str = sent_at[:16] if sent_at else ""
+            chat_text += f"[{time_str}] <b>{html.escape(nick)}</b>: {html.escape(msg)}\n"
+    else:
+        chat_text = "💬 <b>ЧАТ КЛАНА</b>\n\nПока нет сообщений. Будь первым!"
+    if clan_id not in clan_chat_sessions:
+        clan_chat_sessions[clan_id] = set()
+    clan_chat_sessions[clan_id].add(user_id)
+    await callback.message.answer(
+        chat_text + "\n\nПишите сообщения — они увидят все участники клана онлайн.\nДля выхода нажмите 🚪 Выйти из чата.",
+        reply_markup=get_clan_chat_kb()
+    )
+    await state.set_state(ClanMenu.in_clan_chat)
+
+
+@router.callback_query(ClanMenu.viewing_my_clan, F.data == "clan_boss")
+async def handle_clan_boss_callback(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer()
+    user_id = callback.from_user.id
+    clan, _ = await _get_clan_for_callback(callback, state)
+    if not clan:
+        return
+    await _open_clan_boss_menu(callback.message, state, clan, user_id)
+
+
+@router.callback_query(ClanMenu.viewing_my_clan, F.data == "clan_leave")
+async def handle_clan_leave_callback(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer()
+    user_id = callback.from_user.id
+    clan, _ = await _get_clan_for_callback(callback, state)
+    if not clan or clan['leader_id'] == user_id:
+        await callback.answer("Глава не может выйти из клана таким способом.", show_alert=True)
+        return
+    confirm_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="✅ Да, выйти", callback_data="clan_leave_confirm"),
+            InlineKeyboardButton(text="❌ Нет, остаться", callback_data="clan_leave_cancel"),
+        ]
+    ])
+    await callback.message.edit_reply_markup(reply_markup=confirm_kb)
+
+
+@router.callback_query(F.data == "clan_leave_confirm")
+async def handle_clan_leave_confirm(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer()
+    user_id = callback.from_user.id
+    data = await state.get_data()
+    clan_id = data.get('clan_id')
+    clan = get_clan(clan_id) if clan_id else None
+    if not clan or clan['leader_id'] == user_id:
+        return
+    leaver = get_player(user_id)
+    leaver_name = leaver['nickname'] if leaver else "Игрок"
+    clan_name = clan['clan_name']
+    members_before = get_clan_members(clan_id)
+    leave_clan(user_id, clan_id)
+    await state.clear()
+    clans = get_all_clans()
+    await callback.message.answer("Вы вышли из клана.", reply_markup=get_clans_list_kb(clans))
+    await state.set_state(ClanMenu.viewing_clans)
+    leave_notify_text = (
+        f"{E_BELL} {leaver_name}, покинул клан \"{clan_name}\"\n"
+        f"{E_CRYING} Прощаемся с тобой.."
+    )
+    for member_uid, _, _, _ in members_before:
+        if member_uid == user_id:
+            continue
+        try:
+            await bot.send_message(chat_id=member_uid, text=leave_notify_text, parse_mode="HTML")
+        except Exception:
+            pass
+
+
+@router.callback_query(F.data == "clan_leave_cancel")
+async def handle_clan_leave_cancel(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer()
+    user_id = callback.from_user.id
+    data = await state.get_data()
+    clan_id = data.get('clan_id')
+    clan = get_clan(clan_id) if clan_id else None
+    if not clan:
+        return
+    is_leader = clan['leader_id'] == user_id
+    is_co_leader = not is_leader and get_clan_member_role(user_id, clan_id) == 'co_leader'
+    inline_kb = get_my_clan_inline_kb(is_leader, is_co_leader)
+    try:
+        await callback.message.edit_reply_markup(reply_markup=inline_kb)
+    except Exception:
+        pass
+
 
 @router.message(ClanMenu.kicking_member)
 async def handle_kick_member(message: types.Message, state: FSMContext):
@@ -5157,10 +5272,7 @@ async def handle_kick_member(message: types.Message, state: FSMContext):
 
     if text == "❌ Отмена" or not clan:
         if clan:
-            leader = get_player(clan['leader_id'])
-            leader_name = leader['nickname'] if leader else "—"
-            clan_text = _format_clan_menu(clan, leader_name)
-            await message.answer(clan_text, reply_markup=get_my_clan_kb(is_leader, is_co_leader))
+            await _show_clan_info(message, clan, is_leader, is_co_leader)
         else:
             await show_main_menu(message, state)
         await state.set_state(ClanMenu.viewing_my_clan)
@@ -5194,14 +5306,14 @@ async def handle_kick_member(message: types.Message, state: FSMContext):
 
             # Уведомить оставшихся членов клана о выходе
             leave_notify_text = (
-                f"❌👤 из клана {clan_name}, вышел {nickname}\n"
-                f"▫️🔴 Прощаемся с тобой. ☹️"
+                f"{E_BELL} {nickname}, покинул клан \"{clan_name}\"\n"
+                f"{E_CRYING} Прощаемся с тобой.."
             )
             for m_uid, _, _, _ in members:
                 if m_uid == member_id:
                     continue
                 try:
-                    await bot.send_message(chat_id=m_uid, text=leave_notify_text)
+                    await bot.send_message(chat_id=m_uid, text=leave_notify_text, parse_mode="HTML")
                 except Exception:
                     pass
 
@@ -5214,10 +5326,7 @@ async def handle_kick_member(message: types.Message, state: FSMContext):
         return
 
     updated_clan = get_clan(clan_id)
-    leader = get_player(updated_clan['leader_id'])
-    leader_name = leader['nickname'] if leader else "—"
-    clan_text = _format_clan_menu(updated_clan, leader_name)
-    await message.answer(clan_text, reply_markup=get_my_clan_kb(is_leader, is_co_leader))
+    await _show_clan_info(message, updated_clan, is_leader, is_co_leader)
     await state.set_state(ClanMenu.viewing_my_clan)
 
 @router.message(ClanMenu.promoting_member)
@@ -5230,18 +5339,15 @@ async def handle_promote_member(message: types.Message, state: FSMContext):
 
     if text == "❌ Отмена" or not clan:
         if clan:
-            leader = get_player(clan['leader_id'])
-            leader_name = leader['nickname'] if leader else "—"
-            clan_text = _format_clan_menu(clan, leader_name)
-            await message.answer(clan_text, reply_markup=get_my_clan_kb(True))
+            await _show_clan_info(message, clan, True)
         else:
             await show_main_menu(message, state)
         await state.set_state(ClanMenu.viewing_my_clan)
         return
 
     if clan['leader_id'] != user_id:
-        await message.answer(f"{E_CROSS} Только глава может назначать соруководителей.",
-                             reply_markup=get_my_clan_kb(False))
+        await message.answer(f"{E_CROSS} Только глава может назначать соруководителей.")
+        await _show_clan_info(message, clan, False)
         await state.set_state(ClanMenu.viewing_my_clan)
         return
 
@@ -5267,10 +5373,7 @@ async def handle_promote_member(message: types.Message, state: FSMContext):
         return
 
     updated_clan = get_clan(clan_id)
-    leader = get_player(updated_clan['leader_id'])
-    leader_name = leader['nickname'] if leader else "—"
-    clan_text = _format_clan_menu(updated_clan, leader_name)
-    await message.answer(clan_text, reply_markup=get_my_clan_kb(True))
+    await _show_clan_info(message, updated_clan, True)
     await state.set_state(ClanMenu.viewing_my_clan)
 
 @router.message(ClanMenu.demoting_member)
@@ -5283,18 +5386,15 @@ async def handle_demote_member(message: types.Message, state: FSMContext):
 
     if text == "❌ Отмена" or not clan:
         if clan:
-            leader = get_player(clan['leader_id'])
-            leader_name = leader['nickname'] if leader else "—"
-            clan_text = _format_clan_menu(clan, leader_name)
-            await message.answer(clan_text, reply_markup=get_my_clan_kb(True))
+            await _show_clan_info(message, clan, True)
         else:
             await show_main_menu(message, state)
         await state.set_state(ClanMenu.viewing_my_clan)
         return
 
     if clan['leader_id'] != user_id:
-        await message.answer(f"{E_CROSS} Только глава может снимать соруководителей.",
-                             reply_markup=get_my_clan_kb(False))
+        await message.answer(f"{E_CROSS} Только глава может снимать соруководителей.")
+        await _show_clan_info(message, clan, False)
         await state.set_state(ClanMenu.viewing_my_clan)
         return
 
@@ -5320,10 +5420,7 @@ async def handle_demote_member(message: types.Message, state: FSMContext):
         return
 
     updated_clan = get_clan(clan_id)
-    leader = get_player(updated_clan['leader_id'])
-    leader_name = leader['nickname'] if leader else "—"
-    clan_text = _format_clan_menu(updated_clan, leader_name)
-    await message.answer(clan_text, reply_markup=get_my_clan_kb(True))
+    await _show_clan_info(message, updated_clan, True)
     await state.set_state(ClanMenu.viewing_my_clan)
 
 @router.message(ClanMenu.in_clan_chat)
@@ -5415,11 +5512,8 @@ async def handle_change_min_power(message: types.Message, state: FSMContext):
 
     set_clan_min_power(clan_id, new_power)
     updated_clan = get_clan(clan_id)
-    leader = get_player(updated_clan['leader_id'])
-    leader_name = leader['nickname'] if leader else "—"
-    clan_text = _format_clan_menu(updated_clan, leader_name)
-    await message.answer(f"✅ Порог входа обновлён: {new_power}⚔️\n\n" + clan_text,
-                         reply_markup=get_my_clan_kb(True))
+    await message.answer(f"✅ Порог входа обновлён: {new_power}⚔️")
+    await _show_clan_info(message, updated_clan, True)
     await state.set_state(ClanMenu.viewing_my_clan)
 
 @router.message(ClanMenu.deleting_clan_confirm)
@@ -5432,10 +5526,7 @@ async def handle_delete_clan_confirm(message: types.Message, state: FSMContext):
     if text == "❌ Нет":
         clan = get_clan(clan_id) if clan_id else None
         if clan:
-            leader = get_player(clan['leader_id'])
-            leader_name = leader['nickname'] if leader else "—"
-            clan_text = _format_clan_menu(clan, leader_name)
-            await message.answer(clan_text, reply_markup=get_my_clan_kb(True))
+            await _show_clan_info(message, clan, True)
         await state.set_state(ClanMenu.viewing_my_clan)
         return
 
@@ -5457,30 +5548,26 @@ async def handle_delete_clan_confirm(message: types.Message, state: FSMContext):
 
 # ============== CLAN CUSTOMIZATION ==============
 async def _show_clan_info(message, clan: dict, is_leader: bool, is_co_leader: bool = False):
-    """Отправить информацию о клане с картиной"""
+    """Отправить информацию о клане с картиной и инлайн-кнопками"""
     leader = get_player(clan['leader_id'])
     leader_name = leader['nickname'] if leader else "—"
     clan_text = _format_clan_menu(clan, leader_name)
-    kb = get_my_clan_kb(is_leader, is_co_leader)
+    inline_kb = get_my_clan_inline_kb(is_leader, is_co_leader)
 
-    # Сначала проверяем загруженную картинку
+    # Remove reply keyboard with an invisible message (Telegram requires a message to send ReplyKeyboardRemove)
+    await message.answer("\u200b", reply_markup=ReplyKeyboardRemove())
+
+    # Сначала проверяем загруженную картинку клана
     if clan.get('clan_image'):
         try:
-            await message.answer_photo(clan['clan_image'], caption=clan_text, reply_markup=kb)
+            await message.answer_photo(clan['clan_image'], caption=clan_text,
+                                       reply_markup=inline_kb, parse_mode="HTML")
             return
         except Exception:
             pass
 
-    # Если нет - показываем дефолтную myclan.png
-    try:
-        photo = FSInputFile("images/myclan.png")
-        await message.answer_photo(photo, caption=clan_text, reply_markup=kb)
-        return
-    except Exception:
-        pass
-
-    # Если ничего - просто текст
-    await message.answer(clan_text, reply_markup=kb)
+    # Если нет — показываем дефолтную myclan.png
+    await send_image_with_text(message, "images/myclan.png", clan_text, reply_markup=inline_kb)
 
 @router.message(ClanMenu.selecting_clan_customization)
 async def handle_select_clan_customization(message: types.Message, state: FSMContext):
@@ -5492,7 +5579,9 @@ async def handle_select_clan_customization(message: types.Message, state: FSMCon
 
     if not clan or clan['leader_id'] != user_id:
         await state.set_state(ClanMenu.viewing_my_clan)
-        await message.answer(f"{E_CROSS} Ошибка доступа.", reply_markup=get_my_clan_kb(False))
+        await message.answer(f"{E_CROSS} Ошибка доступа.")
+        if clan:
+            await _show_clan_info(message, clan, False)
         return
 
     if text == "❌ Отмена":
@@ -6499,9 +6588,9 @@ async def _open_clan_boss_menu(message, state: FSMContext, clan: dict, user_id: 
     clan_id = clan['clan_id']
 
     # Проверка уровня клана
-    if clan['clan_level'] < 3:
+    if clan['clan_level'] < 5:
         text = (
-            f"{E_WARN} Клановый босс доступен с уровня 3!\n"
+            f"{E_WARN} Клановый босс доступен с уровня 5!\n"
             f"{E_YELLOW} Повышать уровень клана может каждый игрок, находящийся в данном клане за почти любые действия."
         )
         await message.answer(text, reply_markup=get_clan_boss_back_kb())
@@ -6521,11 +6610,7 @@ async def _open_clan_boss_menu(message, state: FSMContext, clan: dict, user_id: 
             f"{E_SQ}{E_WARN} Новый босс появится через {E_HOURGLASS}{remaining}\n\n"
             f"{E_GREEN} Пока идёт обновление босса, можете отдохнуть от процесса!"
         )
-        try:
-            photo = FSInputFile("images/clanboss.png")
-            await message.answer_photo(photo, caption=text, reply_markup=get_clan_boss_back_kb())
-        except Exception:
-            await message.answer(text, reply_markup=get_clan_boss_back_kb())
+        await send_image_with_text(message, "images/clanboss.png", text, reply_markup=get_clan_boss_back_kb())
         await state.set_state(ClanBossState.viewing_menu)
         await state.update_data(clan_boss_clan_id=clan_id)
         return
@@ -6543,11 +6628,7 @@ async def _open_clan_boss_menu(message, state: FSMContext, clan: dict, user_id: 
             f"{E_CB_TICKET}{E_BAN} У тебя закончились билеты!\n"
             f"{E_YELLOW} Они обновляются каждый час (по +3 билета)"
         )
-        try:
-            photo = FSInputFile("images/clanboss.png")
-            await message.answer_photo(photo, caption=text, reply_markup=get_clan_boss_back_kb())
-        except Exception:
-            await message.answer(text, reply_markup=get_clan_boss_back_kb())
+        await send_image_with_text(message, "images/clanboss.png", text, reply_markup=get_clan_boss_back_kb())
         await state.set_state(ClanBossState.viewing_menu)
         await state.update_data(clan_boss_clan_id=clan_id)
         return
@@ -6560,11 +6641,7 @@ async def _open_clan_boss_menu(message, state: FSMContext, clan: dict, user_id: 
         f"{E_SQ}{E_YELLOW} Урон: {boss_cfg['damage']} {E_DMG}\n\n"
         f"{E_CB_CROWN}{E_CB_TICKET} Твои билеты: {tickets} / {MAX_CLAN_BOSS_TICKETS}"
     )
-    try:
-        photo = FSInputFile("images/clanboss.png")
-        await message.answer_photo(photo, caption=text, reply_markup=get_clan_boss_menu_kb())
-    except Exception:
-        await message.answer(text, reply_markup=get_clan_boss_menu_kb())
+    await send_image_with_text(message, "images/clanboss.png", text, reply_markup=get_clan_boss_menu_kb())
     await state.set_state(ClanBossState.viewing_menu)
     await state.update_data(clan_boss_clan_id=clan_id)
 
