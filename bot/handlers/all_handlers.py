@@ -4843,12 +4843,12 @@ def _format_clan_menu(clan: dict, leader_nickname: str) -> str:
         max_exp = CLAN_LEVEL_EXP[clan['clan_level']]
         exp_display = f'{E_SQ}{clan["clan_exp"]} / {max_exp} {E_CLAN_BOTTLE}'
 
-    # Co-leaders line
+    # Co-leaders line (E_CLAN_SAD is pre-built HTML emoji markup, not user input — not escaped)
     co_leaders = get_clan_co_leaders(clan['clan_id'])
     if co_leaders:
         co_str = html.escape(", ".join(nick for _, nick in co_leaders))
     else:
-        co_str = E_CLAN_SAD
+        co_str = E_CLAN_SAD  # tg-emoji HTML markup, no escaping needed
 
     # League info
     league_emoji, league_name = get_clan_league(clan['clan_level'])
@@ -4856,7 +4856,7 @@ def _format_clan_menu(clan: dict, leader_nickname: str) -> str:
     return (
         f'{E_CLAN_TITLE} {E_CLAN_MEMBERS_ICON} Клан: {html.escape(clan["clan_name"])}\n'
         f'{E_SQ}{E_CLAN_LEADER_ICON} Глава: {html.escape(leader_nickname)}\n'
-        f'{E_SQ}{E_CLAN_STAR} Соруководители:{co_str}\n'
+        f'{E_SQ}{E_CLAN_STAR} Соруководители: {co_str}\n'
         f'{E_CLAN_CNT} Участников: {clan["members_count"]}{E_CLAN_PERSON}\n'
         f'{E_SQ}Порог силы - {clan["min_power"]} {E_ATK}\n\n'
         f'{E_CLAN_LEVEL_ICON} Уровень клана - {clan["clan_level"]} {E_CLAN_LVL}\n'
@@ -5554,7 +5554,7 @@ async def _show_clan_info(message, clan: dict, is_leader: bool, is_co_leader: bo
     clan_text = _format_clan_menu(clan, leader_name)
     inline_kb = get_my_clan_inline_kb(is_leader, is_co_leader)
 
-    # Remove reply keyboard
+    # Remove reply keyboard with an invisible message (Telegram requires a message to send ReplyKeyboardRemove)
     await message.answer("\u200b", reply_markup=ReplyKeyboardRemove())
 
     # Сначала проверяем загруженную картинку клана
