@@ -5554,8 +5554,9 @@ async def _show_clan_info(message, clan: dict, is_leader: bool, is_co_leader: bo
     clan_text = _format_clan_menu(clan, leader_name)
     inline_kb = get_my_clan_inline_kb(is_leader, is_co_leader)
 
-    # Remove reply keyboard with an invisible message (Telegram requires a message to send ReplyKeyboardRemove)
-    await message.answer("\u200b", reply_markup=ReplyKeyboardRemove())
+    # Remove reply keyboard with a temporary message, then delete it
+    remove_msg = await message.answer("...", reply_markup=ReplyKeyboardRemove())
+    await remove_msg.delete()
 
     # Сначала проверяем загруженную картинку клана
     if clan.get('clan_image'):
